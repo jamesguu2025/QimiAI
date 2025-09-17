@@ -14,7 +14,6 @@
     "react-dom": "18.2.0"
   },
   "devDependencies": {
-    "@next/swc-darwin-arm64": "^15.5.3",
     "@types/node": "20.11.30",
     "@types/react": "18.2.66",
     "next": "14.2.5",
@@ -22,5 +21,12 @@
     "react": "18.2.0",
     "react-dom": "18.2.0",
     "typescript": "5.4.5"
+  },
+  "optionalDependencies": {
+    "@next/swc-darwin-arm64": "14.2.5",
+    "@next/swc-darwin-x64": "14.2.5",
+    "@next/swc-linux-x64-gnu": "14.2.5",
+    "@next/swc-linux-x64-musl": "14.2.5",
+    "@next/swc-win32-x64-msvc": "14.2.5"
   }
 }
