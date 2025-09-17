@@ -1,0 +1,4 @@
+@import url('../styles.css');
+
+/* Brand icon tweaks */
+.social-btn img { width: 20px; height: 20px; }
