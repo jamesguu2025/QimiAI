@@ -1,4 +1,4 @@
-import NextAuth from 'next-auth';
+import NextAuth, { AuthOptions } from 'next-auth';
 import GoogleProvider from 'next-auth/providers/google';
 import FacebookProvider from 'next-auth/providers/facebook';
 
@@ -8,7 +8,7 @@ const GOOGLE_CLIENT_SECRET = process.env.GOOGLE_CLIENT_SECRET || process.env.Goo
 const FACEBOOK_CLIENT_ID = process.env.FACEBOOK_CLIENT_ID || process.env.Meta_Client_ID || '';
 const FACEBOOK_CLIENT_SECRET = process.env.FACEBOOK_CLIENT_SECRET || process.env.Meta_Client_Secret || '';
 
-export const authOptions = {
+export const authOptions: AuthOptions = {
   providers: [
     GOOGLE_CLIENT_ID && GOOGLE_CLIENT_SECRET
       ? GoogleProvider({ clientId: GOOGLE_CLIENT_ID, clientSecret: GOOGLE_CLIENT_SECRET })
@@ -16,7 +16,7 @@ export const authOptions = {
     FACEBOOK_CLIENT_ID && FACEBOOK_CLIENT_SECRET
       ? FacebookProvider({ clientId: FACEBOOK_CLIENT_ID, clientSecret: FACEBOOK_CLIENT_SECRET })
       : undefined,
-  ].filter(Boolean),
+  ].filter((p): p is NonNullable<typeof p> => Boolean(p)),
   secret: process.env.NEXTAUTH_SECRET,
 };
 
