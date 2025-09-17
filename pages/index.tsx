@@ -68,7 +68,7 @@ export default function Home() {
             <p>Be the first to know when we launch</p>
             <div className="social-login">
               <a className="social-btn google-btn" href="/api/auth/signin/google" aria-label="Continue with Google">
-                <img src="/google-g.svg" alt="Google" />
+                <img src="/google.svg" alt="Google" />
                 <span>Continue with Google</span>
               </a>
               <a className="social-btn facebook-btn" href="/api/auth/signin/facebook" aria-label="Continue with Facebook">
