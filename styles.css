@@ -9,7 +9,11 @@ body {
     font-family: 'Inter', -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif;
     line-height: 1.6;
     color: #2C3E50;
-    background: linear-gradient(135deg, #F0F8F7 0%, #F5F9F8 25%, #FAFCFB 50%, #F8F6F0 75%, #FDF9F0 100%);
+    background: 
+        linear-gradient(135deg, rgba(240, 248, 247, 0.8) 0%, rgba(245, 249, 248, 0.6) 25%, rgba(250, 252, 251, 0.4) 50%, rgba(248, 246, 240, 0.6) 75%, rgba(253, 249, 240, 0.8) 100%),
+        url('data:image/svg+xml,<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 1200 800"><defs><radialGradient id="bg1" cx="20%" cy="30%" r="40%"><stop offset="0%" style="stop-color:%23F0F8F7;stop-opacity:0.3"/><stop offset="100%" style="stop-color:%23E8F5F3;stop-opacity:0.1"/></radialGradient><radialGradient id="bg2" cx="80%" cy="70%" r="35%"><stop offset="0%" style="stop-color:%23F8F6F0;stop-opacity:0.2"/><stop offset="100%" style="stop-color:%23F0F2F5;stop-opacity:0.05"/></radialGradient></defs><rect width="100%" height="100%" fill="url(%23bg1)"/><rect width="100%" height="100%" fill="url(%23bg2)"/></svg>');
+    background-size: cover;
+    background-attachment: fixed;
     min-height: 100vh;
 }
 
@@ -62,9 +66,39 @@ body {
     color: #4A9B8E;
 }
 
+/* Coming Soon Banner */
+.coming-soon-banner {
+    position: fixed;
+    top: 70px;
+    left: 0;
+    right: 0;
+    background: linear-gradient(135deg, #4A9B8E, #F5A623);
+    color: white;
+    text-align: center;
+    padding: 1rem 0;
+    font-family: -apple-system, BlinkMacSystemFont, 'SF Pro Display', 'Helvetica Neue', Helvetica, Arial, sans-serif;
+    font-size: 1.1rem;
+    font-weight: 600;
+    letter-spacing: 0.5px;
+    z-index: 999;
+    animation: slideDown 0.8s ease-out;
+    box-shadow: 0 4px 20px rgba(74, 155, 142, 0.3);
+}
+
+@keyframes slideDown {
+    from {
+        transform: translateY(-100%);
+        opacity: 0;
+    }
+    to {
+        transform: translateY(0);
+        opacity: 1;
+    }
+}
+
 /* Hero Section */
 .hero {
-    padding: 8rem 0 4rem;
+    padding: 12rem 0 4rem;
     min-height: 100vh;
     display: flex;
     align-items: center;
@@ -78,7 +112,9 @@ body {
     left: 0;
     right: 0;
     bottom: 0;
-    background: linear-gradient(135deg, rgba(240, 248, 247, 0.8) 0%, rgba(245, 249, 248, 0.6) 25%, rgba(250, 252, 251, 0.4) 50%, rgba(248, 246, 240, 0.6) 75%, rgba(253, 249, 240, 0.8) 100%);
+    background: 
+        linear-gradient(135deg, rgba(240, 248, 247, 0.6) 0%, rgba(245, 249, 248, 0.4) 25%, rgba(250, 252, 251, 0.2) 50%, rgba(248, 246, 240, 0.4) 75%, rgba(253, 249, 240, 0.6) 100%),
+        url('data:image/svg+xml,<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 1200 800"><defs><pattern id="dots" x="0" y="0" width="40" height="40" patternUnits="userSpaceOnUse"><circle cx="20" cy="20" r="1" fill="%234A9B8E" opacity="0.1"/></pattern></defs><rect width="100%" height="100%" fill="url(%23dots)"/></svg>');
     z-index: -1;
 }
 
@@ -94,22 +130,16 @@ body {
     z-index: 1;
 }
 
-.hero-badge {
-    display: inline-block;
-    background: linear-gradient(135deg, #4A9B8E, #F5A623);
-    color: white;
-    padding: 0.5rem 1rem;
-    border-radius: 50px;
-    font-size: 0.9rem;
-    font-weight: 600;
-    margin-bottom: 2rem;
+.hero-content {
+    display: flex;
+    flex-direction: column;
+    gap: 2rem;
 }
 
 .hero-title {
     font-size: 3.5rem;
     font-weight: 700;
     line-height: 1.2;
-    margin-bottom: 1.5rem;
     color: #2C3E50;
 }
 
@@ -123,116 +153,93 @@ body {
 .hero-description {
     font-size: 1.2rem;
     color: #4A5A6B;
-    margin-bottom: 3rem;
     line-height: 1.7;
 }
 
-.hero-stats {
-    display: flex;
-    gap: 2rem;
-    margin-bottom: 3rem;
+/* Features Grid */
+.features-grid {
+    display: grid;
+    grid-template-columns: repeat(3, 1fr);
+    gap: 1.5rem;
+    margin-top: 2rem;
 }
 
-.stat-item {
+.feature-card {
+    background: rgba(255, 255, 255, 0.95);
+    border-radius: 20px;
+    padding: 1.5rem;
     text-align: center;
+    box-shadow: 0 15px 40px rgba(74, 155, 142, 0.15);
+    border: 1px solid rgba(74, 155, 142, 0.1);
+    backdrop-filter: blur(10px);
+    transition: transform 0.3s ease, box-shadow 0.3s ease;
 }
 
-.stat-number {
-    font-size: 2rem;
-    font-weight: 700;
-    color: #4A9B8E;
+.feature-card:hover {
+    transform: translateY(-5px);
+    box-shadow: 0 20px 50px rgba(74, 155, 142, 0.2);
 }
 
-.stat-label {
-    font-size: 0.9rem;
+.feature-icon {
+    font-size: 2.5rem;
+    margin-bottom: 1rem;
+}
+
+.feature-card h3 {
+    font-size: 1.1rem;
+    font-weight: 600;
+    color: #2C3E50;
+    margin-bottom: 0.5rem;
+}
+
+.feature-card p {
     color: #5A6C7D;
-    margin-top: 0.5rem;
+    font-size: 0.9rem;
+    line-height: 1.4;
 }
 
-/* Hero Visual */
+/* Hero Visual - Waitlist Counter */
 .hero-visual {
-    position: relative;
-    height: 500px;
-    width: 100%;
-}
-
-.visual-container {
-    position: relative;
-    width: 100%;
+    display: flex;
+    align-items: center;
+    justify-content: center;
     height: 100%;
 }
 
-.floating-card {
-    position: absolute;
+.waitlist-counter-display {
     background: rgba(255, 255, 255, 0.95);
     border-radius: 20px;
-    padding: 2rem;
-    box-shadow: 0 15px 40px rgba(74, 155, 142, 0.15);
-    border: 1px solid rgba(74, 155, 142, 0.1);
-    opacity: 0;
-    transform: translateY(30px);
-    transition: all 0.6s ease;
-    backdrop-filter: blur(10px);
-    width: 280px;
-}
-
-.floating-card.animate {
-    opacity: 1;
-    transform: translateY(0);
-}
-
-/* 重新调整卡片位置，确保完全不重叠 */
-.card-1 {
-    top: 5%;
-    left: 0%;
-    animation: float 4s ease-in-out infinite;
-}
-
-.card-2 {
-    top: 50%;
-    right: 0%;
-    animation: float 4s ease-in-out infinite 1.5s;
-}
-
-.card-3 {
-    bottom: 5%;
-    left: 50%;
-    transform: translateX(-50%);
-    animation: float 4s ease-in-out infinite 3s;
-}
-
-@keyframes float {
-    0%, 100% { transform: translateY(0px) rotate(0deg); }
-    25% { transform: translateY(-8px) rotate(0.5deg); }
-    50% { transform: translateY(-12px) rotate(0deg); }
-    75% { transform: translateY(-8px) rotate(-0.5deg); }
-}
-
-.card-3.animate {
-    opacity: 1;
-    transform: translateX(-50%) translateY(0);
-}
-
-.card-content {
+    padding: 3rem;
     text-align: center;
+    box-shadow: 0 20px 60px rgba(74, 155, 142, 0.2);
+    border: 2px solid rgba(74, 155, 142, 0.1);
+    backdrop-filter: blur(10px);
+    max-width: 400px;
+    width: 100%;
 }
 
-.card-icon {
-    font-size: 2.5rem;
-    margin-bottom: 1.5rem;
+.waitlist-number {
+    font-size: 4rem;
+    font-weight: 800;
+    background: linear-gradient(135deg, #4A9B8E, #F5A623);
+    -webkit-background-clip: text;
+    -webkit-text-fill-color: transparent;
+    background-clip: text;
+    text-shadow: 0 4px 8px rgba(74, 155, 142, 0.3);
+    margin-bottom: 1rem;
 }
 
-.card-content h3 {
-    font-size: 1.3rem;
+.waitlist-label {
+    font-size: 1.5rem;
     font-weight: 600;
-    color: #2C3E50;
-    margin-bottom: 0.8rem;
+    color: #4A9B8E;
+    margin-bottom: 1rem;
 }
 
-.card-content p {
-    color: #5A6C7D;
+.waitlist-description {
     font-size: 1rem;
-    line-height: 1.5;
+    color: #5A6C7D;
+    line-height: 1.6;
 }
 
 /* Top Login Section */
@@ -308,11 +315,6 @@ body {
 .google-btn:hover {
     border-color: #4285F4;
     background: rgba(248, 249, 255, 0.9);
-}
-
-.apple-btn:hover {
-    border-color: #000;
-    background: rgba(245, 245, 245, 0.9);
 }
 
 .facebook-btn:hover {
@@ -695,8 +697,9 @@ body {
         font-size: 2.5rem;
     }
     
-    .hero-stats {
-        justify-content: center;
+    .features-grid {
+        grid-template-columns: 1fr;
+        gap: 1.5rem;
     }
     
     .email-form {
@@ -739,30 +742,14 @@ body {
         text-align: center;
     }
     
-    .floating-card {
-        width: 250px !important;
-    }
-    
-    .card-1 {
-        top: 5%;
-        left: 5%;
-    }
-    
-    .card-2 {
-        top: 45%;
-        right: 5%;
-    }
-    
-    .card-3 {
-        bottom: 5%;
-        left: 50%;
-        transform: translateX(-50%);
+    .waitlist-number {
+        font-size: 3rem;
     }
 }
 
 @media (max-width: 480px) {
     .hero {
-        padding: 6rem 0 2rem;
+        padding: 10rem 0 2rem;
     }
     
     .hero-title {
@@ -798,24 +785,16 @@ body {
         font-size: 1.5rem;
     }
     
-    .floating-card {
-        width: 200px !important;
-        padding: 1.5rem;
+    .waitlist-number {
+        font-size: 2.5rem;
     }
     
-    .card-1 {
-        top: 5%;
-        left: 5%;
+    .coming-soon-banner {
+        font-size: 1rem;
+        padding: 0.8rem 0;
     }
     
-    .card-2 {
-        top: 40%;
-        right: 5%;
-    }
-    
-    .card-3 {
-        bottom: 5%;
-        left: 50%;
-        transform: translateX(-50%);
+    .waitlist-counter-display {
+        padding: 2rem;
     }
 }
