@@ -68,8 +68,14 @@
                 <h2>Get Early Access</h2>
                 <p>Be the first to know when we launch</p>
                 <div class="social-login">
-                    <button class="social-btn google-btn" onclick="loginWithGoogle()">Continue with Google</button>
-                    <button class="social-btn facebook-btn" onclick="loginWithFacebook()">Continue with Facebook</button>
+                    <a class="social-btn google-btn" href="/api/auth/google" aria-label="Continue with Google">
+                        <img src="https://cdn.simpleicons.org/google/4285F4" alt="Google" />
+                        <span>Continue with Google</span>
+                    </a>
+                    <a class="social-btn facebook-btn" href="/api/auth/facebook" aria-label="Continue with Facebook">
+                        <img src="https://cdn.simpleicons.org/facebook/1877F2" alt="Facebook" />
+                        <span>Continue with Facebook</span>
+                    </a>
                 </div>
                 <div class="divider"><span>or</span></div>
                 <div class="email-form">
@@ -122,8 +128,7 @@
     </footer>
 
     <script>
-    function loginWithGoogle(){alert('Google login coming soon. Please use email signup.');}
-    function loginWithFacebook(){alert('Facebook login coming soon. Please use email signup.');}
+    // Social auth handled via /api/auth/* routes on Vercel
     function joinWaitlist(){const e=document.getElementById('emailInput').value;if(e&&e.includes('@')){alert('Thanks! You\'re on the waitlist.');document.getElementById('emailInput').value='';}else{alert('Please enter a valid email.');}}
     </script>
 </body>
