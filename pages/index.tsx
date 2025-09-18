@@ -16,7 +16,7 @@ export default function Home() {
           }}
         />
       </Head>
-      <div className="coming-soon-banner">🚀 Coming Soon</div>
+      <div className="coming-soon-banner" style={{position: 'fixed', top: '70px', left: '0', right: '0', background: 'linear-gradient(135deg, #00D4AA, #8B5CF6)', color: 'white', textAlign: 'center', padding: '12px 0', fontSize: '16px', fontWeight: '600', zIndex: 1001, display: 'block'}}>🚀 Coming Soon</div>
       <nav className="navbar">
         <div className="nav-container">
           <div className="nav-logo">
