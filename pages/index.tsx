@@ -194,7 +194,7 @@ export default function Home() {
           margin: '0',
           border: 'none',
           boxShadow: '0 4px 20px rgba(0,212,170,0.3)'
-        }}>🚀 Coming Soon</div>
+        }}>🚀 Coming Soon - Our AI-powered features are being built with care</div>
       </nav>
 
       <main className="hero">
@@ -249,6 +249,17 @@ export default function Home() {
         </div>
       </section>
 
+      <section id="waitlist" className="waitlist">
+        <div className="waitlist-container">
+          <h2 className="section-title">Why Join Our Waitlist?</h2>
+          <div className="waitlist-grid">
+            <div className="waitlist-item"><div className="waitlist-icon">🎯</div><h3>First Access</h3><p>Be among the first to experience Qimi AI when we launch. Early users get exclusive access to beta features and special pricing.</p></div>
+            <div className="waitlist-item"><div className="waitlist-icon">💡</div><h3>Shape the Product</h3><p>Your feedback matters! Help us build the perfect solution for ADHD families by sharing your needs and preferences.</p></div>
+            <div className="waitlist-item"><div className="waitlist-icon">🎁</div><h3>Exclusive Benefits</h3><p>Waitlist members receive special discounts, priority support, and access to exclusive resources and content.</p></div>
+          </div>
+        </div>
+      </section>
+
       <section className="waitlist-section">
         <div className="waitlist-container">
           <div className="waitlist-content">
@@ -283,17 +294,6 @@ export default function Home() {
               <input type="email" placeholder="Enter your email address" className="email-input" id="emailInput" />
               <button className="join-btn" onClick={handleEmailSubmit}>Join Waitlist</button>
             </div>
-          </div>
-        </div>
-      </section>
-
-      <section id="waitlist" className="waitlist">
-        <div className="waitlist-container">
-          <h2 className="section-title">Why Join Our Waitlist?</h2>
-          <div className="waitlist-grid">
-            <div className="waitlist-item"><div className="waitlist-icon">🎯</div><h3>First Access</h3><p>Be among the first to experience Qimi AI when we launch. Early users get exclusive access to beta features and special pricing.</p></div>
-            <div className="waitlist-item"><div className="waitlist-icon">💡</div><h3>Shape the Product</h3><p>Your feedback matters! Help us build the perfect solution for ADHD families by sharing your needs and preferences.</p></div>
-            <div className="waitlist-item"><div className="waitlist-icon">🎁</div><h3>Exclusive Benefits</h3><p>Waitlist members receive special discounts, priority support, and access to exclusive resources and content.</p></div>
           </div>
         </div>
       </section>

@@ -111,6 +111,33 @@ body {
 /* Brand icon tweaks */
 .social-btn img { width: 20px; height: 20px; }
 
+/* Hero Tagline Section */
+.hero-tagline-section {
+  padding: 1.5rem 0;
+  text-align: center;
+  background: rgba(255,255,255,0.8);
+  backdrop-filter: blur(10px);
+  border-bottom: 1px solid rgba(0,212,170,0.1);
+  margin-top: 80px; /* Adjust based on navbar height */
+}
+
+.hero-tagline {
+  font-size: 2.5rem;
+  font-weight: 700;
+  color: #2C3E50;
+  line-height: 1.2;
+  max-width: 900px;
+  margin: 0 auto;
+  padding: 0 1rem;
+}
+
+.tagline-highlight {
+  background: linear-gradient(135deg,#00D4AA,#8B5CF6);
+  -webkit-background-clip: text;
+  -webkit-text-fill-color: transparent;
+  background-clip: text;
+}
+
 /* Page Styles */
 .page-hero { padding: 12rem 0 4rem; background: linear-gradient(135deg, rgba(0,212,170,0.08) 0%, rgba(139,92,246,0.08) 100%); }
 .page-container { max-width: 1200px; margin: 0 auto; padding: 0 2rem; }
@@ -227,6 +254,10 @@ body {
   .page-container { padding: 0 1rem; }
   .page-title { font-size: 2.5rem; }
   .page-subtitle { font-size: 1.1rem; }
+  
+  /* Hero Tagline Mobile */
+  .hero-tagline-section { margin-top: 70px; padding: 1rem 0; }
+  .hero-tagline { font-size: 1.8rem; }
   
   /* Content Grid Mobile */
   .content-grid { grid-template-columns: 1fr; gap: 1.5rem; }
