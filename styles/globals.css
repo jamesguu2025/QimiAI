@@ -50,8 +50,7 @@ body {
 
 /* James Photo Section */
 .james-photo-section { display: flex; justify-content: center; align-items: center; }
-.photo-placeholder { width: 280px; height: 500px; background: rgba(255,255,255,0.9); border-radius: 20px; display: flex; align-items: center; justify-content: center; border: 2px dashed #00D4AA; color: #00D4AA; font-weight: 600; text-align: center; box-shadow: 0 15px 40px rgba(0,212,170,0.1); }
-.photo-placeholder p { font-size: 1rem; line-height: 1.4; }
+.james-photo { width: 100%; max-width: 520px; aspect-ratio: 16/9; object-fit: cover; border-radius: 20px; box-shadow: 0 15px 40px rgba(0,212,170,0.15); border: 2px solid rgba(0,212,170,0.1); }
 
 /* Product Intro Section */
 .product-intro { padding: 4rem 0; background: rgba(248,255,254,0.6); backdrop-filter: blur(10px); }
@@ -137,9 +136,7 @@ body {
   
   /* James Photo Section */
   .photo-placeholder { 
-    width: 200px; 
-    height: 350px; 
-    margin: 0 auto;
+    display: none;
   }
   
   /* Product Features */

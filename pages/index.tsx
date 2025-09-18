@@ -225,9 +225,7 @@ export default function Home() {
               </div>
             </div>
             <div className="james-photo-section">
-              <div className="photo-placeholder">
-                <p>James Guu Photo<br/>(9:16 ratio)</p>
-              </div>
+              <img src="/james-family.jpg" alt="James Guu with family" className="james-photo" />
             </div>
           </div>
         </div>
@@ -303,14 +301,14 @@ export default function Home() {
       <section id="about" className="about">
         <div className="about-container">
           <h2 className="section-title">About Qimi AI</h2>
-          <div className="about-description"><p>Qimi AI is designed specifically for ADHD families who need intelligent, compassionate support. Our platform combines cutting-edge AI technology with evidence-based practices to provide personalized guidance that adapts to your family's unique needs.</p></div>
+          <div className="about-description"><p>Qimi AI is an ADHD family support platform built by parents, for parents. We provide practical, step-by-step guidance that fits real family life — from emotional support for parents to daily action plans for children, covering learning, exercise, nutrition, sleep, and routines.</p><p>Our approach blends evidence-based psychology with insights from traditional Chinese wellness, translated into actionable, trackable routines. Qimi AI learns your family's rhythm and adapts recommendations over time to help you build sustainable habits that actually work.</p></div>
         </div>
       </section>
 
       <section id="founder" className="founder">
         <div className="founder-container">
           <h2 className="section-title">Meet the Founder</h2>
-          <div className="founder-content">Follow on TikTok: <a href="https://www.tiktok.com/@jamesguu2024" target="_blank">@jamesguu2024</a></div>
+          <div className="founder-content"><p>James Guu is a 36-year-old ADHD adult, experienced educator, and serial entrepreneur who has helped families across North America and China. As a parent to an ADHD child, he turned years of learning into a practical system that families can apply day by day.</p><p>James believes every child deserves a path to succeed — and every parent deserves calm, clarity, and support. Qimi AI reflects that mission.</p><p>Follow James on TikTok: <a href="https://www.tiktok.com/@jamesguu2024" target="_blank" rel="noreferrer">@jamesguu2024</a></p></div>
         </div>
       </section>
 
