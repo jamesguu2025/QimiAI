@@ -102,7 +102,7 @@ export default function Home() {
   return (
     <>
       <Head>
-        <title>Qimi AI - to Transform ADHD Families</title>
+        <title>Qimi AI - to Empower Every ADHD Family</title>
         <meta name="description" content="Qimi AI provides emotional support for ADHD parents and comprehensive action plans for children. Founded by James Guu, an experienced educator and serial entrepreneur." />
         <meta name="keywords" content="ADHD support, ADHD families, ADHD parents, ADHD children, family intervention, emotional support, ADHD education, ADHD therapy, ADHD management" />
         <meta name="author" content="James Guu" />
@@ -113,7 +113,7 @@ export default function Home() {
         {/* Open Graph / Facebook */}
         <meta property="og:type" content="website" />
         <meta property="og:url" content="https://www.qimiai.to/" />
-        <meta property="og:title" content="Qimi AI - to Transform ADHD Families" />
+        <meta property="og:title" content="Qimi AI - to Empower Every ADHD Family" />
         <meta property="og:description" content="Qimi AI provides emotional support for ADHD parents and comprehensive action plans for children. Founded by James Guu, an experienced educator and serial entrepreneur." />
         <meta property="og:image" content="https://www.qimiai.to/logo.png" />
         <meta property="og:site_name" content="Qimi AI" />
@@ -121,7 +121,7 @@ export default function Home() {
         {/* Twitter */}
         <meta property="twitter:card" content="summary_large_image" />
         <meta property="twitter:url" content="https://www.qimiai.to/" />
-        <meta property="twitter:title" content="Qimi AI - to Transform ADHD Families" />
+        <meta property="twitter:title" content="Qimi AI - to Empower Every ADHD Family" />
         <meta property="twitter:description" content="Qimi AI provides emotional support for ADHD parents and comprehensive action plans for children. Founded by James Guu, an experienced educator and serial entrepreneur." />
         <meta property="twitter:image" content="https://www.qimiai.to/logo.png" />
         
