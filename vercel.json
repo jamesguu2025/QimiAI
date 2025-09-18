@@ -2,10 +2,6 @@
   "framework": "nextjs",
   "buildCommand": "npm run build",
   "outputDirectory": ".next",
-  "installCommand": "npm install",
-  "functions": {
-    "pages/api/**/*.ts": {
-      "runtime": "nodejs18.x"
-    }
-  }
+  "installCommand": "npm install"
 }
+
