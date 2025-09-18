@@ -170,8 +170,8 @@ export default function Home() {
             <img src="/logo.svg" alt="Qimi AI" />
           </div>
           <div className="nav-links">
-            <a href="#about" className="nav-link">About</a>
-            <a href="#founder" className="nav-link">Founder</a>
+            <a href="/about" className="nav-link">About</a>
+            <a href="/founder" className="nav-link">Founder</a>
             <a href="#waitlist" className="nav-link">Join Waitlist</a>
           </div>
         </div>
@@ -298,27 +298,14 @@ export default function Home() {
         </div>
       </section>
 
-      <section id="about" className="about">
-        <div className="about-container">
-          <h2 className="section-title">About Qimi AI</h2>
-          <div className="about-description"><p>Qimi AI is an ADHD family support platform built by parents, for parents. We provide practical, step-by-step guidance that fits real family life — from emotional support for parents to daily action plans for children, covering learning, exercise, nutrition, sleep, and routines.</p><p>Our approach blends evidence-based psychology with insights from traditional Chinese wellness, translated into actionable, trackable routines. Qimi AI learns your family's rhythm and adapts recommendations over time to help you build sustainable habits that actually work.</p></div>
-        </div>
-      </section>
-
-      <section id="founder" className="founder">
-        <div className="founder-container">
-          <h2 className="section-title">Meet the Founder</h2>
-          <div className="founder-content"><p>James Guu is a 36-year-old ADHD adult, experienced educator, and serial entrepreneur who has helped families across North America and China. As a parent to an ADHD child, he turned years of learning into a practical system that families can apply day by day.</p><p>James believes every child deserves a path to succeed — and every parent deserves calm, clarity, and support. Qimi AI reflects that mission.</p><p>Follow James on TikTok: <a href="https://www.tiktok.com/@jamesguu2024" target="_blank" rel="noreferrer">@jamesguu2024</a></p></div>
-        </div>
-      </section>
 
       <footer className="footer">
         <div className="footer-container">
           <div className="footer-content">
             <div className="footer-logo"><h3>Qimi AI</h3><p>Empowering ADHD families through intelligent intervention</p></div>
             <div className="footer-links">
-              <a href="#about" className="footer-link">About</a>
-              <a href="#founder" className="footer-link">Founder</a>
+              <a href="/about" className="footer-link">About</a>
+              <a href="/founder" className="footer-link">Founder</a>
               <a href="#waitlist" className="footer-link">Join Waitlist</a>
               <a href="/privacy.html" className="footer-link">Privacy Policy</a>
               <a href="/terms.html" className="footer-link">Terms of Service</a>

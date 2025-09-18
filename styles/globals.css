@@ -111,6 +111,52 @@ body {
 /* Brand icon tweaks */
 .social-btn img { width: 20px; height: 20px; }
 
+/* Page Styles */
+.page-hero { padding: 12rem 0 4rem; background: linear-gradient(135deg, rgba(0,212,170,0.08) 0%, rgba(139,92,246,0.08) 100%); }
+.page-container { max-width: 1200px; margin: 0 auto; padding: 0 2rem; }
+.hero-content { text-align: center; }
+.page-title { font-size: 3.5rem; font-weight: 700; color: #2C3E50; margin-bottom: 1rem; }
+.page-subtitle { font-size: 1.3rem; color: #4A5A6B; max-width: 600px; margin: 0 auto; }
+
+/* Content Sections */
+.about-content, .founder-content { padding: 4rem 0; }
+.content-container { max-width: 1200px; margin: 0 auto; padding: 0 2rem; }
+.content-grid { display: grid; grid-template-columns: repeat(2, 1fr); gap: 2rem; margin-top: 2rem; }
+.content-card { background: rgba(255,255,255,0.95); border-radius: 20px; padding: 2.5rem; box-shadow: 0 15px 40px rgba(0,212,170,0.15); border: 1px solid rgba(0,212,170,0.1); backdrop-filter: blur(10px); }
+.content-card .card-icon { font-size: 2.5rem; margin-bottom: 1rem; }
+.content-card h3 { font-size: 1.5rem; font-weight: 700; color: #2C3E50; margin-bottom: 1rem; }
+.content-card p { color: #5A6C7D; font-size: 1rem; line-height: 1.6; }
+
+/* Founder Profile */
+.founder-profile { display: grid; grid-template-columns: 1fr 2fr; gap: 4rem; align-items: start; margin-top: 2rem; }
+.founder-image { display: flex; justify-content: center; }
+.profile-photo { width: 100%; max-width: 400px; aspect-ratio: 16/9; object-fit: cover; border-radius: 20px; box-shadow: 0 20px 60px rgba(0,212,170,0.2); }
+.founder-info h2 { font-size: 2.5rem; font-weight: 700; color: #2C3E50; margin-bottom: 0.5rem; }
+.founder-title { font-size: 1.2rem; color: #00D4AA; font-weight: 600; margin-bottom: 2rem; }
+.founder-story { margin-bottom: 2rem; }
+.founder-story p { color: #4A5A6B; font-size: 1.1rem; line-height: 1.7; margin-bottom: 1rem; }
+.founder-credentials { margin-bottom: 2rem; }
+.credential-item { display: flex; align-items: flex-start; gap: 1rem; margin-bottom: 1.5rem; }
+.credential-icon { font-size: 1.5rem; margin-top: 0.25rem; }
+.credential-text h4 { font-size: 1.1rem; font-weight: 700; color: #2C3E50; margin-bottom: 0.25rem; }
+.credential-text p { color: #5A6C7D; font-size: 0.95rem; line-height: 1.5; }
+.social-links { background: rgba(248,255,254,0.8); border-radius: 12px; padding: 1.5rem; }
+.social-links p { color: #4A5A6B; font-weight: 600; margin-bottom: 0.5rem; }
+.social-link { display: inline-flex; align-items: center; gap: 0.5rem; color: #00D4AA; text-decoration: none; font-weight: 600; }
+.social-link:hover { color: #8B5CF6; }
+.social-icon { font-size: 1.2rem; }
+
+/* CTA Section */
+.cta-section { padding: 4rem 0; background: linear-gradient(135deg, #00D4AA, #8B5CF6); color: white; text-align: center; }
+.cta-container { max-width: 800px; margin: 0 auto; padding: 0 2rem; }
+.cta-section h2 { font-size: 2.5rem; font-weight: 700; margin-bottom: 1rem; }
+.cta-section p { font-size: 1.2rem; margin-bottom: 2rem; opacity: 0.9; }
+.cta-button { display: inline-block; background: white; color: #00D4AA; padding: 1rem 2rem; border-radius: 12px; font-weight: 700; text-decoration: none; font-size: 1.1rem; transition: all 0.3s ease; }
+.cta-button:hover { transform: translateY(-2px); box-shadow: 0 10px 30px rgba(0,0,0,0.2); }
+
+/* Navigation Active State */
+.nav-link.active { color: #00D4AA; font-weight: 600; }
+
 /* Responsive */
 @media (max-width: 768px) {
   /* 全局调整 */
@@ -175,6 +221,27 @@ body {
   .footer-container { padding: 0 1rem; }
   .footer-content { grid-template-columns: 1fr; gap: 1rem; text-align: center; }
   .footer-links { justify-content: center; flex-wrap: wrap; gap: 1rem; }
+  
+  /* Page Styles Mobile */
+  .page-hero { padding: 9rem 0 2rem; }
+  .page-container { padding: 0 1rem; }
+  .page-title { font-size: 2.5rem; }
+  .page-subtitle { font-size: 1.1rem; }
+  
+  /* Content Grid Mobile */
+  .content-grid { grid-template-columns: 1fr; gap: 1.5rem; }
+  .content-card { padding: 2rem; }
+  .content-card h3 { font-size: 1.3rem; }
+  
+  /* Founder Profile Mobile */
+  .founder-profile { grid-template-columns: 1fr; gap: 2rem; }
+  .founder-info h2 { font-size: 2rem; }
+  .profile-photo { max-width: 100%; }
+  
+  /* CTA Mobile */
+  .cta-section h2 { font-size: 2rem; }
+  .cta-section p { font-size: 1rem; }
+  .cta-button { padding: 0.8rem 1.5rem; font-size: 1rem; }
 }
 
 /* 更小的屏幕 */
