@@ -1,7 +1,77 @@
 import Head from 'next/head';
-import { signIn } from 'next-auth/react';
+import { signIn, useSession } from 'next-auth/react';
+import { useEffect } from 'react';
 
 export default function Home() {
+  const { data: session, status } = useSession();
+
+  // 处理登录后的自动订阅
+  useEffect(() => {
+    const urlParams = new URLSearchParams(window.location.search);
+    const subscribed = urlParams.get('subscribed');
+    
+    if (subscribed === 'true' && session?.user?.email) {
+      // 自动订阅到邮件列表
+      fetch('/api/subscribe', {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+        },
+        body: JSON.stringify({
+          email: session.user.email,
+          name: session.user.name || '',
+          source: 'google_login',
+        }),
+      }).then(response => response.json())
+        .then(data => {
+          if (data.success) {
+            alert('Welcome! You\'ve been added to our waitlist.');
+          }
+        })
+        .catch(error => {
+          console.error('Auto-subscription error:', error);
+        });
+      
+      // 清理 URL 参数
+      window.history.replaceState({}, document.title, window.location.pathname);
+    }
+  }, [session]);
+
+  const handleEmailSubmit = async () => {
+    const emailInput = document.getElementById('emailInput') as HTMLInputElement;
+    const email = emailInput.value.trim();
+
+    if (!email || !email.includes('@')) {
+      alert('Please enter a valid email address.');
+      return;
+    }
+
+    try {
+      const response = await fetch('/api/subscribe', {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+        },
+        body: JSON.stringify({
+          email: email,
+          source: 'email_form',
+        }),
+      });
+
+      const data = await response.json();
+
+      if (data.success) {
+        alert(data.message);
+        emailInput.value = '';
+      } else {
+        alert(data.message || 'Something went wrong. Please try again.');
+      }
+    } catch (error) {
+      console.error('Subscription error:', error);
+      alert('Something went wrong. Please try again.');
+    }
+  };
+
   return (
     <>
       <Head>
@@ -88,7 +158,7 @@ export default function Home() {
             <h2>Get Early Access</h2>
             <p>Be the first to know when we launch</p>
             <div className="social-login">
-              <button className="social-btn google-btn" onClick={() => signIn('google', { callbackUrl: 'https://www.qimiai.to' })} aria-label="Continue with Google">
+              <button className="social-btn google-btn" onClick={() => signIn('google', { callbackUrl: 'https://www.qimiai.to?subscribed=true' })} aria-label="Continue with Google">
                 <img src="/google.svg" alt="Google" />
                 <span>Continue with Google</span>
               </button>
@@ -100,7 +170,7 @@ export default function Home() {
             <div className="divider"><span>or</span></div>
             <div className="email-form">
               <input type="email" placeholder="Enter your email address" className="email-input" id="emailInput" />
-              <button className="join-btn" onClick={() => alert('Thanks! You\'re on the waitlist.')}>Join Waitlist</button>
+              <button className="join-btn" onClick={handleEmailSubmit}>Join Waitlist</button>
             </div>
           </div>
         </div>
