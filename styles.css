@@ -28,7 +28,7 @@ body {
 .nav-link:hover { color: #00D4AA; }
 
 /* Coming Soon Banner */
-.coming-soon-banner { position: fixed; top: 70px; left: 0; right: 0; background: linear-gradient(135deg, #00D4AA, #8B5CF6); color: white; text-align: center; padding: 1rem 0; font-family: -apple-system, BlinkMacSystemFont, 'SF Pro Display', 'Helvetica Neue', Helvetica, Arial, sans-serif; font-size: 1.1rem; font-weight: 600; letter-spacing: 0.5px; z-index: 999; box-shadow: 0 4px 20px rgba(0,212,170,0.3); }
+.coming-soon-banner { position: fixed; top: 70px; left: 0; right: 0; background: linear-gradient(135deg, #00D4AA, #8B5CF6); color: white; text-align: center; padding: 1rem 0; font-family: -apple-system, BlinkMacSystemFont, 'SF Pro Display', 'Helvetica Neue', Helvetica, Arial, sans-serif; font-size: 1.1rem; font-weight: 600; letter-spacing: 0.5px; z-index: 1001; box-shadow: 0 4px 20px rgba(0,212,170,0.3); }
 
 /* Hero Section */
 .hero { padding: 12rem 0 4rem; min-height: 100vh; display: flex; align-items: center; position: relative; }
@@ -95,13 +95,16 @@ body {
   /* 全局调整 */
   body { padding: 0; margin: 0; }
   
+  /* Coming Soon 横幅 */
+  .coming-soon-banner { top: 60px; font-size: 1rem; padding: 0.8rem 0; }
+  
   /* 导航栏 */
   .nav-container { padding: 1rem; }
   .nav-links { gap: 1rem; }
   .nav-link { font-size: 0.9rem; }
   
   /* Hero 区域 */
-  .hero { padding: 8rem 0 2rem; }
+  .hero { padding: 9rem 0 2rem; }
   .hero-container { 
     grid-template-columns: 1fr; 
     gap: 2rem; 
