@@ -12,39 +12,43 @@ export default async function handler(req: NextApiRequest, res: NextApiResponse)
   }
 
   try {
-    // MailerLite API 配置
-    const MAILERLITE_API_KEY = process.env.MAILERLITE_API_KEY;
-    const MAILERLITE_GROUP_ID = process.env.MAILERLITE_GROUP_ID;
+    // Mailchimp API 配置
+    const MAILCHIMP_API_KEY = process.env.MAILCHIMP_API_KEY;
+    const MAILCHIMP_AUDIENCE_ID = process.env.MAILCHIMP_AUDIENCE_ID;
+    const MAILCHIMP_SERVER_PREFIX = process.env.MAILCHIMP_SERVER_PREFIX;
 
-    if (!MAILERLITE_API_KEY || !MAILERLITE_GROUP_ID) {
-      console.error('MailerLite API credentials not configured');
+    if (!MAILCHIMP_API_KEY || !MAILCHIMP_AUDIENCE_ID || !MAILCHIMP_SERVER_PREFIX) {
+      console.error('Mailchimp API credentials not configured');
       return res.status(500).json({ message: 'Service configuration error' });
     }
 
-    // 调用 MailerLite API 添加订阅者
-    const response = await fetch(`https://connect.mailerlite.com/api/subscribers`, {
+    // 构建 Mailchimp API URL
+    const mailchimpUrl = `https://${MAILCHIMP_SERVER_PREFIX}.api.mailchimp.com/3.0/lists/${MAILCHIMP_AUDIENCE_ID}/members`;
+
+    // 调用 Mailchimp API 添加订阅者
+    const response = await fetch(mailchimpUrl, {
       method: 'POST',
       headers: {
         'Content-Type': 'application/json',
-        'Authorization': `Bearer ${MAILERLITE_API_KEY}`,
+        'Authorization': `Basic ${Buffer.from(`anystring:${MAILCHIMP_API_KEY}`).toString('base64')}`,
       },
       body: JSON.stringify({
-        email: email,
-        name: name || '',
-        groups: [MAILERLITE_GROUP_ID],
-        fields: {
-          source: source || 'website',
-          subscribed_at: new Date().toISOString(),
-        }
+        email_address: email,
+        status: 'subscribed',
+        merge_fields: {
+          FNAME: name || '',
+          SOURCE: source || 'website',
+        },
+        tags: ['waitlist', source || 'website'],
       }),
     });
 
     if (!response.ok) {
       const errorData = await response.json();
-      console.error('MailerLite API error:', errorData);
+      console.error('Mailchimp API error:', errorData);
       
       // 如果用户已存在，返回成功
-      if (response.status === 409) {
+      if (response.status === 400 && errorData.title === 'Member Exists') {
         return res.status(200).json({ 
           message: 'You are already subscribed!', 
           success: true 
@@ -52,7 +56,8 @@ export default async function handler(req: NextApiRequest, res: NextApiResponse)
       }
       
       return res.status(400).json({ 
-        message: 'Failed to subscribe. Please try again.' 
+        message: 'Failed to subscribe. Please try again.',
+        error: errorData.detail || errorData.title
       });
     }
 
@@ -61,7 +66,11 @@ export default async function handler(req: NextApiRequest, res: NextApiResponse)
     return res.status(200).json({ 
       message: 'Successfully subscribed to our waitlist!', 
       success: true,
-      data: data
+      data: {
+        id: data.id,
+        email: data.email_address,
+        status: data.status
+      }
     });
 
   } catch (error) {
