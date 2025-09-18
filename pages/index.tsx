@@ -102,14 +102,65 @@ export default function Home() {
   return (
     <>
       <Head>
-        <title>Qimi AI - ADHD Family Support Platform</title>
+        <title>Qimi AI - to Transform ADHD Families</title>
         <meta name="description" content="Qimi AI provides emotional support for ADHD parents and comprehensive action plans for children. Founded by James Guu, an experienced educator and serial entrepreneur." />
+        <meta name="keywords" content="ADHD support, ADHD families, ADHD parents, ADHD children, family intervention, emotional support, ADHD education, ADHD therapy, ADHD management" />
+        <meta name="author" content="James Guu" />
+        <meta name="robots" content="index, follow" />
+        <meta name="language" content="English" />
+        <meta name="revisit-after" content="7 days" />
+        
+        {/* Open Graph / Facebook */}
+        <meta property="og:type" content="website" />
+        <meta property="og:url" content="https://www.qimiai.to/" />
+        <meta property="og:title" content="Qimi AI - to Transform ADHD Families" />
+        <meta property="og:description" content="Qimi AI provides emotional support for ADHD parents and comprehensive action plans for children. Founded by James Guu, an experienced educator and serial entrepreneur." />
+        <meta property="og:image" content="https://www.qimiai.to/logo.png" />
+        <meta property="og:site_name" content="Qimi AI" />
+        
+        {/* Twitter */}
+        <meta property="twitter:card" content="summary_large_image" />
+        <meta property="twitter:url" content="https://www.qimiai.to/" />
+        <meta property="twitter:title" content="Qimi AI - to Transform ADHD Families" />
+        <meta property="twitter:description" content="Qimi AI provides emotional support for ADHD parents and comprehensive action plans for children. Founded by James Guu, an experienced educator and serial entrepreneur." />
+        <meta property="twitter:image" content="https://www.qimiai.to/logo.png" />
+        
+        {/* Additional SEO */}
+        <meta name="theme-color" content="#00D4AA" />
+        <meta name="msapplication-TileColor" content="#00D4AA" />
+        <link rel="canonical" href="https://www.qimiai.to/" />
         <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no" />
         <link rel="icon" href="/favicon.svg" />
         <script async src="https://www.googletagmanager.com/gtag/js?id=G-3T1NP7EG91"></script>
         <script
           dangerouslySetInnerHTML={{
             __html: `window.dataLayer=window.dataLayer||[];function gtag(){dataLayer.push(arguments);}gtag('js',new Date());gtag('config','G-3T1NP7EG91');`
+          }}
+        />
+        <script
+          type="application/ld+json"
+          dangerouslySetInnerHTML={{
+            __html: JSON.stringify({
+              "@context": "https://schema.org",
+              "@type": "Organization",
+              "name": "Qimi AI",
+              "url": "https://www.qimiai.to",
+              "logo": "https://www.qimiai.to/logo.png",
+              "description": "Qimi AI provides emotional support for ADHD parents and comprehensive action plans for children",
+              "founder": {
+                "@type": "Person",
+                "name": "James Guu",
+                "description": "36-year-old ADHD adult, experienced educator, and serial entrepreneur"
+              },
+              "sameAs": [
+                "https://www.qimiai.to"
+              ],
+              "contactPoint": {
+                "@type": "ContactPoint",
+                "contactType": "customer service",
+                "url": "https://www.qimiai.to"
+              }
+            })
           }}
         />
       </Head>
