@@ -102,8 +102,8 @@ export default function Home() {
   return (
     <>
       <Head>
-        <title>Qimi AI - Join the Waitlist</title>
-        <meta name="description" content="Qimi AI - Intelligent Family Intervention Assistant for ADHD Families. Join our waitlist to be notified when we launch." />
+        <title>Qimi AI - ADHD Family Support Platform</title>
+        <meta name="description" content="Qimi AI provides emotional support for ADHD parents and comprehensive action plans for children. Founded by James Guu, a successful ADHD adult entrepreneur." />
         <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no" />
         <link rel="icon" href="/favicon.svg" />
         <script async src="https://www.googletagmanager.com/gtag/js?id=G-3T1NP7EG91"></script>
@@ -150,22 +150,26 @@ export default function Home() {
         <div className="hero-container">
           <div>
             <h1 className="hero-title">Intelligent Family Intervention <span className="title-highlight">for ADHD Families</span></h1>
-            <p className="hero-description">Qimi AI is revolutionizing how ADHD families receive support and guidance. Join our growing community to be the first to experience our innovative AI-powered family intervention platform.</p>
+            <p className="hero-description">
+              Qimi AI provides emotional support for parents and comprehensive action plans for children. 
+              Founded by James Guu, a 36-year-old ADHD adult and successful entrepreneur who has transformed 
+              his own life and helped countless families across North America and China.
+            </p>
             <div className="features-grid">
               <div className="feature-card">
-                <div className="feature-icon">🧠</div>
-                <h3>Smart Insights</h3>
-                <p>AI-powered guidance tailored for ADHD family dynamics</p>
+                <div className="feature-icon">💚</div>
+                <h3>Parent Emotional Support</h3>
+                <p>Helping ADHD parents manage stress from children, work, family, and school pressures with proven emotional wellness strategies</p>
               </div>
               <div className="feature-card">
-                <div className="feature-icon">❤️</div>
-                <h3>Family Support</h3>
-                <p>Compassionate care for the entire family unit</p>
+                <div className="feature-icon">🎯</div>
+                <h3>Comprehensive Action Plans</h3>
+                <p>Evidence-based strategies covering learning, exercise, nutrition, and daily routines to help your child thrive</p>
               </div>
               <div className="feature-card">
-                <div className="feature-icon">📈</div>
-                <h3>Progress Tracking</h3>
-                <p>Measurable growth and development insights</p>
+                <div className="feature-icon">👨‍💼</div>
+                <h3>Trusted Expertise</h3>
+                <p>Founded by James Guu, a 36-year-old ADHD adult and successful entrepreneur with proven results across North America and China</p>
               </div>
             </div>
           </div>
