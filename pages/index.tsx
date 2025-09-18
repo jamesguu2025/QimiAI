@@ -199,6 +199,9 @@ export default function Home() {
 
       <main className="hero">
         <div className="hero-container">
+          <div className="tagline">
+            <h1 className="tagline-text">Practical AI Guidance for <span className="title-highlight">Every ADHD Family</span></h1>
+          </div>
           <div className="letter-section">
             <div className="letter-content">
               <h1 className="letter-title">A Letter from James</h1>
