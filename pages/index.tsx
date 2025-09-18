@@ -1,4 +1,5 @@
 import Head from 'next/head';
+import { signIn } from 'next-auth/react';
 
 export default function Home() {
   return (
@@ -67,14 +68,14 @@ export default function Home() {
             <h2>Get Early Access</h2>
             <p>Be the first to know when we launch</p>
             <div className="social-login">
-              <a className="social-btn google-btn" href="/api/auth/signin/google?callbackUrl=https://www.qimiai.to" aria-label="Continue with Google">
+              <button className="social-btn google-btn" onClick={() => signIn('google', { callbackUrl: 'https://www.qimiai.to' })} aria-label="Continue with Google">
                 <img src="/google.svg" alt="Google" />
                 <span>Continue with Google</span>
-              </a>
-              <a className="social-btn facebook-btn" href="/api/auth/signin/facebook?callbackUrl=https://www.qimiai.to" aria-label="Continue with Facebook">
+              </button>
+              <button className="social-btn facebook-btn" onClick={() => signIn('facebook', { callbackUrl: 'https://www.qimiai.to' })} aria-label="Continue with Facebook">
                 <img src="/facebook-f.svg" alt="Facebook" />
                 <span>Continue with Facebook</span>
-              </a>
+              </button>
             </div>
             <div className="divider"><span>or</span></div>
             <div className="email-form">
