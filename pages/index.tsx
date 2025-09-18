@@ -16,26 +16,6 @@ export default function Home() {
           }}
         />
       </Head>
-      <div style={{
-        position: 'fixed', 
-        top: '70px', 
-        left: '0', 
-        right: '0', 
-        width: '100%',
-        background: 'linear-gradient(135deg, #00D4AA, #8B5CF6)', 
-        color: 'white', 
-        textAlign: 'center', 
-        padding: '12px 0', 
-        fontSize: '16px', 
-        fontWeight: '600', 
-        zIndex: 1001, 
-        display: 'block',
-        visibility: 'visible',
-        opacity: '1',
-        margin: '0',
-        border: 'none',
-        boxShadow: '0 4px 20px rgba(0,212,170,0.3)'
-      }}>🚀 Coming Soon</div>
       <nav className="navbar">
         <div className="nav-container">
           <div className="nav-logo">
@@ -47,6 +27,26 @@ export default function Home() {
             <a href="#waitlist" className="nav-link">Join Waitlist</a>
           </div>
         </div>
+        <div style={{
+          position: 'absolute',
+          top: '100%',
+          left: '0',
+          right: '0',
+          width: '100%',
+          background: 'linear-gradient(135deg, #00D4AA, #8B5CF6)',
+          color: 'white',
+          textAlign: 'center',
+          padding: '12px 0',
+          fontSize: '16px',
+          fontWeight: '600',
+          zIndex: 1001,
+          display: 'block',
+          visibility: 'visible',
+          opacity: '1',
+          margin: '0',
+          border: 'none',
+          boxShadow: '0 4px 20px rgba(0,212,170,0.3)'
+        }}>🚀 Coming Soon</div>
       </nav>
 
       <main className="hero">
