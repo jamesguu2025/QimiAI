@@ -1,9 +1,28 @@
 import Head from 'next/head';
 import { signIn, useSession } from 'next-auth/react';
-import { useEffect } from 'react';
+import { useEffect, useState } from 'react';
 
 export default function Home() {
   const { data: session, status } = useSession();
+  const [waitlistCount, setWaitlistCount] = useState(0);
+
+  // 获取等待列表数量
+  const fetchWaitlistCount = async () => {
+    try {
+      const response = await fetch('/api/waitlist-count');
+      const data = await response.json();
+      if (data.success) {
+        setWaitlistCount(data.count);
+      }
+    } catch (error) {
+      console.error('Failed to fetch waitlist count:', error);
+    }
+  };
+
+  // 页面加载时获取数量
+  useEffect(() => {
+    fetchWaitlistCount();
+  }, []);
 
   // 处理登录后的自动订阅
   useEffect(() => {
@@ -26,6 +45,8 @@ export default function Home() {
         .then(data => {
           if (data.success) {
             alert('Welcome! You\'ve been added to our waitlist.');
+            // 刷新等待列表数量
+            fetchWaitlistCount();
           }
         })
         .catch(error => {
@@ -67,6 +88,8 @@ export default function Home() {
         alert(data.message);
         nameInput.value = '';
         emailInput.value = '';
+        // 刷新等待列表数量
+        fetchWaitlistCount();
       } else {
         alert(data.message || 'Something went wrong. Please try again.');
       }
@@ -148,7 +171,7 @@ export default function Home() {
           </div>
           <div className="hero-visual">
             <div className="waitlist-counter-display">
-              <div className="waitlist-number" id="waitlistCount">0</div>
+              <div className="waitlist-number" id="waitlistCount">{waitlistCount}</div>
               <div className="waitlist-label">Families Waiting</div>
               <p className="waitlist-description">Join the waitlist to be the first to experience Qimi AI when we launch. Get early access and exclusive benefits.</p>
             </div>
