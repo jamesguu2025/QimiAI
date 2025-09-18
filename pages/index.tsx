@@ -249,17 +249,6 @@ export default function Home() {
         </div>
       </section>
 
-      <section id="waitlist" className="waitlist">
-        <div className="waitlist-container">
-          <h2 className="section-title">Why Join Our Waitlist?</h2>
-          <div className="waitlist-grid">
-            <div className="waitlist-item"><div className="waitlist-icon">🎯</div><h3>First Access</h3><p>Be among the first to experience Qimi AI when we launch. Early users get exclusive access to beta features and special pricing.</p></div>
-            <div className="waitlist-item"><div className="waitlist-icon">💡</div><h3>Shape the Product</h3><p>Your feedback matters! Help us build the perfect solution for ADHD families by sharing your needs and preferences.</p></div>
-            <div className="waitlist-item"><div className="waitlist-icon">🎁</div><h3>Exclusive Benefits</h3><p>Waitlist members receive special discounts, priority support, and access to exclusive resources and content.</p></div>
-          </div>
-        </div>
-      </section>
-
       <section className="waitlist-section">
         <div className="waitlist-container">
           <div className="waitlist-content">
@@ -269,6 +258,17 @@ export default function Home() {
               <div className="waitlist-label">Families Already Waiting</div>
               <p className="waitlist-description">Be the first to experience Qimi AI when we launch. Get early access and exclusive benefits for your family's journey.</p>
             </div>
+          </div>
+        </div>
+      </section>
+
+      <section id="waitlist" className="waitlist">
+        <div className="waitlist-container">
+          <h2 className="section-title">Why Join Our Waitlist?</h2>
+          <div className="waitlist-grid">
+            <div className="waitlist-item"><div className="waitlist-icon">🎯</div><h3>First Access</h3><p>Be among the first to experience Qimi AI when we launch. Early users get exclusive access to beta features and special pricing.</p></div>
+            <div className="waitlist-item"><div className="waitlist-icon">💡</div><h3>Shape the Product</h3><p>Your feedback matters! Help us build the perfect solution for ADHD families by sharing your needs and preferences.</p></div>
+            <div className="waitlist-item"><div className="waitlist-icon">🎁</div><h3>Exclusive Benefits</h3><p>Waitlist members receive special discounts, priority support, and access to exclusive resources and content.</p></div>
           </div>
         </div>
       </section>
