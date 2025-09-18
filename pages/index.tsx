@@ -223,9 +223,9 @@ export default function Home() {
                 <strong>James Guu</strong><br/>
                 Founder of Qimi AI</p>
               </div>
-            </div>
-            <div className="james-photo-section">
-              <img src="/james-family.jpg" alt="James Guu with family" className="james-photo" />
+              <div className="james-photo-section">
+                <img src="/james-family.jpg" alt="James Guu with family" className="james-family-photo" />
+              </div>
             </div>
           </div>
         </div>

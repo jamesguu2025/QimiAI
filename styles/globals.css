@@ -41,16 +41,25 @@ body {
 .title-highlight { background: linear-gradient(135deg,#00D4AA,#8B5CF6); -webkit-background-clip: text; -webkit-text-fill-color: transparent; background-clip: text; }
 
 /* Letter Section */
-.letter-section { display: grid; grid-template-columns: 2fr 1fr; gap: 4rem; align-items: start; }
-.letter-content { background: rgba(255,255,255,0.95); border-radius: 20px; padding: 3rem; box-shadow: 0 20px 60px rgba(0,212,170,0.15); border: 1px solid rgba(0,212,170,0.1); backdrop-filter: blur(10px); }
+.letter-section { display: block; }
+.letter-content { background: rgba(255,255,255,0.95); border-radius: 20px; padding: 3rem; box-shadow: 0 20px 60px rgba(0,212,170,0.15); border: 1px solid rgba(0,212,170,0.1); backdrop-filter: blur(10px); max-width: 1000px; margin: 0 auto; }
 .letter-title { font-size: 2.5rem; font-weight: 700; color: #2C3E50; margin-bottom: 2rem; text-align: center; }
-.letter-text { font-size: 1.1rem; line-height: 1.8; color: #4A5A6B; }
+.letter-text { font-size: 1.1rem; line-height: 1.8; color: #4A5A6B; margin-bottom: 2rem; }
 .letter-text p { margin-bottom: 1.5rem; }
 .letter-text strong { color: #00D4AA; font-weight: 700; }
 
-/* James Photo Section */
-.james-photo-section { display: flex; justify-content: center; align-items: center; }
-.james-photo { width: 100%; max-width: 520px; aspect-ratio: 16/9; object-fit: cover; border-radius: 20px; box-shadow: 0 15px 40px rgba(0,212,170,0.15); border: 2px solid rgba(0,212,170,0.1); }
+/* James Photo Section - Inside Letter */
+.james-photo-section { display: flex; justify-content: center; align-items: center; margin-top: 2rem; }
+.james-family-photo {
+  width: 100%;
+  max-width: 400px;
+  height: auto;
+  aspect-ratio: 16/9;
+  object-fit: cover;
+  border-radius: 15px;
+  box-shadow: 0 10px 30px rgba(0,212,170,0.2);
+  border: 1px solid rgba(0,212,170,0.1);
+}
 
 /* Product Intro Section */
 .product-intro { padding: 4rem 0; background: rgba(248,255,254,0.6); backdrop-filter: blur(10px); }
@@ -200,17 +209,15 @@ body {
   .tagline { text-align: center; margin-bottom: 1.5rem; }
   .tagline-text { font-size: 1.8rem; }
   .letter-section { 
-    grid-template-columns: 1fr; 
-    gap: 2rem; 
+    display: block;
   }
-  .letter-content { padding: 2rem; }
+  .letter-content { padding: 2rem; max-width: 100%; }
   .letter-title { font-size: 2rem; }
   .letter-text { font-size: 1rem; }
   
-  /* James Photo Section */
-  .photo-placeholder { 
-    display: none;
-  }
+  /* James Photo Section Mobile */
+  .james-photo-section { margin-top: 1.5rem; }
+  .james-family-photo { max-width: 100%; }
   
   /* Product Features */
   .product-features { 
