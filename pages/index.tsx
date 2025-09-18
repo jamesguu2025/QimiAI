@@ -7,6 +7,7 @@ export default function Home() {
       <Head>
         <title>Qimi AI - Join the Waitlist</title>
         <meta name="description" content="Qimi AI - Intelligent Family Intervention Assistant for ADHD Families. Join our waitlist to be notified when we launch." />
+        <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no" />
         <link rel="icon" href="/favicon.svg" />
         <script async src="https://www.googletagmanager.com/gtag/js?id=G-3T1NP7EG91"></script>
         <script

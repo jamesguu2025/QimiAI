@@ -92,7 +92,67 @@ body {
 
 /* Responsive */
 @media (max-width: 768px) {
-  .hero-container { grid-template-columns: 1fr; gap: 2rem; text-align: center; }
-  .features-grid { grid-template-columns: 1fr; }
+  /* 全局调整 */
+  body { padding: 0; margin: 0; }
+  
+  /* 导航栏 */
+  .nav-container { padding: 1rem; }
+  .nav-links { gap: 1rem; }
+  .nav-link { font-size: 0.9rem; }
+  
+  /* Hero 区域 */
+  .hero { padding: 8rem 0 2rem; }
+  .hero-container { 
+    grid-template-columns: 1fr; 
+    gap: 2rem; 
+    text-align: center; 
+    padding: 0 1rem;
+  }
+  .hero-title { font-size: 2.5rem; line-height: 1.1; }
+  
+  /* Features 网格 */
+  .features-grid { 
+    grid-template-columns: 1fr; 
+    gap: 1rem;
+    margin-top: 1.5rem;
+  }
+  .feature-card { padding: 1rem; }
+  
+  /* Hero 视觉区域 */
   .hero-visual { justify-content: center; }
+  .waitlist-counter-display { 
+    max-width: 100%; 
+    padding: 1.5rem;
+    margin-top: 1rem;
+  }
+  .waitlist-number { font-size: 3rem; }
+  
+  /* 登录区域 */
+  .top-login-section { padding: 2rem 0; }
+  .top-login-container { padding: 0 1rem; }
+  .login-content h2 { font-size: 1.5rem; }
+  .social-login { gap: 0.5rem; }
+  .social-btn { padding: 0.8rem 1rem; font-size: 0.9rem; }
+  .email-form { flex-direction: column; gap: 0.5rem; }
+  .email-input, .join-btn { padding: 0.8rem; }
+  
+  /* 其他区域 */
+  .waitlist, .about, .founder { padding: 2rem 0; }
+  .waitlist-container, .about-container, .founder-container { padding: 0 1rem; }
+  .section-title { font-size: 1.5rem; }
+  .waitlist-grid { grid-template-columns: 1fr; gap: 1rem; }
+  
+  /* Footer */
+  .footer { padding: 2rem 0 1rem; }
+  .footer-container { padding: 0 1rem; }
+  .footer-content { grid-template-columns: 1fr; gap: 1rem; text-align: center; }
+  .footer-links { justify-content: center; flex-wrap: wrap; gap: 1rem; }
+}
+
+/* 更小的屏幕 */
+@media (max-width: 480px) {
+  .hero-title { font-size: 2rem; }
+  .nav-links { flex-direction: column; gap: 0.5rem; }
+  .social-btn { font-size: 0.8rem; padding: 0.7rem 0.8rem; }
+  .waitlist-number { font-size: 2.5rem; }
 }
