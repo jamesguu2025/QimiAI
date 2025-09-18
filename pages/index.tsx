@@ -199,40 +199,67 @@ export default function Home() {
 
       <main className="hero">
         <div className="hero-container">
-          <div>
-            <h1 className="hero-title">Intelligent Family Intervention <span className="title-highlight">for ADHD Families</span></h1>
-            <p className="hero-description">
-              Qimi AI provides emotional support for parents and comprehensive action plans for children. 
-              Founded by James Guu, a 36-year-old ADHD adult, experienced educator, and serial entrepreneur 
-              who has transformed his own life and helped countless families succeed across North America and China.
-            </p>
-            <div className="features-grid">
-              <div className="feature-card">
-                <div className="feature-icon">💚</div>
-                <h3>Parent Emotional Support</h3>
-                <p>Helping ADHD parents manage stress from children, work, family, and school pressures with proven emotional wellness strategies</p>
-              </div>
-              <div className="feature-card">
-                <div className="feature-icon">🎯</div>
-                <h3>Comprehensive Action Plans</h3>
-                <p>Evidence-based strategies covering learning, exercise, nutrition, and daily routines to help your child thrive</p>
-              </div>
-              <div className="feature-card">
-                <div className="feature-icon">👨‍💼</div>
-                <h3>Trusted Expertise</h3>
-                <p>Founded by James Guu, a 36-year-old ADHD adult, experienced educator, and serial entrepreneur with proven success helping families across North America and China</p>
+          <div className="letter-section">
+            <div className="letter-content">
+              <h1 className="letter-title">A Letter from James</h1>
+              <div className="letter-text">
+                <p>Dear fellow parent,</p>
+                
+                <p>This is James Guu. I grew up as a kid with ADHD—always being told to focus, to sit still, to behave. But no one ever told me how. I felt lost, misunderstood, and exhausted.</p>
+                
+                <p>Years later, when my son began showing the same signs, I made a promise: he wouldn't have to go through this alone like I did.</p>
+                
+                <p>That's why I created Qimi AI—not as a tech product, but as a parent's tool.</p>
+                
+                <p>I've been a teacher, an entrepreneur, and now a self-taught AI developer. I spent years connecting ancient Chinese medicine, modern science, and practical daily routines—then built a system that could actually support families like ours.</p>
+                
+                <p>Qimi AI is here to help. It's not perfect, but it's honest. And it comes from someone who truly understands what you're going through.</p>
+                
+                <p>From my family to yours,<br/>
+                Warmly,<br/><br/>
+                <strong>James Guu</strong><br/>
+                Founder of Qimi AI</p>
               </div>
             </div>
-          </div>
-          <div className="hero-visual">
-            <div className="waitlist-counter-display">
-              <div className="waitlist-number" id="waitlistCount">{waitlistCount}</div>
-              <div className="waitlist-label">Families Waiting</div>
-              <p className="waitlist-description">Join the waitlist to be the first to experience Qimi AI when we launch. Get early access and exclusive benefits.</p>
+            <div className="james-photo-section">
+              <div className="photo-placeholder">
+                <p>James Guu Photo<br/>(9:16 ratio)</p>
+              </div>
             </div>
           </div>
         </div>
       </main>
+
+      <section className="product-intro">
+        <div className="product-container">
+          <h2 className="section-title">How Qimi AI Helps Your Family</h2>
+          <div className="product-features">
+            <div className="product-feature">
+              <div className="feature-icon">💚</div>
+              <h3>Parent Emotional Support</h3>
+              <p>Helping ADHD parents manage stress from children, work, family, and school pressures with proven emotional wellness strategies</p>
+            </div>
+            <div className="product-feature">
+              <div className="feature-icon">🎯</div>
+              <h3>Comprehensive Action Plans</h3>
+              <p>Evidence-based strategies covering learning, exercise, nutrition, and daily routines to help your child thrive</p>
+            </div>
+          </div>
+        </div>
+      </section>
+
+      <section className="waitlist-section">
+        <div className="waitlist-container">
+          <div className="waitlist-content">
+            <h2 className="section-title">Join Our Community</h2>
+            <div className="waitlist-counter-display">
+              <div className="waitlist-number" id="waitlistCount">{waitlistCount}</div>
+              <div className="waitlist-label">Families Already Waiting</div>
+              <p className="waitlist-description">Be the first to experience Qimi AI when we launch. Get early access and exclusive benefits for your family's journey.</p>
+            </div>
+          </div>
+        </div>
+      </section>
 
       <section className="top-login-section">
         <div className="top-login-container">
