@@ -118,7 +118,7 @@ body {
   background: rgba(255,255,255,0.8);
   backdrop-filter: blur(10px);
   border-bottom: 1px solid rgba(0,212,170,0.1);
-  margin-top: 0; /* Remove the large margin */
+  margin-top: 50px; /* Add space to avoid banner overlap */
 }
 
 .hero-tagline {
@@ -256,7 +256,7 @@ body {
   .page-subtitle { font-size: 1.1rem; }
   
   /* Hero Tagline Mobile */
-  .hero-tagline-section { margin-top: 0; padding: 1rem 0; }
+  .hero-tagline-section { margin-top: 45px; padding: 1rem 0; }
   .hero-tagline { font-size: 1.8rem; }
   
   /* Content Grid Mobile */
