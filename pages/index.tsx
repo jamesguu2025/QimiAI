@@ -38,7 +38,9 @@ export default function Home() {
   }, [session]);
 
   const handleEmailSubmit = async () => {
+    const nameInput = document.getElementById('nameInput') as HTMLInputElement;
     const emailInput = document.getElementById('emailInput') as HTMLInputElement;
+    const name = nameInput.value.trim();
     const email = emailInput.value.trim();
 
     if (!email || !email.includes('@')) {
@@ -54,6 +56,7 @@ export default function Home() {
         },
         body: JSON.stringify({
           email: email,
+          name: name,
           source: 'email_form',
         }),
       });
@@ -62,6 +65,7 @@ export default function Home() {
 
       if (data.success) {
         alert(data.message);
+        nameInput.value = '';
         emailInput.value = '';
       } else {
         alert(data.message || 'Something went wrong. Please try again.');
@@ -169,6 +173,7 @@ export default function Home() {
             </div>
             <div className="divider"><span>or</span></div>
             <div className="email-form">
+              <input type="text" placeholder="Your name (optional)" className="name-input" id="nameInput" />
               <input type="email" placeholder="Enter your email address" className="email-input" id="emailInput" />
               <button className="join-btn" onClick={handleEmailSubmit}>Join Waitlist</button>
             </div>
