@@ -103,7 +103,7 @@ export default function Home() {
     <>
       <Head>
         <title>Qimi AI - ADHD Family Support Platform</title>
-        <meta name="description" content="Qimi AI provides emotional support for ADHD parents and comprehensive action plans for children. Founded by James Guu, a successful ADHD adult entrepreneur." />
+        <meta name="description" content="Qimi AI provides emotional support for ADHD parents and comprehensive action plans for children. Founded by James Guu, an experienced educator and serial entrepreneur." />
         <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no" />
         <link rel="icon" href="/favicon.svg" />
         <script async src="https://www.googletagmanager.com/gtag/js?id=G-3T1NP7EG91"></script>
@@ -152,8 +152,8 @@ export default function Home() {
             <h1 className="hero-title">Intelligent Family Intervention <span className="title-highlight">for ADHD Families</span></h1>
             <p className="hero-description">
               Qimi AI provides emotional support for parents and comprehensive action plans for children. 
-              Founded by James Guu, a 36-year-old ADHD adult and successful entrepreneur who has transformed 
-              his own life and helped countless families across North America and China.
+              Founded by James Guu, a 36-year-old ADHD adult, experienced educator, and serial entrepreneur 
+              who has transformed his own life and helped countless families succeed across North America and China.
             </p>
             <div className="features-grid">
               <div className="feature-card">
@@ -169,7 +169,7 @@ export default function Home() {
               <div className="feature-card">
                 <div className="feature-icon">👨‍💼</div>
                 <h3>Trusted Expertise</h3>
-                <p>Founded by James Guu, a 36-year-old ADHD adult and successful entrepreneur with proven results across North America and China</p>
+                <p>Founded by James Guu, a 36-year-old ADHD adult, experienced educator, and serial entrepreneur with proven success helping families across North America and China</p>
               </div>
             </div>
           </div>
