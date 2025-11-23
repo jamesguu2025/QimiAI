@@ -56,7 +56,7 @@ export const ChatInput: React.FC<ChatInputProps> = ({ onSend, disabled }) => {
                     onChange={(e) => setInput(e.target.value)}
                     onKeyDown={handleKeyDown}
                     placeholder="Ask anything..."
-                    className="w-full max-h-[200px] py-3 px-4 bg-transparent border-none focus:ring-0 resize-none text-slate-800 placeholder:text-slate-400 text-[0.95rem] leading-relaxed"
+                    className="w-full max-h-[200px] py-3 px-4 bg-transparent border-none focus:ring-0 outline-none resize-none text-slate-800 placeholder:text-slate-400 text-[0.95rem] leading-relaxed"
                     rows={1}
                     disabled={disabled}
                     style={{ minHeight: '52px' }}

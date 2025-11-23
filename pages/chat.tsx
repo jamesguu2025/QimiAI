@@ -1,5 +1,7 @@
 import React, { useState, useRef, useEffect } from 'react';
 import Head from 'next/head';
+import { useRouter } from 'next/router';
+import AppLayout from '../components/Layout/AppLayout';
 import { ChatMessage } from '../components/Chat/ChatMessage';
 import { ChatInput } from '../components/Chat/ChatInput';
 import { Source } from '../components/Chat/RAGSources';
@@ -12,6 +14,9 @@ interface Message {
 }
 
 export default function ChatPage() {
+    const router = useRouter();
+    const { mode } = router.query;
+
     const [messages, setMessages] = useState<Message[]>([
         {
             id: 'welcome',
@@ -29,6 +34,17 @@ export default function ChatPage() {
     useEffect(() => {
         scrollToBottom();
     }, [messages]);
+
+    // Handle initial mode from query params
+    useEffect(() => {
+        if (mode === 'iep') {
+            handleSend("I need help with an IEP.");
+        } else if (mode === 'routine') {
+            handleSend("I need help building a routine.");
+        } else if (mode === 'support') {
+            handleSend("I'm feeling overwhelmed and need support.");
+        }
+    }, [mode]);
 
     const getMockResponse = (input: string): { content: string; sources: Source[] } => {
         const lowerInput = input.toLowerCase();
@@ -52,6 +68,15 @@ export default function ChatPage() {
             };
         }
 
+        if (lowerInput.includes('iep')) {
+            return {
+                content: "Navigating the IEP process can be daunting. I can help you understand your rights, suggest goals, or draft a letter to the school.\n\n**Where should we start?**\n*   Understanding the evaluation process\n*   Drafting SMART goals\n*   Requesting a meeting",
+                sources: [
+                    { title: "Understood.org: IEP Guide", url: "https://www.understood.org/en/school-learning/special-services/ieps/understanding-individualized-education-programs" }
+                ]
+            };
+        }
+
         return {
             content: "I understand. Could you tell me more about that? I'm here to listen and provide support based on verified medical guidelines.",
             sources: []
@@ -59,13 +84,18 @@ export default function ChatPage() {
     };
 
     const handleSend = async (content: string) => {
-        const userMessage: Message = {
-            id: Date.now().toString(),
-            role: 'user',
-            content
-        };
+        // Avoid duplicates if called from effect
+        setMessages(prev => {
+            const lastMsg = prev[prev.length - 1];
+            if (lastMsg.role === 'user' && lastMsg.content === content) return prev;
 
-        setMessages(prev => [...prev, userMessage]);
+            return [...prev, {
+                id: Date.now().toString(),
+                role: 'user',
+                content
+            }];
+        });
+
         setIsLoading(true);
 
         // Mock Response Logic
@@ -84,74 +114,12 @@ export default function ChatPage() {
     };
 
     return (
-        <div className="flex h-screen bg-white font-sans text-slate-900 selection:bg-slate-100">
+        <AppLayout fullScreen>
             <Head>
-                <title>Qimi AI</title>
-                <meta name="viewport" content="width=device-width, initial-scale=1, maximum-scale=1" />
+                <title>Chat - Qimi AI</title>
             </Head>
 
-            {/* Sidebar */}
-            <aside className="w-[260px] flex-shrink-0 bg-white/50 border-r border-slate-200/60 flex flex-col hidden md:flex backdrop-blur-sm">
-                <div className="p-4">
-                    <button
-                        onClick={() => setMessages([messages[0]])}
-                        className="w-full flex items-center gap-2 px-3 py-2.5 bg-white border border-slate-200 rounded-xl shadow-sm hover:bg-slate-50 hover:border-slate-300 hover:shadow-md transition-all text-sm font-semibold text-slate-700 group"
-                    >
-                        <div className="w-6 h-6 rounded-lg bg-primary-teal/10 flex items-center justify-center group-hover:bg-primary-teal/20 transition-colors">
-                            <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 20 20" fill="currentColor" className="w-4 h-4 text-primary-teal">
-                                <path d="M10.75 4.75a.75.75 0 00-1.5 0v4.5h-4.5a.75.75 0 000 1.5h4.5v4.5a.75.75 0 001.5 0v-4.5h4.5a.75.75 0 000-1.5h-4.5v-4.5z" />
-                            </svg>
-                        </div>
-                        New Chat
-                    </button>
-                </div>
-
-                <div className="flex-1 overflow-y-auto px-3 py-2 space-y-1">
-                    <div className="px-3 mb-2 text-[10px] font-bold text-slate-400 uppercase tracking-wider">Today</div>
-                    <button className="w-full flex items-center gap-3 px-3 py-2 rounded-lg text-sm text-slate-600 hover:bg-white hover:shadow-sm transition-all group">
-                        <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 20 20" fill="currentColor" className="w-4 h-4 text-slate-400 group-hover:text-primary-purple transition-colors">
-                            <path fillRule="evenodd" d="M10 18a8 8 0 100-16 8 8 0 000 16zm.75-11.25a.75.75 0 00-1.5 0v2.5h-2.5a.75.75 0 000 1.5h2.5v2.5a.75.75 0 001.5 0v-2.5h2.5a.75.75 0 000-1.5h-2.5v-2.5z" clipRule="evenodd" />
-                        </svg>
-                        <span className="truncate">Understanding ADHD</span>
-                    </button>
-                    <button className="w-full flex items-center gap-3 px-3 py-2 rounded-lg text-sm text-slate-600 hover:bg-white hover:shadow-sm transition-all group">
-                        <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 20 20" fill="currentColor" className="w-4 h-4 text-slate-400 group-hover:text-primary-purple transition-colors">
-                            <path fillRule="evenodd" d="M10 18a8 8 0 100-16 8 8 0 000 16zm.75-11.25a.75.75 0 00-1.5 0v2.5h-2.5a.75.75 0 000 1.5h2.5v2.5a.75.75 0 001.5 0v-2.5h2.5a.75.75 0 000-1.5h-2.5v-2.5z" clipRule="evenodd" />
-                        </svg>
-                        <span className="truncate">Sleep schedule help</span>
-                    </button>
-                </div>
-
-                <div className="p-4 border-t border-slate-200/60">
-                    <button className="flex items-center gap-3 w-full px-2 py-2 rounded-xl hover:bg-white hover:shadow-sm transition-all text-sm text-slate-700">
-                        <div className="w-8 h-8 rounded-full bg-gradient-to-br from-teal-400 to-purple-500 flex items-center justify-center text-white font-bold text-xs shadow-sm">
-                            JG
-                        </div>
-                        <div className="flex-1 text-left">
-                            <div className="font-semibold text-slate-800">James Guu</div>
-                            <div className="text-xs text-slate-500">Free Plan</div>
-                        </div>
-                    </button>
-                </div>
-            </aside>
-
-            {/* Main Content */}
-            <main className="flex-1 flex flex-col min-w-0 relative">
-                {/* Mobile Header */}
-                <header className="md:hidden h-14 border-b border-slate-100 flex items-center justify-between px-4 bg-white/80 backdrop-blur-md sticky top-0 z-10">
-                    <div className="font-bold text-slate-800 flex items-center gap-2">
-                        <div className="w-6 h-6 rounded bg-gradient-primary flex items-center justify-center">
-                            <img src="/logo.svg" alt="Qimi" className="w-3 h-3 brightness-0 invert" />
-                        </div>
-                        Qimi AI
-                    </div>
-                    <button onClick={() => setMessages([messages[0]])} className="text-slate-500 p-2 bg-slate-100 rounded-full">
-                        <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 20 20" fill="currentColor" className="w-5 h-5">
-                            <path d="M10.75 4.75a.75.75 0 00-1.5 0v4.5h-4.5a.75.75 0 000 1.5h4.5v4.5a.75.75 0 001.5 0v-4.5h4.5a.75.75 0 000-1.5h-4.5v-4.5z" />
-                        </svg>
-                    </button>
-                </header>
-
+            <div className="flex flex-col h-full bg-white">
                 {/* Chat Stream */}
                 <div className="flex-1 overflow-y-auto">
                     <div className="max-w-3xl mx-auto px-4 py-8 flex flex-col min-h-full">
@@ -220,10 +188,10 @@ export default function ChatPage() {
                 </div>
 
                 {/* Input Area */}
-                <div className="flex-shrink-0 pb-6 pt-2 px-4">
+                <div className="flex-shrink-0 pb-6 pt-2 px-4 bg-white border-t border-slate-50">
                     <ChatInput onSend={handleSend} disabled={isLoading} />
                 </div>
-            </main>
-        </div>
+            </div>
+        </AppLayout>
     );
 }
