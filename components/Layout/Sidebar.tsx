@@ -7,7 +7,6 @@ import {
     BookOpen,
     Settings,
     LogOut,
-    Menu,
     X
 } from 'lucide-react';
 
@@ -22,7 +21,7 @@ const Sidebar: React.FC<SidebarProps> = ({ isOpen, setIsOpen }) => {
     const navigation = [
         { name: 'Dashboard', href: '/dashboard', icon: LayoutDashboard },
         { name: 'Chat', href: '/chat', icon: MessageSquare },
-        { name: 'Resources', href: '/resources', icon: BookOpen },
+        { name: 'ADHD Insights', href: '/blog', icon: BookOpen },
         { name: 'Settings', href: '/settings', icon: Settings },
     ];
 
@@ -40,11 +39,8 @@ const Sidebar: React.FC<SidebarProps> = ({ isOpen, setIsOpen }) => {
                 }`}>
                 {/* Logo Area */}
                 <div className="flex items-center justify-between h-16 px-6 border-b border-slate-100">
-                    <Link href="/dashboard" className="flex items-center gap-2 font-bold text-xl text-slate-900">
-                        <div className="w-8 h-8 rounded-lg bg-gradient-to-br from-primary-teal to-primary-purple flex items-center justify-center text-white">
-                            Q
-                        </div>
-                        <span>Qimi AI</span>
+                    <Link href="/dashboard" className="flex items-center gap-2">
+                        <img src="/logo.svg" alt="Qimi AI" className="h-10 w-auto" />
                     </Link>
                     <button
                         onClick={() => setIsOpen(false)}

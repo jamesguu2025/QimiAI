@@ -1,21 +1,33 @@
-import React, { useState, useRef, useEffect } from 'react';
+import { useState, useRef, useEffect } from 'react';
 import Head from 'next/head';
 import { useRouter } from 'next/router';
+import { useSession } from 'next-auth/react';
 import AppLayout from '../components/Layout/AppLayout';
-import { ChatMessage } from '../components/Chat/ChatMessage';
-import { ChatInput } from '../components/Chat/ChatInput';
+import { ChatMessage, Attachment } from '../components/Chat/ChatMessage';
+import { ChatInput, FileAttachment } from '../components/Chat/ChatInput';
 import { Source } from '../components/Chat/RAGSources';
+import GuestOnboarding from '../components/Chat/GuestOnboarding';
+import LoginWall from '../components/Chat/LoginWall';
+import { guestStorage } from '../utils/guest-storage';
 
 interface Message {
     id: string;
     role: 'user' | 'assistant';
     content: string;
     sources?: Source[];
+    attachments?: Attachment[];
 }
 
 export default function ChatPage() {
     const router = useRouter();
     const { mode } = router.query;
+    const { data: session, status } = useSession();
+
+    // 访客模式状态
+    const [isGuest, setIsGuest] = useState(true);
+    const [showOnboarding, setShowOnboarding] = useState(false);
+    const [showLoginWall, setShowLoginWall] = useState(false);
+    const [guestMessageCount, setGuestMessageCount] = useState(0);
 
     const [messages, setMessages] = useState<Message[]>([
         {
@@ -35,6 +47,45 @@ export default function ChatPage() {
         scrollToBottom();
     }, [messages]);
 
+    // 检查登录状态和访客数据
+    useEffect(() => {
+        if (status === 'loading') return;
+
+        if (session) {
+            // 已登录用户
+            setIsGuest(false);
+            setShowOnboarding(false);
+            // 静默迁移访客数据到用户账户
+            const guestData = guestStorage.get();
+            if (guestData && session.user?.email) {
+                guestStorage.migrateToUser(session.user.email);
+            }
+        } else {
+            // 访客用户
+            setIsGuest(true);
+            const hasOnboarded = guestStorage.hasCompletedOnboarding();
+            if (!hasOnboarded) {
+                setShowOnboarding(true);
+            } else {
+                // 恢复访客数据
+                const guestData = guestStorage.get();
+                if (guestData) {
+                    setGuestMessageCount(guestData.messageCount || 0);
+                    // 恢复历史消息
+                    if (guestData.chatHistory && guestData.chatHistory.length > 0) {
+                        const restoredMessages: Message[] = guestData.chatHistory.map(msg => ({
+                            id: msg.id,
+                            role: msg.role,
+                            content: msg.content,
+                            sources: []
+                        }));
+                        setMessages([messages[0], ...restoredMessages]);
+                    }
+                }
+            }
+        }
+    }, [session, status]);
+
     // Handle initial mode from query params
     useEffect(() => {
         if (mode === 'iep') {
@@ -46,8 +97,16 @@ export default function ChatPage() {
         }
     }, [mode]);
 
-    const getMockResponse = (input: string): { content: string; sources: Source[] } => {
+    const getMockResponse = (input: string, hasAttachments: boolean): { content: string; sources: Source[] } => {
         const lowerInput = input.toLowerCase();
+
+        // 如果有附件，给出不同的回复
+        if (hasAttachments) {
+            return {
+                content: "Thank you for sharing those files with me. I can see the attachments you've uploaded.\n\n**What I can help with:**\n*   Analyze images of documents or homework\n*   Review PDFs of school reports or IEPs\n*   Help interpret Word documents\n\nCould you tell me more about what you'd like me to look at specifically?",
+                sources: []
+            };
+        }
 
         if (lowerInput.includes('adhd')) {
             return {
@@ -83,24 +142,54 @@ export default function ChatPage() {
         };
     };
 
-    const handleSend = async (content: string) => {
+    const handleSend = async (content: string, attachments?: FileAttachment[]) => {
+        // 访客模式：检查是否达到消息限制
+        if (isGuest && guestStorage.hasReachedLimit()) {
+            setShowLoginWall(true);
+            return;
+        }
+
+        // 转换附件格式
+        const messageAttachments: Attachment[] | undefined = attachments?.map(a => ({
+            id: a.id,
+            name: a.name,
+            type: a.type,
+            size: a.size,
+            url: a.url
+        }));
+
+        // 构建显示内容（如果只有附件没有文字）
+        const displayContent = content || (attachments && attachments.length > 0
+            ? `[Attached ${attachments.length} file${attachments.length > 1 ? 's' : ''}]`
+            : '');
+
         // Avoid duplicates if called from effect
+        const userMessage: Message = {
+            id: Date.now().toString(),
+            role: 'user',
+            content: displayContent,
+            attachments: messageAttachments
+        };
+
         setMessages(prev => {
             const lastMsg = prev[prev.length - 1];
-            if (lastMsg.role === 'user' && lastMsg.content === content) return prev;
-
-            return [...prev, {
-                id: Date.now().toString(),
-                role: 'user',
-                content
-            }];
+            if (lastMsg.role === 'user' && lastMsg.content === displayContent) return prev;
+            return [...prev, userMessage];
         });
+
+        // 访客模式：保存消息并增加计数
+        if (isGuest) {
+            guestStorage.addMessage({ id: userMessage.id, role: 'user', content: displayContent });
+            guestStorage.incrementMessageCount();
+            setGuestMessageCount(prev => prev + 1);
+        }
 
         setIsLoading(true);
 
         // Mock Response Logic
         setTimeout(() => {
-            const { content: aiContent, sources } = getMockResponse(content);
+            const hasAttachments = attachments && attachments.length > 0;
+            const { content: aiContent, sources } = getMockResponse(content, !!hasAttachments);
 
             const mockResponse: Message = {
                 id: (Date.now() + 1).toString(),
@@ -109,15 +198,78 @@ export default function ChatPage() {
                 sources: sources
             };
             setMessages(prev => [...prev, mockResponse]);
+
+            // 访客模式：保存 AI 回复
+            if (isGuest) {
+                guestStorage.addMessage({ id: mockResponse.id, role: 'assistant', content: aiContent });
+            }
+
             setIsLoading(false);
         }, 1000);
     };
+
+    // 访客引导完成回调
+    const handleOnboardingComplete = (data: {
+        childBirthday: { year: number; month: number };
+        challenges: { id: string; name: string; categoryId: string; categoryName: string }[];
+        firstQuestion: string;
+    }) => {
+        guestStorage.initSession(data.childBirthday, data.challenges, data.firstQuestion);
+        setShowOnboarding(false);
+
+        // 自动发送第一个问题
+        if (data.firstQuestion) {
+            setTimeout(() => {
+                handleSend(data.firstQuestion);
+            }, 500);
+        }
+    };
+
+    // 关闭登录墙
+    const handleLoginWallClose = () => {
+        setShowLoginWall(false);
+    };
+
+    // 加载中状态
+    if (status === 'loading') {
+        return (
+            <AppLayout fullScreen>
+                <Head>
+                    <title>Chat - Qimi AI</title>
+                </Head>
+                <div className="flex items-center justify-center h-full">
+                    <div className="animate-pulse text-slate-400">Loading...</div>
+                </div>
+            </AppLayout>
+        );
+    }
+
+    // 访客引导页面
+    if (showOnboarding) {
+        return (
+            <AppLayout fullScreen>
+                <Head>
+                    <title>Welcome - Qimi AI</title>
+                </Head>
+                <GuestOnboarding onComplete={handleOnboardingComplete} />
+            </AppLayout>
+        );
+    }
 
     return (
         <AppLayout fullScreen>
             <Head>
                 <title>Chat - Qimi AI</title>
             </Head>
+
+            {/* 登录墙弹窗 */}
+            {showLoginWall && (
+                <LoginWall
+                    onClose={handleLoginWallClose}
+                    messageCount={guestMessageCount}
+                    maxMessages={guestStorage.getMaxMessages()}
+                />
+            )}
 
             <div className="flex flex-col h-full bg-white">
                 {/* Chat Stream */}
@@ -169,11 +321,17 @@ export default function ChatPage() {
                         ) : (
                             <>
                                 {messages.map((msg) => (
-                                    <ChatMessage key={msg.id} role={msg.role} content={msg.content} sources={msg.sources} />
+                                    <ChatMessage
+                                        key={msg.id}
+                                        role={msg.role}
+                                        content={msg.content}
+                                        sources={msg.sources}
+                                        attachments={msg.attachments}
+                                    />
                                 ))}
 
                                 {isLoading && (
-                                    <div className="flex justify-start mb-6 ml-12">
+                                    <div className="flex justify-start mb-6">
                                         <div className="flex gap-1.5">
                                             <div className="w-1.5 h-1.5 bg-slate-400 rounded-full animate-bounce" style={{ animationDelay: '0ms' }} />
                                             <div className="w-1.5 h-1.5 bg-slate-400 rounded-full animate-bounce" style={{ animationDelay: '150ms' }} />
@@ -186,6 +344,26 @@ export default function ChatPage() {
                         )}
                     </div>
                 </div>
+
+                {/* 访客剩余消息提示 */}
+                {isGuest && guestMessageCount > 0 && (
+                    <div className="flex-shrink-0 px-4 py-2 bg-amber-50 border-t border-amber-100">
+                        <div className="max-w-3xl mx-auto flex items-center justify-center gap-2 text-sm text-amber-700">
+                            <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 20 20" fill="currentColor" className="w-4 h-4">
+                                <path fillRule="evenodd" d="M18 10a8 8 0 11-16 0 8 8 0 0116 0zm-7-4a1 1 0 11-2 0 1 1 0 012 0zM9 9a.75.75 0 000 1.5h.253a.25.25 0 01.244.304l-.459 2.066A1.75 1.75 0 0010.747 15H11a.75.75 0 000-1.5h-.253a.25.25 0 01-.244-.304l.459-2.066A1.75 1.75 0 009.253 9H9z" clipRule="evenodd" />
+                            </svg>
+                            <span>
+                                {guestStorage.getRemainingMessages()} free messages remaining.{' '}
+                                <button
+                                    onClick={() => setShowLoginWall(true)}
+                                    className="font-semibold underline hover:text-amber-800"
+                                >
+                                    Sign up for unlimited
+                                </button>
+                            </span>
+                        </div>
+                    </div>
+                )}
 
                 {/* Input Area */}
                 <div className="flex-shrink-0 pb-6 pt-2 px-4 bg-white border-t border-slate-50">

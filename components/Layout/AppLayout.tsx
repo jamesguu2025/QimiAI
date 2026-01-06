@@ -23,7 +23,7 @@ const AppLayout: React.FC<AppLayoutProps> = ({ children, fullScreen = false }) =
                     >
                         <Menu size={24} />
                     </button>
-                    <span className="font-bold text-lg text-slate-900">Qimi AI</span>
+                    <img src="/logo.svg" alt="Qimi AI" className="h-9 w-auto" />
                     <div className="w-8" /> {/* Spacer for centering */}
                 </div>
 
