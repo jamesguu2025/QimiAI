@@ -1,5 +1,6 @@
 import React, { useState, useRef, useEffect, useCallback } from 'react';
 import { Paperclip, X, FileText, Image as ImageIcon, File, Upload } from 'lucide-react';
+import { formatFileSize, getFileCategory } from '../../utils/format';
 
 // 支持的文件类型
 const ACCEPTED_FILE_TYPES = {
@@ -39,13 +40,6 @@ interface ChatInputProps {
   onSend: (message: string, attachments?: FileAttachment[]) => void;
   disabled?: boolean;
 }
-
-// 格式化文件大小
-const formatFileSize = (bytes: number): string => {
-  if (bytes < 1024) return `${bytes} B`;
-  if (bytes < 1024 * 1024) return `${(bytes / 1024).toFixed(1)} KB`;
-  return `${(bytes / (1024 * 1024)).toFixed(1)} MB`;
-};
 
 // 获取文件图标
 const getFileIcon = (type: string) => {

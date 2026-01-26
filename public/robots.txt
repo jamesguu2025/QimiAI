@@ -1,0 +1,55 @@
+# Qimi AI - robots.txt
+# https://qimi.ai
+
+# Default rules
+User-agent: *
+Allow: /
+Disallow: /api/
+Disallow: /chat
+Disallow: /dashboard
+Disallow: /profile
+Disallow: /settings
+
+# Block AI training crawlers
+User-agent: GPTBot
+Disallow: /
+
+User-agent: ChatGPT-User
+Disallow: /
+
+User-agent: CCBot
+Disallow: /
+
+User-agent: anthropic-ai
+Disallow: /
+
+User-agent: Google-Extended
+Disallow: /
+
+User-agent: FacebookBot
+Disallow: /
+
+User-agent: Bytespider
+Disallow: /
+
+# Allow search engines to index marketing pages
+User-agent: Googlebot
+Allow: /
+Allow: /about
+Allow: /blog
+Allow: /founder
+Disallow: /api/
+Disallow: /chat
+Disallow: /dashboard
+
+User-agent: Bingbot
+Allow: /
+Allow: /about
+Allow: /blog
+Allow: /founder
+Disallow: /api/
+Disallow: /chat
+Disallow: /dashboard
+
+# Sitemap
+Sitemap: https://qimi.ai/sitemap.xml

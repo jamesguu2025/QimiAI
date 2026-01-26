@@ -10,7 +10,9 @@ import {
   BookOpen,
   Lightbulb,
   Users,
-  User
+  User,
+  Menu,
+  X
 } from 'lucide-react';
 
 // 下拉菜单数据类型
@@ -86,6 +88,24 @@ interface LandingLayoutProps {
 export default function LandingLayout({ children }: LandingLayoutProps) {
   const { data: session } = useSession();
   const [openDropdown, setOpenDropdown] = useState<string | null>(null);
+  const [mobileMenuOpen, setMobileMenuOpen] = useState(false);
+  const [userCount, setUserCount] = useState(0);
+
+  // 获取全球注册用户数
+  useEffect(() => {
+    const fetchUserStats = async () => {
+      try {
+        const response = await fetch('/api/user-stats');
+        const data = await response.json();
+        if (data.success) {
+          setUserCount(data.count);
+        }
+      } catch (error) {
+        console.error('Failed to fetch user stats:', error);
+      }
+    };
+    fetchUserStats();
+  }, []);
 
   // 导航菜单数据
   const featuresItems: DropdownItem[] = [
@@ -111,48 +131,75 @@ export default function LandingLayout({ children }: LandingLayoutProps) {
       <nav className="fixed top-0 left-0 right-0 z-50 bg-white/80 backdrop-blur-md border-b border-slate-100">
         <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
           <div className="flex items-center justify-between h-16">
-            <Link href="/" className="flex items-center gap-2">
-              <img src="/logo.svg" alt="Qimi AI" className="h-10 w-auto" />
-            </Link>
-            <div className="hidden md:flex items-center gap-6">
-              <NavDropdown
-                label="Features"
-                items={featuresItems}
-                isOpen={openDropdown === 'features'}
-                onToggle={() => setOpenDropdown(openDropdown === 'features' ? null : 'features')}
-                onClose={() => setOpenDropdown(null)}
-              />
-              <NavDropdown
-                label="Resources"
-                items={resourcesItems}
-                isOpen={openDropdown === 'resources'}
-                onToggle={() => setOpenDropdown(openDropdown === 'resources' ? null : 'resources')}
-                onClose={() => setOpenDropdown(null)}
-              />
-              <Link href="/#pricing" className="text-sm font-medium text-slate-600 hover:text-slate-900 transition-colors">
-                Pricing
+            {/* Left: Hamburger (mobile) / Logo (desktop) */}
+            <div className="flex items-center gap-2 flex-1 md:flex-none">
+              <button
+                onClick={() => setMobileMenuOpen(!mobileMenuOpen)}
+                className="md:hidden p-2 rounded-lg hover:bg-slate-100 transition-colors"
+              >
+                {mobileMenuOpen ? <X size={24} className="text-slate-600" /> : <Menu size={24} className="text-slate-600" />}
+              </button>
+              <Link href="/" className="hidden md:flex items-center gap-2">
+                <img src="/logo.svg" alt="Qimi AI" className="h-10 w-auto" />
               </Link>
-              <NavDropdown
-                label="About"
-                items={aboutItems}
-                isOpen={openDropdown === 'about'}
-                onToggle={() => setOpenDropdown(openDropdown === 'about' ? null : 'about')}
-                onClose={() => setOpenDropdown(null)}
-              />
             </div>
-            <div className="flex items-center gap-4">
+            {/* Center: Logo (mobile) / Nav (desktop) */}
+            <div className="flex items-center justify-center">
+              <Link href="/" className="md:hidden flex items-center gap-2">
+                <img src="/logo.svg" alt="Qimi AI" className="h-10 w-auto" />
+              </Link>
+              <div className="hidden md:flex items-center gap-6">
+                <NavDropdown
+                  label="Features"
+                  items={featuresItems}
+                  isOpen={openDropdown === 'features'}
+                  onToggle={() => setOpenDropdown(openDropdown === 'features' ? null : 'features')}
+                  onClose={() => setOpenDropdown(null)}
+                />
+                <NavDropdown
+                  label="Resources"
+                  items={resourcesItems}
+                  isOpen={openDropdown === 'resources'}
+                  onToggle={() => setOpenDropdown(openDropdown === 'resources' ? null : 'resources')}
+                  onClose={() => setOpenDropdown(null)}
+                />
+                <Link href="/#pricing" className="text-sm font-medium text-slate-600 hover:text-slate-900 transition-colors">
+                  Pricing
+                </Link>
+                <NavDropdown
+                  label="About"
+                  items={aboutItems}
+                  isOpen={openDropdown === 'about'}
+                  onToggle={() => setOpenDropdown(openDropdown === 'about' ? null : 'about')}
+                  onClose={() => setOpenDropdown(null)}
+                />
+              </div>
+            </div>
+            {/* Right: Counter + Auth */}
+            <div className="flex items-center gap-4 flex-1 md:flex-none justify-end">
               {session ? (
                 <Link href="/dashboard" className="text-sm font-bold text-slate-900 hover:text-primary-purple">
                   Go to Dashboard
                 </Link>
               ) : (
                 <>
-                  <button onClick={() => signIn()} className="text-sm font-medium text-slate-600 hover:text-slate-900">
+                  {/* Live Counter - Always visible with context */}
+                  <div className="flex items-center gap-1.5 md:gap-2 px-2 md:px-3 py-1 md:py-1.5 bg-slate-50 rounded-full border border-slate-100">
+                    <span className="relative flex h-2 w-2">
+                      <span className="animate-ping absolute inline-flex h-full w-full rounded-full bg-green-400 opacity-75"></span>
+                      <span className="relative inline-flex rounded-full h-2 w-2 bg-green-500"></span>
+                    </span>
+                    <span className="text-xs font-medium text-slate-600">
+                      <span className="font-bold text-slate-900">{userCount.toLocaleString()}</span> families empowered
+                    </span>
+                  </div>
+
+                  <button onClick={() => signIn()} className="hidden md:block text-sm font-medium text-slate-600 hover:text-slate-900">
                     Log in
                   </button>
                   <button
                     onClick={() => signIn('google', { callbackUrl: '/dashboard' })}
-                    className="px-4 py-2 rounded-lg bg-slate-900 text-white text-sm font-bold hover:bg-slate-800 transition-colors"
+                    className="hidden md:block px-4 py-2 rounded-lg bg-slate-900 text-white text-sm font-bold hover:bg-slate-800 transition-colors"
                   >
                     Sign up
                   </button>
@@ -162,6 +209,82 @@ export default function LandingLayout({ children }: LandingLayoutProps) {
           </div>
         </div>
       </nav>
+
+      {/* Mobile menu drawer - 与主页保持一致的简洁设计 */}
+      {mobileMenuOpen && (
+        <div className="fixed inset-0 z-40 md:hidden">
+          {/* Backdrop */}
+          <div
+            className="fixed inset-0 bg-black/50"
+            onClick={() => setMobileMenuOpen(false)}
+          />
+          {/* Drawer */}
+          <div className="fixed top-16 left-0 right-0 bg-white border-b border-slate-100 shadow-lg">
+            <div className="px-4 py-4 space-y-1">
+              <Link
+                href="/"
+                className="block px-3 py-3 text-base font-medium text-slate-700 hover:bg-slate-50 rounded-lg"
+                onClick={() => setMobileMenuOpen(false)}
+              >
+                Home
+              </Link>
+              <Link
+                href="/chat"
+                className="block px-3 py-3 text-base font-medium text-slate-700 hover:bg-slate-50 rounded-lg"
+                onClick={() => setMobileMenuOpen(false)}
+              >
+                AI Parenting Assistant
+              </Link>
+              <Link
+                href="/blog"
+                className="block px-3 py-3 text-base font-medium text-slate-700 hover:bg-slate-50 rounded-lg"
+                onClick={() => setMobileMenuOpen(false)}
+              >
+                ADHD Insights
+              </Link>
+              <Link
+                href="/#pricing"
+                className="block px-3 py-3 text-base font-medium text-slate-700 hover:bg-slate-50 rounded-lg"
+                onClick={() => setMobileMenuOpen(false)}
+              >
+                Pricing
+              </Link>
+              <Link
+                href="/about"
+                className="block px-3 py-3 text-base font-medium text-slate-700 hover:bg-slate-50 rounded-lg"
+                onClick={() => setMobileMenuOpen(false)}
+              >
+                About Us
+              </Link>
+              <Link
+                href="/founder"
+                className="block px-3 py-3 text-base font-medium text-slate-700 hover:bg-slate-50 rounded-lg"
+                onClick={() => setMobileMenuOpen(false)}
+              >
+                Founder&apos;s Letter
+              </Link>
+
+              {/* Auth buttons */}
+              {!session && (
+                <div className="pt-4 border-t border-slate-100 mt-4 space-y-2">
+                  <button
+                    onClick={() => { setMobileMenuOpen(false); signIn(); }}
+                    className="w-full px-4 py-3 text-base font-medium text-slate-700 hover:bg-slate-50 rounded-lg text-left"
+                  >
+                    Log in
+                  </button>
+                  <button
+                    onClick={() => { setMobileMenuOpen(false); signIn('google', { callbackUrl: '/dashboard' }); }}
+                    className="w-full px-4 py-3 rounded-lg bg-slate-900 text-white text-base font-bold hover:bg-slate-800 transition-colors"
+                  >
+                    Sign up
+                  </button>
+                </div>
+              )}
+            </div>
+          </div>
+        </div>
+      )}
 
       {/* 主内容区域 - 需要顶部 padding 避免被 navbar 遮挡 */}
       <main className="pt-16">

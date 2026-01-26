@@ -20,6 +20,56 @@ if (FACEBOOK_CLIENT_ID && FACEBOOK_CLIENT_SECRET) {
 export const authOptions: AuthOptions = {
   providers,
   secret: process.env.NEXTAUTH_SECRET,
+
+  // Session 配置
+  session: {
+    strategy: 'jwt',
+    maxAge: 30 * 24 * 60 * 60, // 30 days
+  },
+
+  // 自定义页面
+  pages: {
+    signIn: '/login',
+    error: '/login',
+  },
+
+  // Callbacks
+  callbacks: {
+    async jwt({ token, user, account }) {
+      // 首次登录时，将用户信息存入 token
+      if (user) {
+        token.id = user.id;
+        token.email = user.email;
+        token.name = user.name;
+        token.picture = user.image;
+      }
+      if (account) {
+        token.provider = account.provider;
+      }
+      return token;
+    },
+
+    async session({ session, token }) {
+      // 将 token 信息传递到 session
+      if (session.user) {
+        (session.user as { id?: string }).id = token.id as string;
+        session.user.email = token.email as string;
+        session.user.name = token.name as string;
+        session.user.image = token.picture as string;
+      }
+      return session;
+    },
+
+    async redirect({ url, baseUrl }) {
+      // 登录后重定向到 dashboard 或原始页面
+      if (url.startsWith('/')) return `${baseUrl}${url}`;
+      if (new URL(url).origin === baseUrl) return url;
+      return `${baseUrl}/dashboard`;
+    },
+  },
+
+  // 调试模式（仅开发环境）
+  debug: process.env.NODE_ENV === 'development',
 };
 
 export default NextAuth(authOptions);
