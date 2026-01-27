@@ -3,12 +3,6 @@ import { signIn, useSession } from 'next-auth/react';
 import Link from 'next/link';
 import {
   ChevronDown,
-  MessageSquare,
-  FileText,
-  Calendar,
-  Heart,
-  BookOpen,
-  Lightbulb,
   Users,
   User,
   Menu,
@@ -107,19 +101,7 @@ export default function LandingLayout({ children }: LandingLayoutProps) {
     fetchUserStats();
   }, []);
 
-  // 导航菜单数据
-  const featuresItems: DropdownItem[] = [
-    { label: 'AI Chat', description: '24/7 personalized ADHD parenting support', href: '/chat', icon: <MessageSquare size={20} /> },
-    { label: 'IEP Assistant', description: 'Generate and review IEP documents', href: '/chat?mode=iep', icon: <FileText size={20} /> },
-    { label: 'Routine Builder', description: 'Create visual schedules for daily tasks', href: '/chat?mode=routine', icon: <Calendar size={20} /> },
-    { label: 'Emotional Support', description: 'Guidance for difficult moments', href: '/chat?mode=support', icon: <Heart size={20} /> },
-  ];
-
-  const resourcesItems: DropdownItem[] = [
-    { label: 'Blog', description: 'Latest articles and research insights', href: '/blog', icon: <BookOpen size={20} /> },
-    { label: 'FAQ', description: 'Common questions answered', href: '/#faq', icon: <Lightbulb size={20} /> },
-  ];
-
+  // 导航菜单数据 - 与首页保持一致
   const aboutItems: DropdownItem[] = [
     { label: 'Our Story', description: 'Why we built Qimi AI', href: '/about', icon: <Users size={20} /> },
     { label: "Founder's Letter", description: 'A personal message from James', href: '/founder', icon: <User size={20} /> },
@@ -149,20 +131,12 @@ export default function LandingLayout({ children }: LandingLayoutProps) {
                 <img src="/logo.svg" alt="Qimi AI" className="h-10 w-auto" />
               </Link>
               <div className="hidden md:flex items-center gap-6">
-                <NavDropdown
-                  label="Features"
-                  items={featuresItems}
-                  isOpen={openDropdown === 'features'}
-                  onToggle={() => setOpenDropdown(openDropdown === 'features' ? null : 'features')}
-                  onClose={() => setOpenDropdown(null)}
-                />
-                <NavDropdown
-                  label="Resources"
-                  items={resourcesItems}
-                  isOpen={openDropdown === 'resources'}
-                  onToggle={() => setOpenDropdown(openDropdown === 'resources' ? null : 'resources')}
-                  onClose={() => setOpenDropdown(null)}
-                />
+                <Link href="/chat" className="text-sm font-medium text-slate-600 hover:text-slate-900 transition-colors">
+                  AI Parenting Assistant
+                </Link>
+                <Link href="/blog" className="text-sm font-medium text-slate-600 hover:text-slate-900 transition-colors">
+                  ADHD Insights
+                </Link>
                 <Link href="/#pricing" className="text-sm font-medium text-slate-600 hover:text-slate-900 transition-colors">
                   Pricing
                 </Link>

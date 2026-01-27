@@ -31,7 +31,8 @@ export interface GuestData {
 }
 
 const GUEST_KEY = 'qimi_guest_data';
-const MAX_GUEST_MESSAGES = 5;
+// TODO: 测试阶段暂时禁用消息限制，上线前改回 5
+const MAX_GUEST_MESSAGES = 999;
 
 export const guestStorage = {
   /**

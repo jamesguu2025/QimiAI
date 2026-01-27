@@ -10,14 +10,9 @@ import GuestOnboarding from '../components/Chat/GuestOnboarding';
 import LoginWall from '../components/Chat/LoginWall';
 import { ChatPageSkeleton } from '../components/UI/Skeleton';
 import { guestStorage } from '../utils/guest-storage';
-import { useStreamingChat, Message } from '../hooks/useStreamingChat';
-
-// 欢迎消息
-const WELCOME_MESSAGE: Message = {
-    id: 'welcome',
-    role: 'assistant',
-    content: "Hello. I'm Qimi AI.\n\nI can help you understand ADHD symptoms, find management strategies, or just listen. How can I help you today?"
-};
+import { useChat } from '../hooks/useChat';
+import { useChatStore, WELCOME_MESSAGE } from '../stores/chatStore';
+import { Message } from '../types/chat';
 
 export default function ChatPage() {
     const router = useRouter();
@@ -34,7 +29,7 @@ export default function ChatPage() {
     const [drawerOpen, setDrawerOpen] = useState(false);
     const [drawerCollapsed, setDrawerCollapsed] = useState(false);
 
-    // 使用流式聊天 Hook
+    // 使用流式聊天 Hook (连接真实 API)
     const {
         messages,
         isStreaming,
@@ -42,10 +37,11 @@ export default function ChatPage() {
         sendMessage,
         stopGeneration,
         setMessages
-    } = useStreamingChat([WELCOME_MESSAGE]);
+    } = useChat();
 
     const messagesEndRef = useRef<HTMLDivElement>(null);
     const touchStartX = useRef<number>(0);
+    const modeHandledRef = useRef<string | null>(null);
 
     // 自动滚动到底部
     const scrollToBottom = () => {
@@ -96,6 +92,7 @@ export default function ChatPage() {
                             id: msg.id,
                             role: msg.role as 'user' | 'assistant',
                             content: msg.content,
+                            timestamp: new Date().toISOString(),
                             sources: []
                         }));
                         setMessages([WELCOME_MESSAGE, ...restoredMessages]);
@@ -105,8 +102,12 @@ export default function ChatPage() {
         }
     }, [session, status, setMessages]);
 
-    // 处理初始模式
+    // 处理初始模式 - 使用 ref 防止刷新时重复触发
     useEffect(() => {
+        if (!mode || modeHandledRef.current === mode) return;
+
+        modeHandledRef.current = mode as string;
+
         if (mode === 'iep') {
             handleSend("I need help with an IEP.");
         } else if (mode === 'routine') {
@@ -152,12 +153,12 @@ export default function ChatPage() {
     };
 
     const handleSelectTopic = (folderKey: string) => {
-        console.log('Selected topic:', folderKey);
+        // TODO: Sprint 1.2 - Create conversation with selected topic
         setDrawerOpen(false);
     };
 
     const handleSelectConversation = (conversationId: string) => {
-        console.log('Selected conversation:', conversationId);
+        // TODO: Sprint 1.2 - Load selected conversation
         setDrawerOpen(false);
     };
 
