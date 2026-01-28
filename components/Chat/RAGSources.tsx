@@ -1,63 +1,77 @@
-import React, { useState } from 'react';
+// components/Chat/RAGSources.tsx - Research Paper Citations Display
 
-export interface Source {
-    title: string;
-    url?: string;
-    snippet?: string;
-}
+import { useState } from 'react';
+import { RAGSource } from '../../types/api';
 
 interface RAGSourcesProps {
-    sources: Source[];
+  sources: RAGSource[];
 }
 
-export const RAGSources: React.FC<RAGSourcesProps> = ({ sources }) => {
-    const [isExpanded, setIsExpanded] = useState(false);
+export function RAGSources({ sources }: RAGSourcesProps) {
+  const [isExpanded, setIsExpanded] = useState(false);
 
-    if (!sources || sources.length === 0) return null;
+  if (!sources || sources.length === 0) {
+    return null;
+  }
 
-    return (
-        <div className="mt-3 pt-2">
-            <button
-                onClick={() => setIsExpanded(!isExpanded)}
-                className="flex items-center gap-1.5 text-[10px] font-semibold uppercase tracking-wider text-slate-400 hover:text-slate-600 transition-colors mb-2"
+  return (
+    <div className="mt-3 border-t border-gray-200 pt-3">
+      <button
+        onClick={() => setIsExpanded(!isExpanded)}
+        className="flex items-center gap-2 text-sm text-gray-600 hover:text-gray-900 transition-colors"
+      >
+        <svg
+          className={`w-4 h-4 transition-transform ${isExpanded ? 'rotate-90' : ''}`}
+          fill="none"
+          stroke="currentColor"
+          viewBox="0 0 24 24"
+        >
+          <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 5l7 7-7 7" />
+        </svg>
+        <span className="font-medium">
+          {sources.length} Research {sources.length === 1 ? 'Paper' : 'Papers'} Referenced
+        </span>
+      </button>
+
+      {isExpanded && (
+        <div className="mt-2 space-y-2">
+          {sources.map((source, index) => (
+            <div
+              key={index}
+              className="bg-gray-50 rounded-lg p-3 border border-gray-200 hover:border-gray-300 transition-colors"
             >
-                <span className="bg-slate-100 text-slate-500 px-1.5 py-0.5 rounded text-[9px]">SOURCES</span>
-                <span>{sources.length} citations</span>
-                <svg
-                    xmlns="http://www.w3.org/2000/svg"
-                    viewBox="0 0 20 20"
-                    fill="currentColor"
-                    className={`w-3 h-3 transition-transform duration-200 ${isExpanded ? 'rotate-90' : ''}`}
-                >
-                    <path fillRule="evenodd" d="M7.21 14.77a.75.75 0 01.02-1.06L11.168 10 7.23 6.29a.75.75 0 111.04-1.08l4.5 4.25a.75.75 0 010 1.08l-4.5 4.25a.75.75 0 01-1.06-.02z" clipRule="evenodd" />
-                </svg>
-            </button>
-
-            <div className={`grid gap-1.5 transition-all duration-300 ease-in-out ${isExpanded ? 'opacity-100 max-h-[500px]' : 'opacity-100 max-h-[0px] overflow-hidden'}`}>
-                <div className="flex flex-wrap gap-1.5">
-                    {sources.map((source, index) => (
-                        <a
-                            key={index}
-                            href={source.url || '#'}
-                            target="_blank"
-                            rel="noopener noreferrer"
-                            className="
-                flex items-center gap-1.5 
-                bg-slate-50 border border-slate-200 
-                hover:border-slate-300 hover:bg-white
-                px-2 py-1 rounded-md
-                transition-all duration-200
-                max-w-full
-                "
-                        >
-                            <span className="text-[9px] font-bold text-slate-400">{index + 1}</span>
-                            <span className="text-[11px] text-slate-600 font-medium truncate max-w-[180px]">
-                                {source.title}
-                            </span>
-                        </a>
-                    ))}
+              <div className="flex items-start gap-2">
+                <span className="flex-shrink-0 w-6 h-6 bg-teal-100 text-teal-700 rounded-full flex items-center justify-center text-xs font-medium">
+                  {index + 1}
+                </span>
+                <div className="flex-1 min-w-0">
+                  {source.url ? (
+                    <a
+                      href={source.url}
+                      target="_blank"
+                      rel="noopener noreferrer"
+                      className="text-sm font-medium text-gray-900 hover:text-teal-600 transition-colors line-clamp-2"
+                    >
+                      {source.title}
+                    </a>
+                  ) : (
+                    <p className="text-sm font-medium text-gray-900 line-clamp-2">
+                      {source.title}
+                    </p>
+                  )}
+                  {source.snippet && (
+                    <p className="mt-1 text-xs text-gray-600 line-clamp-2">
+                      {source.snippet}
+                    </p>
+                  )}
                 </div>
+              </div>
             </div>
+          ))}
         </div>
-    );
-};
+      )}
+    </div>
+  );
+}
+
+export default RAGSources;

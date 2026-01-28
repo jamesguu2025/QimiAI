@@ -20,12 +20,14 @@ export interface SendMessageOptions {
   signal?: AbortSignal;
   conversationHistory?: Array<{ role: string; content: string }>;
   userProfile?: UserProfile;
+  forceRAG?: boolean; // Force RAG mode - when true, always use RAG
 }
 
 /** Chat service response */
 export interface ChatStreamCallbacks {
   onToken: (content: string) => void;
   onSources: (sources: RAGSource[]) => void;
+  onStatus: (message: string) => void;
   onDone: (totalTokens?: number) => void;
   onError: (error: string) => void;
 }
@@ -37,7 +39,7 @@ export async function sendMessage(
   options: SendMessageOptions,
   callbacks: ChatStreamCallbacks
 ): Promise<void> {
-  const { content, attachments, conversationId, folderKey, signal, conversationHistory, userProfile } = options;
+  const { content, attachments, conversationId, folderKey, signal, conversationHistory, userProfile, forceRAG } = options;
 
   const response = await fetch('/api/chat/stream', {
     method: 'POST',
@@ -51,6 +53,7 @@ export async function sendMessage(
       folderKey,
       conversationHistory,
       userProfile,
+      forceRAG,
     }),
     signal,
   });
@@ -101,6 +104,11 @@ export async function sendMessage(
               case 'sources':
                 if (chunk.sources) {
                   callbacks.onSources(chunk.sources);
+                }
+                break;
+              case 'status':
+                if (chunk.message) {
+                  callbacks.onStatus(chunk.message);
                 }
                 break;
               case 'done':

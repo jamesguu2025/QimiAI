@@ -6,7 +6,11 @@ import { getServerSession } from 'next-auth';
 import { authOptions } from '../auth/[...nextauth]';
 import { buildSystemMessage, UserProfile } from '../../../lib/prompts';
 import { getRagTools } from '../../../lib/rag-definitions';
-import { executeRAGToolCall } from '../../../services/rag-service';
+import {
+  executeRAGToolCall,
+  executeRAGWithSmartSummary,
+  RAGToolCallResult
+} from '../../../services/rag-service';
 
 // DeepSeek API configuration from environment variables
 const DEEPSEEK_API_KEY = process.env.DEEPSEEK_API_KEY;
@@ -63,7 +67,7 @@ export default async function handler(
       userId = `guest_${Date.now()}_${Math.random().toString(36).slice(2, 9)}`;
     }
 
-    const { content, attachments, conversationHistory, userProfile } = req.body;
+    const { content, attachments, conversationHistory, userProfile, forceRAG } = req.body;
 
     if (!content && (!attachments || attachments.length === 0)) {
       return res.status(400).json({ error: 'Message content required' });
@@ -114,7 +118,7 @@ export default async function handler(
     res.setHeader('X-Accel-Buffering', 'no');
 
     // Call DeepSeek with potential RAG tool support
-    await streamChatWithRAG(messages, res);
+    await streamChatWithRAG(messages, res, forceRAG || false);
 
   } catch (error) {
     console.error('[chat/stream] Handler error:', error);
@@ -131,9 +135,54 @@ export default async function handler(
  */
 async function streamChatWithRAG(
   messages: ChatMessage[],
-  res: NextApiResponse
+  res: NextApiResponse,
+  forceRAG: boolean = false
 ): Promise<void> {
   try {
+    // If forceRAG is enabled and ENABLE_RAG is true, make direct RAG call first
+    // 使用双LLM架构：第一个LLM提取论文核心发现，第二个LLM与用户对话
+    if (forceRAG && ENABLE_RAG) {
+      console.log('[chat/stream] Force RAG mode enabled - making direct RAG call');
+
+      // Get the user's last message
+      const userMessage = messages[messages.length - 1];
+
+      // Send status update
+      res.write(`data: ${JSON.stringify({ type: 'status', message: 'Searching research papers...' })}\n\n`);
+
+      try {
+        // Execute RAG search with smart summary (双LLM架构)
+        // 如果 ENABLE_SMART_SUMMARY=true，会先用第一个LLM生成精炼摘要
+        const ragResult = await executeRAGWithSmartSummary(
+          userMessage.content,  // query
+          userMessage.content,  // userQuestion (for smart summary)
+          10                    // top_k
+        );
+
+        // Log which mode was used
+        console.log(`[chat/stream] Force RAG: Using ${ragResult.summaryMode} mode`);
+
+        // Send sources to frontend
+        if (ragResult.sources.length > 0) {
+          console.log(`[chat/stream] Force RAG: Sending ${ragResult.sources.length} paper sources to frontend`);
+          res.write(`data: ${JSON.stringify({ type: 'sources', sources: ragResult.sources })}\n\n`);
+        }
+
+        // Inject RAG results into conversation as a system message
+        messages.push({
+          role: 'system',
+          content: `Research papers found for the user's question:\n\n${ragResult.formattedText}\n\nPlease provide a comprehensive answer based on these research findings.`
+        });
+
+        // Send status update with mode info
+        const modeInfo = ragResult.summaryMode === 'smart' ? '(智能摘要)' : '(原始模式)';
+        res.write(`data: ${JSON.stringify({ type: 'status', message: `Research papers retrieved ${modeInfo}, generating response...` })}\n\n`);
+      } catch (error) {
+        console.error('[chat/stream] Force RAG search failed:', error);
+        // Continue without RAG if it fails
+      }
+    }
+
     // Prepare request body
     const requestBody: any = {
       model: DEEPSEEK_MODEL,
@@ -143,12 +192,15 @@ async function streamChatWithRAG(
       max_tokens: 2048,
     };
 
-    // Add RAG tools if enabled
-    if (ENABLE_RAG) {
+    // Add RAG tools if enabled and NOT in forceRAG mode
+    // (in forceRAG mode, we already injected RAG results)
+    if (ENABLE_RAG && !forceRAG) {
       requestBody.tools = getRagTools();
       console.log('[chat/stream] RAG tools enabled - AI can decide when to search papers');
-    } else {
+    } else if (!ENABLE_RAG) {
       console.log('[chat/stream] RAG disabled - using general knowledge only');
+    } else {
+      console.log('[chat/stream] Force RAG mode - RAG results already injected');
     }
 
     // First API call
@@ -190,20 +242,45 @@ async function streamChatWithRAG(
         tool_calls: toolCalls
       });
 
+      // Collect all sources from all tool calls
+      const allSources: Array<{ title: string; url: string; snippet?: string }> = [];
+
       // Execute each tool call and add results
+      // 使用双LLM架构：如果开启智能摘要，先用第一个LLM提取核心发现
       for (const toolCall of toolCalls) {
         try {
           console.log(`[chat/stream] Executing tool: ${toolCall.function.name}`);
-          const toolResult = await executeRAGToolCall(toolCall);
 
+          // Parse tool arguments to get query
+          const args = JSON.parse(toolCall.function.arguments);
+          const query = args.query || '';
+
+          // Get user's original question for smart summary context
+          const userMessage = messages.find(m => m.role === 'user');
+          const userQuestion = userMessage?.content || query;
+
+          // Use smart summary if available
+          const toolResult = await executeRAGWithSmartSummary(
+            query,
+            userQuestion,
+            args.top_k || 10
+          );
+
+          console.log(`[chat/stream] Tool result using ${toolResult.summaryMode} mode`);
+
+          // Add formatted text to conversation for LLM
           messages.push({
             role: 'tool',
             tool_call_id: toolCall.id,
-            content: toolResult
+            content: toolResult.formattedText
           });
 
-          // Send a status update to client
-          res.write(`data: ${JSON.stringify({ type: 'status', message: 'Research papers retrieved, generating response...' })}\n\n`);
+          // Collect sources for frontend
+          allSources.push(...toolResult.sources);
+
+          // Send a status update to client with mode info
+          const modeInfo = toolResult.summaryMode === 'smart' ? '(智能摘要)' : '';
+          res.write(`data: ${JSON.stringify({ type: 'status', message: `Research papers retrieved ${modeInfo}, generating response...` })}\n\n`);
         } catch (error) {
           console.error(`[chat/stream] Tool execution failed:`, error);
           messages.push({
@@ -212,6 +289,12 @@ async function streamChatWithRAG(
             content: `Error: ${error instanceof Error ? error.message : 'Tool execution failed'}`
           });
         }
+      }
+
+      // Send sources to frontend immediately after tool execution
+      if (allSources.length > 0) {
+        console.log(`[chat/stream] Sending ${allSources.length} paper sources to frontend`);
+        res.write(`data: ${JSON.stringify({ type: 'sources', sources: allSources })}\n\n`);
       }
 
       // Second API call with tool results

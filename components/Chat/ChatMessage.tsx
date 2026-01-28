@@ -1,6 +1,7 @@
 import React from 'react';
 import ReactMarkdown from 'react-markdown';
-import { RAGSources, Source } from './RAGSources';
+import { RAGSources } from './RAGSources';
+import { RAGSource } from '../../types/api';
 import { FileText, Image as ImageIcon, File } from 'lucide-react';
 
 // 附件类型
@@ -15,8 +16,10 @@ export interface Attachment {
 interface ChatMessageProps {
   role: 'user' | 'assistant';
   content: string;
-  sources?: Source[];
+  sources?: RAGSource[];
+  statusMessage?: string;
   attachments?: Attachment[];
+  isStreaming?: boolean;
 }
 
 // 格式化文件大小
@@ -40,7 +43,7 @@ const getFileIcon = (type: string) => {
   return <File size={16} className="text-slate-500" />;
 };
 
-export const ChatMessage: React.FC<ChatMessageProps> = ({ role, content, sources, attachments }) => {
+export const ChatMessage: React.FC<ChatMessageProps> = ({ role, content, sources, statusMessage, attachments, isStreaming }) => {
   const isUser = role === 'user';
 
   return (
@@ -98,6 +101,17 @@ export const ChatMessage: React.FC<ChatMessageProps> = ({ role, content, sources
             </div>
           )}
         </div>
+
+        {/* Status Message (RAG search indicator) */}
+        {!isUser && statusMessage && (
+          <div className="mt-2 flex items-center gap-2 text-sm text-gray-500 italic">
+            <svg className="animate-spin h-4 w-4" xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24">
+              <circle className="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="4"></circle>
+              <path className="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4zm2 5.291A7.962 7.962 0 014 12H0c0 3.042 1.135 5.824 3 7.938l3-2.647z"></path>
+            </svg>
+            <span>{statusMessage}</span>
+          </div>
+        )}
 
         {/* RAG Sources (Only for Assistant) */}
         {!isUser && sources && sources.length > 0 && (

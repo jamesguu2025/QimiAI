@@ -26,6 +26,7 @@ export interface Message {
   timestamp: string;
   attachments?: Attachment[];
   sources?: RAGSource[];
+  statusMessage?: string; // Status update like "Searching research papers..."
   isStreaming?: boolean;
 }
 

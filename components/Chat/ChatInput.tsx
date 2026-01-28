@@ -2,6 +2,48 @@ import React, { useState, useRef, useEffect, useCallback } from 'react';
 import { Paperclip, X, FileText, Image as ImageIcon, File, Upload } from 'lucide-react';
 import { formatFileSize, getFileCategory } from '../../utils/format';
 
+// 自定义学位帽图标组件
+const DegreeHatIcon: React.FC<{
+  size?: number;
+  className?: string;
+  useGradient?: boolean;
+}> = ({ size = 25, className = '', useGradient = false }) => {
+  const fillStroke = useGradient ? 'url(#ragGradient)' : 'currentColor';
+
+  return (
+    <svg
+      width={size}
+      height={size}
+      viewBox="0 0 48 48"
+      fill="none"
+      xmlns="http://www.w3.org/2000/svg"
+      className={className}
+    >
+      <path
+        d="M2 17.4L23.0222 9L44.0444 17.4L23.0222 25.8L2 17.4Z"
+        fill={fillStroke}
+        stroke={fillStroke}
+        strokeWidth="2"
+        strokeLinejoin="miter"
+      />
+      <path
+        d="M44.0444 17.51V26.7332"
+        stroke={fillStroke}
+        strokeWidth="2"
+        strokeLinecap="butt"
+        strokeLinejoin="miter"
+      />
+      <path
+        d="M11.5557 21.8252V34.2666C11.5557 34.2666 16.3658 38.9999 23.0224 38.9999C29.679 38.9999 34.4891 34.2666 34.4891 34.2666V21.8252"
+        stroke={fillStroke}
+        strokeWidth="2"
+        strokeLinecap="butt"
+        strokeLinejoin="miter"
+      />
+    </svg>
+  );
+};
+
 // 支持的文件类型
 const ACCEPTED_FILE_TYPES = {
   // 图片
@@ -39,6 +81,8 @@ export interface FileAttachment {
 interface ChatInputProps {
   onSend: (message: string, attachments?: FileAttachment[]) => void;
   disabled?: boolean;
+  forceRAG?: boolean;
+  onToggleRAG?: () => void;
 }
 
 // 获取文件图标
@@ -55,7 +99,7 @@ const getFileIcon = (type: string) => {
   return <File size={16} className="text-slate-500" />;
 };
 
-export const ChatInput: React.FC<ChatInputProps> = ({ onSend, disabled }) => {
+export const ChatInput: React.FC<ChatInputProps> = ({ onSend, disabled, forceRAG = false, onToggleRAG }) => {
   const [input, setInput] = useState('');
   const [attachments, setAttachments] = useState<FileAttachment[]>([]);
   const [isDragging, setIsDragging] = useState(false);
@@ -337,6 +381,44 @@ export const ChatInput: React.FC<ChatInputProps> = ({ onSend, disabled }) => {
             >
               <Paperclip size={20} />
             </button>
+
+            {/* RAG 强化模式按钮 */}
+            {onToggleRAG && (
+              <button
+                onClick={onToggleRAG}
+                disabled={disabled}
+                className={`
+                  flex items-center justify-center p-2 rounded-lg transition-all duration-200
+                  ${disabled ? 'opacity-50 cursor-not-allowed' : ''}
+                `}
+                style={forceRAG ? {
+                  background: 'white',
+                  border: '2px solid transparent',
+                  backgroundImage: 'linear-gradient(white, white), linear-gradient(135deg, #00D4AA 0%, #8B5CF6 100%)',
+                  backgroundOrigin: 'border-box',
+                  backgroundClip: 'padding-box, border-box',
+                } : {
+                  background: 'transparent',
+                  border: '2px solid transparent',
+                }}
+                title={forceRAG ? 'Enhanced Research Mode: ON' : 'Enhanced Research Mode: OFF (AI decides)'}
+              >
+                {/* 博士帽图标 */}
+                <DegreeHatIcon
+                  size={25}
+                  className={forceRAG ? '' : 'text-slate-500'}
+                  useGradient={forceRAG}
+                />
+                <svg width="0" height="0" style={{ position: 'absolute' }}>
+                  <defs>
+                    <linearGradient id="ragGradient" x1="0%" y1="0%" x2="100%" y2="100%">
+                      <stop offset="0%" stopColor="#00D4AA" />
+                      <stop offset="100%" stopColor="#8B5CF6" />
+                    </linearGradient>
+                  </defs>
+                </svg>
+              </button>
+            )}
           </div>
 
           {/* 发送按钮 - 渐变边框风格 */}

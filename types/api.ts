@@ -12,7 +12,7 @@ export interface ApiResponse<T = unknown> {
 }
 
 /** SSE 事件类型 */
-export type SSEEventType = 'token' | 'done' | 'error' | 'sources';
+export type SSEEventType = 'token' | 'done' | 'error' | 'sources' | 'status';
 
 /** SSE 数据块 */
 export interface SSEChunk {
@@ -20,6 +20,7 @@ export interface SSEChunk {
   content?: string;
   sources?: RAGSource[];
   error?: string;
+  message?: string; // For status updates
   totalTokens?: number;
 }
 

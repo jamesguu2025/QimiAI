@@ -2,7 +2,7 @@ import { useState, useRef, useEffect } from 'react';
 import Head from 'next/head';
 import { useRouter } from 'next/router';
 import { useSession } from 'next-auth/react';
-import { Menu, Moon, BookOpen, Heart } from 'lucide-react';
+import { Menu, Moon, BookOpen, Heart, Sparkles } from 'lucide-react';
 import { StreamingMessage } from '../components/Chat/StreamingMessage';
 import { ChatInput, FileAttachment } from '../components/Chat/ChatInput';
 import { SmartDrawer } from '../components/Chat/SmartDrawer';
@@ -28,6 +28,9 @@ export default function ChatPage() {
     // 抽屉状态
     const [drawerOpen, setDrawerOpen] = useState(false);
     const [drawerCollapsed, setDrawerCollapsed] = useState(false);
+
+    // RAG 强化模式状态 (Force RAG)
+    const [forceRAG, setForceRAG] = useState(false);
 
     // 使用流式聊天 Hook (连接真实 API)
     const {
@@ -124,7 +127,7 @@ export default function ChatPage() {
             return;
         }
 
-        await sendMessage(content, attachments);
+        await sendMessage(content, attachments, forceRAG);
 
         if (isGuest) {
             guestStorage.addMessage({ id: Date.now().toString(), role: 'user', content });
@@ -214,6 +217,20 @@ export default function ChatPage() {
                     <img src="/logo.svg" alt="Qimi" className="h-8" />
                 </header>
 
+                {/* 访客剩余消息提示 */}
+                {isGuest && guestMessageCount > 0 && (
+                    <div className="flex-shrink-0 px-4 py-2 bg-amber-50 border-b border-amber-100">
+                        <div className="max-w-3xl mx-auto flex items-center justify-center gap-2 text-sm text-amber-700">
+                            <span>
+                                {guestStorage.getRemainingMessages()} free messages remaining.{' '}
+                                <button onClick={() => setShowLoginWall(true)} className="font-semibold underline hover:text-amber-800">
+                                    Sign up for unlimited
+                                </button>
+                            </span>
+                        </div>
+                    </div>
+                )}
+
                 {/* 登录墙 */}
                 {showLoginWall && (
                     <LoginWall
@@ -272,6 +289,7 @@ export default function ChatPage() {
                                         role={msg.role}
                                         content={msg.content}
                                         sources={msg.sources}
+                                        statusMessage={msg.statusMessage}
                                         attachments={msg.attachments}
                                         isStreaming={msg.isStreaming}
                                         onStop={canStop ? stopGeneration : undefined}
@@ -283,15 +301,12 @@ export default function ChatPage() {
                     </div>
                 </div>
 
-                {/* 访客剩余消息提示 */}
-                {isGuest && guestMessageCount > 0 && (
-                    <div className="flex-shrink-0 px-4 py-2 bg-amber-50 border-t border-amber-100">
-                        <div className="max-w-3xl mx-auto flex items-center justify-center gap-2 text-sm text-amber-700">
-                            <span>
-                                {guestStorage.getRemainingMessages()} free messages remaining.{' '}
-                                <button onClick={() => setShowLoginWall(true)} className="font-semibold underline hover:text-amber-800">
-                                    Sign up for unlimited
-                                </button>
+                {/* RAG 模式提示 */}
+                {forceRAG && (
+                    <div className="flex-shrink-0 px-4 py-2 bg-gradient-to-r from-primary-teal/10 to-primary-purple/10 border-t border-primary-teal/20">
+                        <div className="max-w-3xl mx-auto flex items-center justify-center gap-2 text-sm">
+                            <span className="text-primary-teal font-medium animate-pulse">
+                                ✨ Searching 15,844 ADHD research papers • Response will take longer
                             </span>
                         </div>
                     </div>
@@ -299,7 +314,12 @@ export default function ChatPage() {
 
                 {/* 输入区域 */}
                 <div className="flex-shrink-0 pb-6 pt-2 px-4 bg-white border-t border-slate-50">
-                    <ChatInput onSend={handleSend} disabled={isStreaming} />
+                    <ChatInput
+                        onSend={handleSend}
+                        disabled={isStreaming}
+                        forceRAG={forceRAG}
+                        onToggleRAG={() => setForceRAG(!forceRAG)}
+                    />
                 </div>
             </div>
         </div>

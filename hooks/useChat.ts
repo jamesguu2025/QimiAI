@@ -12,7 +12,7 @@ export interface UseChatReturn {
   isStreaming: boolean;
   canStop: boolean;
   error: string | null;
-  sendMessage: (content: string, attachments?: Attachment[]) => Promise<void>;
+  sendMessage: (content: string, attachments?: Attachment[], forceRAG?: boolean) => Promise<void>;
   stopGeneration: () => void;
   clearHistory: () => void;
   setMessages: (messages: Message[]) => void;
@@ -36,8 +36,8 @@ export function useChat(initialMessages?: typeof WELCOME_MESSAGE[]): UseChatRetu
   // Note: The store is already initialized with WELCOME_MESSAGE
 
   const sendMessage = useCallback(
-    async (content: string, attachments?: Attachment[]) => {
-      await storeSendMessage(content, attachments);
+    async (content: string, attachments?: Attachment[], forceRAG?: boolean) => {
+      await storeSendMessage(content, attachments, forceRAG);
     },
     [storeSendMessage]
   );

@@ -33,7 +33,7 @@ interface ChatState {
 /** Chat actions */
 interface ChatActions {
   // Message actions
-  sendMessage: (content: string, attachments?: Attachment[]) => Promise<void>;
+  sendMessage: (content: string, attachments?: Attachment[], forceRAG?: boolean) => Promise<void>;
   stopStream: () => void;
   clearMessages: () => void;
   setMessages: (messages: Message[]) => void;
@@ -62,7 +62,7 @@ export const useChatStore = create<ChatState & ChatActions>((set, get) => ({
   error: null,
 
   // Send message with streaming response
-  sendMessage: async (content: string, attachments?: Attachment[]) => {
+  sendMessage: async (content: string, attachments?: Attachment[], forceRAG?: boolean) => {
     const { currentConversation, abortController: existingController } = get();
 
     // Cancel any existing stream
@@ -120,6 +120,7 @@ export const useChatStore = create<ChatState & ChatActions>((set, get) => ({
           conversationId: currentConversation?.id,
           signal: controller.signal,
           conversationHistory,
+          forceRAG,
           // TODO: Pass userProfile when available (from guest storage or user session)
         },
         {
@@ -128,7 +129,7 @@ export const useChatStore = create<ChatState & ChatActions>((set, get) => ({
             set(state => ({
               messages: state.messages.map(msg =>
                 msg.id === aiMessageId
-                  ? { ...msg, content: accumulated }
+                  ? { ...msg, content: accumulated, statusMessage: undefined }
                   : msg
               ),
             }));
@@ -143,11 +144,27 @@ export const useChatStore = create<ChatState & ChatActions>((set, get) => ({
               ),
             }));
           },
+          onStatus: (statusMsg) => {
+            // Log status to browser console for easy verification
+            console.log('[Qimi] Status:', statusMsg);
+            if (statusMsg.includes('智能摘要')) {
+              console.log('[Qimi] ✅ 双LLM智能摘要模式已启用！');
+            } else if (statusMsg.includes('原始模式')) {
+              console.log('[Qimi] ⚠️ 使用原始模式（智能摘要未启用）');
+            }
+            set(state => ({
+              messages: state.messages.map(msg =>
+                msg.id === aiMessageId
+                  ? { ...msg, statusMessage: statusMsg }
+                  : msg
+              ),
+            }));
+          },
           onDone: () => {
             set(state => ({
               messages: state.messages.map(msg =>
                 msg.id === aiMessageId
-                  ? { ...msg, isStreaming: false, sources }
+                  ? { ...msg, isStreaming: false, statusMessage: undefined, sources }
                   : msg
               ),
               isStreaming: false,
@@ -158,7 +175,7 @@ export const useChatStore = create<ChatState & ChatActions>((set, get) => ({
             set(state => ({
               messages: state.messages.map(msg =>
                 msg.id === aiMessageId
-                  ? { ...msg, isStreaming: false, content: accumulated || 'An error occurred.' }
+                  ? { ...msg, isStreaming: false, statusMessage: undefined, content: accumulated || 'An error occurred.' }
                   : msg
               ),
               isStreaming: false,

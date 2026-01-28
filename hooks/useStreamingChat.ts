@@ -1,5 +1,5 @@
 import { useState, useCallback, useRef } from 'react';
-import { Source } from '../components/Chat/RAGSources';
+import { RAGSource } from '../types/api';
 import { FileAttachment } from '../components/Chat/ChatInput';
 
 // ============================================================================
@@ -13,7 +13,7 @@ export type SSEEventType = 'token' | 'done' | 'error' | 'sources';
 export interface SSEChunk {
   type: SSEEventType;
   content?: string;
-  sources?: Source[];
+  sources?: RAGSource[];
   error?: string;
   totalTokens?: number;
 }
@@ -32,7 +32,7 @@ export interface Message {
   id: string;
   role: 'user' | 'assistant';
   content: string;
-  sources?: Source[];
+  sources?: RAGSource[];
   attachments?: Attachment[];
   isStreaming?: boolean;
 }
@@ -41,7 +41,7 @@ export interface Message {
 // Mock 响应数据
 // ============================================================================
 
-const MOCK_RESPONSES: Record<string, { content: string; sources: Source[] }> = {
+const MOCK_RESPONSES: Record<string, { content: string; sources: RAGSource[] }> = {
   adhd: {
     content: "ADHD (Attention Deficit Hyperactivity Disorder) is a neurodevelopmental condition involving persistent patterns of inattention, hyperactivity, and impulsivity.\n\nKey aspects include:\n*   Difficulty sustaining attention\n*   Struggling with organization\n*   Restlessness or fidgeting\n\nManagement often involves a combination of behavioral strategies, medication, and support.",
     sources: [
@@ -90,7 +90,7 @@ function getMockResponse(input: string, hasAttachments: boolean) {
 // Mock SSE 流生成器
 // ============================================================================
 
-async function* mockSSEStream(response: string, sources: Source[]): AsyncGenerator<SSEChunk> {
+async function* mockSSEStream(response: string, sources: RAGSource[]): AsyncGenerator<SSEChunk> {
   const words = response.split(' ');
   for (let i = 0; i < words.length; i++) {
     yield { type: 'token', content: words[i] + (i < words.length - 1 ? ' ' : '') };
