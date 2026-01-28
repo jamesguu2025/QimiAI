@@ -2,6 +2,12 @@
 const nextConfig = {
   reactStrictMode: true,
 
+  // Hide the development indicator
+  devIndicators: {
+    buildActivity: false,
+    buildActivityPosition: 'bottom-right',
+  },
+
   async redirects() {
     return [
       {

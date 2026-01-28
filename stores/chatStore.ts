@@ -4,6 +4,13 @@ import { create } from 'zustand';
 import { Message, Conversation, TopicFolder, Attachment } from '../types/chat';
 import { RAGSource } from '../types';
 import { sendMessage as sendChatMessage, stopGeneration } from '../services/chat';
+import {
+  listConversations,
+  createConversation,
+  getConversation,
+  updateConversation,
+  deleteConversation,
+} from '../services/conversation';
 
 /** Welcome message */
 const WELCOME_MESSAGE: Message = {
@@ -22,6 +29,7 @@ interface ChatState {
   // Current conversation
   currentConversation: Conversation | null;
   conversations: Conversation[];
+  isLoadingConversations: boolean;
 
   // Abort controller for stopping stream
   abortController: AbortController | null;
@@ -45,6 +53,10 @@ interface ChatActions {
   loadConversations: () => Promise<void>;
   selectConversation: (conversationId: string) => Promise<void>;
   createNewChat: () => void;
+  createConversation: (title?: string, folderKey?: TopicFolder | null) => Promise<Conversation>;
+  updateCurrentConversation: (title?: string, folderKey?: TopicFolder | null) => Promise<void>;
+  deleteCurrentConversation: () => Promise<void>;
+  deleteConversationById: (conversationId: string) => Promise<void>;
 
   // Error handling
   setError: (error: string | null) => void;
@@ -58,6 +70,7 @@ export const useChatStore = create<ChatState & ChatActions>((set, get) => ({
   isStreaming: false,
   currentConversation: null,
   conversations: [],
+  isLoadingConversations: false,
   abortController: null,
   error: null,
 
@@ -259,29 +272,146 @@ export const useChatStore = create<ChatState & ChatActions>((set, get) => ({
     set({ conversations });
   },
 
-  // Load conversations from API (to be implemented in Sprint 1.2)
+  // Load conversations from API
+  // Note: This will fail for guests (401), which is expected behavior
   loadConversations: async () => {
-    // TODO: Implement in Sprint 1.2
-    // const conversations = await conversationService.list();
-    // set({ conversations });
+    set({ isLoadingConversations: true, error: null });
+    try {
+      const conversations = await listConversations();
+      set({ conversations, isLoadingConversations: false });
+    } catch (error) {
+      // Don't log error for 401 (unauthorized/guest users)
+      const errorMsg = error instanceof Error ? error.message : 'Failed to load conversations';
+      if (!errorMsg.includes('Unauthorized') && !errorMsg.includes('401')) {
+        console.error('[chatStore] Failed to load conversations:', error);
+      }
+      set({
+        isLoadingConversations: false,
+        // Don't set error for unauthorized (guest users)
+        error: errorMsg.includes('Unauthorized') || errorMsg.includes('401') ? null : errorMsg,
+      });
+    }
   },
 
-  // Select a conversation and load its messages (to be implemented in Sprint 1.2)
+  // Select a conversation and load its messages
   selectConversation: async (conversationId: string) => {
-    // TODO: Implement in Sprint 1.2
-    // const conversation = await conversationService.get(conversationId);
-    // const messages = await conversationService.getMessages(conversationId);
-    // set({ currentConversation: conversation, messages });
-    console.log('Select conversation:', conversationId);
+    set({ isLoadingConversations: true, error: null });
+    try {
+      const conversationWithMessages = await getConversation(conversationId);
+      const { messages: loadedMessages, ...conversation } = conversationWithMessages;
+
+      // Convert backend messages to our Message type with welcome message
+      const formattedMessages: Message[] = [WELCOME_MESSAGE];
+      if (loadedMessages && loadedMessages.length > 0) {
+        for (const msg of loadedMessages) {
+          formattedMessages.push({
+            id: msg.id || `msg-${Date.now()}-${Math.random()}`,
+            role: msg.role as 'user' | 'assistant',
+            content: msg.content,
+            timestamp: msg.timestamp || new Date().toISOString(),
+            sources: msg.sources,
+            attachments: msg.attachments,
+          });
+        }
+      }
+
+      set({
+        currentConversation: conversation as Conversation,
+        messages: formattedMessages,
+        isLoadingConversations: false,
+      });
+    } catch (error) {
+      console.error('[chatStore] Failed to load conversation:', error);
+      set({
+        isLoadingConversations: false,
+        error: error instanceof Error ? error.message : 'Failed to load conversation',
+      });
+    }
   },
 
-  // Create new chat
+  // Create new chat (local only, no API call)
   createNewChat: () => {
     set({
       messages: [WELCOME_MESSAGE],
       currentConversation: null,
       error: null,
     });
+  },
+
+  // Create a new conversation via API
+  createConversation: async (title?: string, folderKey?: TopicFolder | null) => {
+    try {
+      const conversation = await createConversation({ title, folderKey });
+      set(state => ({
+        conversations: [conversation, ...state.conversations],
+        currentConversation: conversation,
+        messages: [WELCOME_MESSAGE],
+      }));
+      return conversation;
+    } catch (error) {
+      console.error('[chatStore] Failed to create conversation:', error);
+      throw error;
+    }
+  },
+
+  // Update current conversation
+  updateCurrentConversation: async (title?: string, folderKey?: TopicFolder | null) => {
+    const { currentConversation } = get();
+    if (!currentConversation) {
+      throw new Error('No current conversation');
+    }
+
+    try {
+      const updated = await updateConversation(currentConversation.id, { title, folderKey });
+      set(state => ({
+        currentConversation: updated,
+        conversations: state.conversations.map(c =>
+          c.id === updated.id ? updated : c
+        ),
+      }));
+    } catch (error) {
+      console.error('[chatStore] Failed to update conversation:', error);
+      throw error;
+    }
+  },
+
+  // Delete current conversation
+  deleteCurrentConversation: async () => {
+    const { currentConversation } = get();
+    if (!currentConversation) {
+      throw new Error('No current conversation');
+    }
+
+    try {
+      await deleteConversation(currentConversation.id);
+      set(state => ({
+        conversations: state.conversations.filter(c => c.id !== currentConversation.id),
+        currentConversation: null,
+        messages: [WELCOME_MESSAGE],
+      }));
+    } catch (error) {
+      console.error('[chatStore] Failed to delete conversation:', error);
+      throw error;
+    }
+  },
+
+  // Delete a conversation by ID
+  deleteConversationById: async (conversationId: string) => {
+    try {
+      await deleteConversation(conversationId);
+      const { currentConversation } = get();
+      set(state => ({
+        conversations: state.conversations.filter(c => c.id !== conversationId),
+        // If we deleted the current conversation, reset
+        ...(currentConversation?.id === conversationId ? {
+          currentConversation: null,
+          messages: [WELCOME_MESSAGE],
+        } : {}),
+      }));
+    } catch (error) {
+      console.error('[chatStore] Failed to delete conversation:', error);
+      throw error;
+    }
   },
 
   // Error handling

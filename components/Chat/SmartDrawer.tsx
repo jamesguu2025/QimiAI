@@ -15,8 +15,16 @@ import {
   Moon,
   GraduationCap,
   Pill,
+  Trash2,
+  Loader2,
+  LogIn,
+  User,
+  Home,
   LucideIcon
 } from 'lucide-react';
+import { signIn, signOut, useSession } from 'next-auth/react';
+import { useChatStore } from '../../stores/chatStore';
+import { Conversation as ConversationType } from '../../types/chat';
 
 // ============================================================================
 // 数据类型定义
@@ -29,10 +37,12 @@ export interface TopicFolder {
   color: string;
 }
 
-export interface Conversation {
+// Use the Conversation type from types/chat.ts via the store
+// Local interface for display purposes
+interface ConversationDisplay {
   id: string;
   title: string;
-  folderKey: string;
+  folderKey: string | null;
   updatedAt: string;
 }
 
@@ -51,12 +61,7 @@ export const TOPIC_FOLDERS: TopicFolder[] = [
   { key: 'supplements', name: 'Supplements', icon: Pill, color: '#14B8A6' },
 ];
 
-export const MOCK_CONVERSATIONS: Conversation[] = [
-  { id: '1', title: 'Sleep routine tips', folderKey: 'sleep', updatedAt: '2024-01-05' },
-  { id: '2', title: 'Homework focus strategies', folderKey: 'learning', updatedAt: '2024-01-04' },
-  { id: '3', title: 'Emotional outburst help', folderKey: 'emotion', updatedAt: '2024-01-03' },
-  { id: '4', title: 'IEP meeting preparation', folderKey: 'school', updatedAt: '2024-01-02' },
-];
+// Mock data removed - now using real data from chatStore
 
 // ============================================================================
 // 子组件
@@ -102,20 +107,38 @@ const TopicCard: React.FC<TopicCardProps> = ({ folder, onClick, collapsed }) => 
 };
 
 interface ConversationItemProps {
-  conversation: Conversation;
+  conversation: ConversationDisplay;
   onClick: () => void;
+  onDelete: () => void;
+  isActive: boolean;
   collapsed: boolean;
 }
 
-const ConversationItem: React.FC<ConversationItemProps> = ({ conversation, onClick, collapsed }) => {
+const ConversationItem: React.FC<ConversationItemProps> = ({ conversation, onClick, onDelete, isActive, collapsed }) => {
+  const [showDeleteConfirm, setShowDeleteConfirm] = useState(false);
+
+  const handleDelete = (e: React.MouseEvent) => {
+    e.stopPropagation();
+    if (showDeleteConfirm) {
+      onDelete();
+      setShowDeleteConfirm(false);
+    } else {
+      setShowDeleteConfirm(true);
+      // Auto-hide after 3 seconds
+      setTimeout(() => setShowDeleteConfirm(false), 3000);
+    }
+  };
+
   if (collapsed) {
     return (
       <button
         onClick={onClick}
-        className="w-10 h-10 flex items-center justify-center rounded-lg hover:bg-slate-100 transition-colors group relative"
+        className={`w-10 h-10 flex items-center justify-center rounded-lg transition-colors group relative ${
+          isActive ? 'bg-primary-teal/10' : 'hover:bg-slate-100'
+        }`}
         title={conversation.title}
       >
-        <MessageSquare size={18} className="text-slate-400" />
+        <MessageSquare size={18} className={isActive ? 'text-primary-teal' : 'text-slate-400'} />
         <div className="absolute left-full ml-2 px-2 py-1 bg-slate-800 text-white text-xs rounded opacity-0 group-hover:opacity-100 transition-opacity whitespace-nowrap pointer-events-none z-50 max-w-[200px] truncate">
           {conversation.title}
         </div>
@@ -126,16 +149,25 @@ const ConversationItem: React.FC<ConversationItemProps> = ({ conversation, onCli
   return (
     <div
       onClick={onClick}
-      className="w-full flex items-center gap-3 px-3 py-2.5 rounded-lg hover:bg-slate-50 transition-colors group text-left cursor-pointer"
+      className={`w-full flex items-center gap-3 px-3 py-2.5 rounded-lg transition-colors group text-left cursor-pointer ${
+        isActive ? 'bg-primary-teal/10' : 'hover:bg-slate-50'
+      }`}
     >
-      <span className="flex-1 text-sm text-slate-600 truncate group-hover:text-slate-900">
+      <span className={`flex-1 text-sm truncate ${
+        isActive ? 'text-primary-teal font-medium' : 'text-slate-600 group-hover:text-slate-900'
+      }`}>
         {conversation.title}
       </span>
       <button
-        onClick={(e) => { e.stopPropagation(); }}
-        className="opacity-0 group-hover:opacity-100 p-1 hover:bg-slate-200 rounded transition-all"
+        onClick={handleDelete}
+        className={`p-1 rounded transition-all ${
+          showDeleteConfirm
+            ? 'opacity-100 bg-red-100 text-red-600'
+            : 'opacity-0 group-hover:opacity-100 hover:bg-slate-200'
+        }`}
+        title={showDeleteConfirm ? 'Click again to confirm delete' : 'Delete conversation'}
       >
-        <MoreHorizontal size={14} className="text-slate-400" />
+        <Trash2 size={14} className={showDeleteConfirm ? 'text-red-600' : 'text-slate-400'} />
       </button>
     </div>
   );
@@ -153,6 +185,7 @@ interface SmartDrawerProps {
   onNewChat: () => void;
   onSelectTopic: (folderKey: string) => void;
   onSelectConversation: (conversationId: string) => void;
+  isGuest?: boolean; // If true, skip loading conversations from backend
 }
 
 export const SmartDrawer: React.FC<SmartDrawerProps> = ({
@@ -162,11 +195,28 @@ export const SmartDrawer: React.FC<SmartDrawerProps> = ({
   onToggleCollapse,
   onNewChat,
   onSelectTopic,
-  onSelectConversation
+  onSelectConversation,
+  isGuest = false
 }) => {
   const [searchQuery, setSearchQuery] = useState('');
   const [isMobile, setIsMobile] = useState(false);
   const drawerRef = useRef<HTMLDivElement>(null);
+
+  // Get conversations from store
+  const {
+    conversations,
+    currentConversation,
+    isLoadingConversations,
+    loadConversations,
+    deleteConversationById,
+  } = useChatStore();
+
+  // Load conversations on mount (only for logged-in users)
+  useEffect(() => {
+    if (!isGuest) {
+      loadConversations();
+    }
+  }, [isGuest, loadConversations]);
 
   // 检测是否是移动端
   useEffect(() => {
@@ -182,10 +232,27 @@ export const SmartDrawer: React.FC<SmartDrawerProps> = ({
   const touchCurrentX = useRef<number>(0);
   const isDragging = useRef<boolean>(false);
 
+  // Convert store conversations to display format and filter
+  const displayConversations: ConversationDisplay[] = conversations.map(c => ({
+    id: c.id,
+    title: c.title || 'Untitled',
+    folderKey: c.folderKey,
+    updatedAt: c.updatedAt,
+  }));
+
   // 过滤对话
-  const filteredConversations = MOCK_CONVERSATIONS.filter(c =>
+  const filteredConversations = displayConversations.filter(c =>
     c.title.toLowerCase().includes(searchQuery.toLowerCase())
   );
+
+  // Handle delete conversation
+  const handleDeleteConversation = async (conversationId: string) => {
+    try {
+      await deleteConversationById(conversationId);
+    } catch (error) {
+      console.error('Failed to delete conversation:', error);
+    }
+  };
 
   // 触摸手势处理 - 移动端滑动关闭
   const handleTouchStart = useCallback((e: React.TouchEvent) => {
@@ -259,34 +326,44 @@ export const SmartDrawer: React.FC<SmartDrawerProps> = ({
           touch-pan-y
         `}
       >
-        {/* Header - 只在桌面端收起时显示 */}
-        {effectiveCollapsed && (
-          <div className="flex items-center h-14 border-b border-slate-100 px-3 justify-center">
-            <div className="flex items-center gap-1">
-              {/* 新建对话按钮 */}
-              <button
-                onClick={onNewChat}
-                className="p-2 rounded-lg hover:bg-slate-100 transition-colors"
-                title="New chat"
-              >
-                <Plus size={20} className="text-slate-600" />
-              </button>
+        {/* Header - Home按钮 + 收起/展开按钮 */}
+        <div className={`flex border-b border-slate-100 ${effectiveCollapsed ? 'flex-col items-center py-3 gap-2' : 'flex-row items-center justify-between h-14 px-4'}`}>
+          {/* 收起/展开按钮（桌面端）- 收起时在上方 */}
+          {effectiveCollapsed && (
+            <button
+              onClick={onToggleCollapse}
+              className="hidden lg:flex p-2 rounded-lg hover:bg-slate-100 transition-colors"
+              title="Expand sidebar"
+            >
+              <PanelLeft size={20} className="text-slate-600" />
+            </button>
+          )}
 
-              {/* 收起/展开按钮（桌面端） */}
-              <button
-                onClick={onToggleCollapse}
-                className="hidden lg:flex p-2 rounded-lg hover:bg-slate-100 transition-colors"
-                title="Expand sidebar"
-              >
-                <PanelLeft size={20} className="text-slate-600" />
-              </button>
-            </div>
-          </div>
-        )}
+          {/* Home/Dashboard 按钮 */}
+          <button
+            onClick={onNewChat}
+            className={`flex items-center gap-2 rounded-lg hover:bg-slate-100 transition-colors ${effectiveCollapsed ? 'p-2' : 'px-3 py-1.5'}`}
+            title="Dashboard"
+          >
+            <Home size={20} className="text-slate-600" />
+            {!effectiveCollapsed && <span className="text-sm font-medium text-slate-600">Dashboard</span>}
+          </button>
+
+          {/* 收起/展开按钮（桌面端）- 展开时在右侧 */}
+          {!effectiveCollapsed && (
+            <button
+              onClick={onToggleCollapse}
+              className="hidden lg:flex p-2 rounded-lg hover:bg-slate-100 transition-colors"
+              title="Collapse sidebar"
+            >
+              <PanelLeftClose size={20} className="text-slate-600" />
+            </button>
+          )}
+        </div>
 
         {/* 搜索框 + 新建对话按钮（展开时） */}
         {!effectiveCollapsed && (
-          <div className="px-3 pt-5 pb-3 flex items-center gap-2">
+          <div className="px-3 pt-3 pb-3 flex items-center gap-2">
             <div className="relative flex-1">
               <Search size={16} className="absolute left-3 top-1/2 -translate-y-1/2 text-slate-400" />
               <input
@@ -304,14 +381,6 @@ export const SmartDrawer: React.FC<SmartDrawerProps> = ({
               title="New chat"
             >
               <Plus size={20} />
-            </button>
-            {/* 收起/展开按钮（桌面端） */}
-            <button
-              onClick={onToggleCollapse}
-              className="hidden lg:flex flex-shrink-0 p-2 rounded-lg hover:bg-slate-100 transition-colors"
-              title="Collapse sidebar"
-            >
-              <PanelLeftClose size={20} className="text-slate-600" />
             </button>
           </div>
         )}
@@ -350,12 +419,20 @@ export const SmartDrawer: React.FC<SmartDrawerProps> = ({
               </h3>
             )}
             <div className={`space-y-1 ${effectiveCollapsed ? 'flex flex-col items-center' : ''}`}>
-              {filteredConversations.length > 0 ? (
+              {isLoadingConversations ? (
+                !effectiveCollapsed && (
+                  <div className="px-3 py-4 flex items-center justify-center">
+                    <Loader2 size={20} className="text-slate-400 animate-spin" />
+                  </div>
+                )
+              ) : filteredConversations.length > 0 ? (
                 filteredConversations.map(conversation => (
                   <ConversationItem
                     key={conversation.id}
                     conversation={conversation}
                     onClick={() => onSelectConversation(conversation.id)}
+                    onDelete={() => handleDeleteConversation(conversation.id)}
+                    isActive={currentConversation?.id === conversation.id}
                     collapsed={effectiveCollapsed}
                   />
                 ))
@@ -368,12 +445,33 @@ export const SmartDrawer: React.FC<SmartDrawerProps> = ({
           </div>
         </div>
 
-        {/* Footer */}
+        {/* Footer with Login/User */}
         {!effectiveCollapsed && (
           <div className="p-4 border-t border-slate-100">
-            <p className="text-xs text-slate-400 text-center">
-              Qimi AI - Your ADHD Support
-            </p>
+            {isGuest ? (
+              <button
+                onClick={() => signIn('google')}
+                className="w-full flex items-center justify-center gap-2 px-4 py-2.5 bg-primary-teal text-white rounded-lg hover:bg-primary-teal/90 transition-colors font-medium text-sm"
+              >
+                <LogIn size={18} />
+                Sign in for unlimited
+              </button>
+            ) : (
+              <div className="flex items-center gap-3">
+                <div className="w-9 h-9 rounded-full bg-primary-teal/10 flex items-center justify-center">
+                  <User size={18} className="text-primary-teal" />
+                </div>
+                <div className="flex-1 min-w-0">
+                  <p className="text-sm font-medium text-slate-700 truncate">Logged in</p>
+                  <button
+                    onClick={() => signOut()}
+                    className="text-xs text-slate-400 hover:text-slate-600"
+                  >
+                    Sign out
+                  </button>
+                </div>
+              </div>
+            )}
           </div>
         )}
       </div>

@@ -48,3 +48,16 @@
 ::-webkit-scrollbar-thumb:hover {
   @apply bg-slate-300;
 }
+
+/* Hide NextAuth dev mode floating button */
+[data-nextauth-portal],
+[data-nextauth-debug] {
+  display: none !important;
+}
+
+/* Hide Next.js development indicator */
+#__next-build-indicator,
+[data-nextjs-toast],
+nextjs-portal {
+  display: none !important;
+}

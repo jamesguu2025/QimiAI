@@ -4,6 +4,7 @@ import { useEffect, useState, useRef } from 'react';
 import Hero from '../components/Landing/Hero';
 import { PricingCard } from '../components/Landing/PricingCard';
 import { ArticleCard } from '../components/Landing/ArticleCard';
+import LoginModal from '../components/Auth/LoginModal';
 
 import { HowItWorks } from '../components/Landing/HowItWorks';
 import { FAQ } from '../components/Landing/FAQ';
@@ -86,6 +87,8 @@ export default function Home() {
   const [waitlistCount, setWaitlistCount] = useState(0);
   const [openDropdown, setOpenDropdown] = useState<string | null>(null);
   const [mobileMenuOpen, setMobileMenuOpen] = useState(false);
+  const [loginModalOpen, setLoginModalOpen] = useState(false);
+  const [loginModalTab, setLoginModalTab] = useState<'login' | 'signup'>('login');
 
   // 导航菜单数据
   const aboutItems: DropdownItem[] = [
@@ -202,8 +205,8 @@ export default function Home() {
                     </span>
                   </div>
 
-                  <button onClick={() => signIn()} className="hidden md:block text-sm font-medium text-slate-600 hover:text-slate-900">Log in</button>
-                  <button onClick={() => signIn('google', { callbackUrl: '/dashboard' })} className="hidden md:block px-4 py-2 rounded-lg bg-slate-900 text-white text-sm font-bold hover:bg-slate-800 transition-colors">
+                  <button onClick={() => { setLoginModalTab('login'); setLoginModalOpen(true); }} className="hidden md:block text-sm font-medium text-slate-600 hover:text-slate-900">Log in</button>
+                  <button onClick={() => { setLoginModalTab('signup'); setLoginModalOpen(true); }} className="hidden md:block px-4 py-2 rounded-lg bg-slate-900 text-white text-sm font-bold hover:bg-slate-800 transition-colors">
                     Sign up
                   </button>
                 </>
@@ -269,13 +272,13 @@ export default function Home() {
 
               <div className="pt-4 border-t border-slate-100 mt-4 space-y-2">
                 <button
-                  onClick={() => { setMobileMenuOpen(false); signIn(); }}
+                  onClick={() => { setMobileMenuOpen(false); setLoginModalTab('login'); setLoginModalOpen(true); }}
                   className="w-full px-4 py-3 text-base font-medium text-slate-700 hover:bg-slate-50 rounded-lg text-left"
                 >
                   Log in
                 </button>
                 <button
-                  onClick={() => { setMobileMenuOpen(false); signIn('google', { callbackUrl: '/dashboard' }); }}
+                  onClick={() => { setMobileMenuOpen(false); setLoginModalTab('signup'); setLoginModalOpen(true); }}
                   className="w-full px-4 py-3 rounded-lg bg-slate-900 text-white text-base font-bold hover:bg-slate-800 transition-colors"
                 >
                   Sign up
@@ -422,6 +425,13 @@ export default function Home() {
           </div>
         </footer>
       </main>
+
+      {/* Login Modal */}
+      <LoginModal
+        isOpen={loginModalOpen}
+        onClose={() => setLoginModalOpen(false)}
+        defaultTab={loginModalTab}
+      />
     </div>
   );
 }

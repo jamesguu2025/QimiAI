@@ -42,6 +42,13 @@ export default function ChatPage() {
         setMessages
     } = useChat();
 
+    // 会话管理 (from store)
+    const {
+        selectConversation,
+        createNewChat,
+        createConversation,
+    } = useChatStore();
+
     const messagesEndRef = useRef<HTMLDivElement>(null);
     const touchStartX = useRef<number>(0);
     const modeHandledRef = useRef<string | null>(null);
@@ -69,6 +76,26 @@ export default function ChatPage() {
     useEffect(() => {
         scrollToBottom();
     }, [messages]);
+
+    // 保存 AI 回复到 guestStorage（当流式响应完成时）
+    useEffect(() => {
+        if (isGuest && !isStreaming && messages.length > 1) {
+            // 找到最后一条 AI 消息
+            const lastMessage = messages[messages.length - 1];
+            if (lastMessage.role === 'assistant' && lastMessage.id !== 'welcome' && lastMessage.content) {
+                // 检查是否已经保存过
+                const guestData = guestStorage.get();
+                const alreadySaved = guestData?.chatHistory?.some(m => m.id === lastMessage.id);
+                if (!alreadySaved) {
+                    guestStorage.addMessage({
+                        id: lastMessage.id,
+                        role: 'assistant',
+                        content: lastMessage.content
+                    });
+                }
+            }
+        }
+    }, [isGuest, isStreaming, messages]);
 
     // 检查登录状态和访客数据
     useEffect(() => {
@@ -151,18 +178,30 @@ export default function ChatPage() {
 
     // 抽屉操作
     const handleNewChat = () => {
-        setMessages([WELCOME_MESSAGE]);
+        createNewChat();
         setDrawerOpen(false);
     };
 
-    const handleSelectTopic = (folderKey: string) => {
-        // TODO: Sprint 1.2 - Create conversation with selected topic
-        setDrawerOpen(false);
+    const handleSelectTopic = async (folderKey: string) => {
+        try {
+            // Create a new conversation with the selected topic
+            await createConversation(
+                `${folderKey.charAt(0).toUpperCase() + folderKey.slice(1)} Chat`,
+                folderKey as any
+            );
+            setDrawerOpen(false);
+        } catch (error) {
+            console.error('Failed to create topic conversation:', error);
+        }
     };
 
-    const handleSelectConversation = (conversationId: string) => {
-        // TODO: Sprint 1.2 - Load selected conversation
-        setDrawerOpen(false);
+    const handleSelectConversation = async (conversationId: string) => {
+        try {
+            await selectConversation(conversationId);
+            setDrawerOpen(false);
+        } catch (error) {
+            console.error('Failed to load conversation:', error);
+        }
     };
 
     // 加载状态 - 使用骨架屏
@@ -198,6 +237,7 @@ export default function ChatPage() {
                 onNewChat={handleNewChat}
                 onSelectTopic={handleSelectTopic}
                 onSelectConversation={handleSelectConversation}
+                isGuest={isGuest}
             />
 
             {/* 主内容区 */}
@@ -214,7 +254,27 @@ export default function ChatPage() {
                     >
                         <Menu size={20} className="text-slate-600" />
                     </button>
-                    <img src="/logo.svg" alt="Qimi" className="h-8" />
+                    <button
+                        onClick={() => {
+                            createNewChat();
+                            setMessages([WELCOME_MESSAGE]);
+                        }}
+                        className="hover:opacity-80 transition-opacity"
+                        title="Back to Dashboard"
+                    >
+                        <img src="/logo.svg" alt="Qimi" className="h-8" />
+                    </button>
+                    {messages.length > 1 && (
+                        <button
+                            onClick={() => {
+                                createNewChat();
+                                setMessages([WELCOME_MESSAGE]);
+                            }}
+                            className="absolute right-4 px-3 py-1.5 text-sm font-medium text-slate-600 hover:text-slate-900 hover:bg-slate-100 rounded-lg transition-colors"
+                        >
+                            + New Chat
+                        </button>
+                    )}
                 </header>
 
                 {/* 访客剩余消息提示 */}
@@ -246,9 +306,6 @@ export default function ChatPage() {
                         {messages.length === 1 ? (
                             // 欢迎界面
                             <div className="flex-1 flex flex-col items-center justify-center pb-10">
-                                <div className="w-16 h-16 rounded-2xl bg-gradient-primary flex items-center justify-center shadow-xl shadow-primary-teal/20 mb-6">
-                                    <img src="/logo.svg" alt="Qimi" className="w-8 h-8 brightness-0 invert" />
-                                </div>
                                 <h2 className="text-2xl font-bold text-slate-800 mb-2">Hi, I'm Qimi AI</h2>
                                 <p className="text-slate-500 text-center max-w-md mb-8">
                                     I'm here to support your family's journey with ADHD.<br />How can I help you today?
