@@ -1,6 +1,7 @@
 import React, { useState, useRef, useEffect, useCallback } from 'react';
-import { Paperclip, X, FileText, Image as ImageIcon, File, Upload } from 'lucide-react';
+import { Paperclip, X, FileText, Image as ImageIcon, File, Upload, Square } from 'lucide-react';
 import { formatFileSize, getFileCategory } from '../../utils/format';
+import { useChatStore } from '../../stores/chatStore';
 
 // 自定义学位帽图标组件
 const DegreeHatIcon: React.FC<{
@@ -106,6 +107,9 @@ export const ChatInput: React.FC<ChatInputProps> = ({ onSend, disabled, forceRAG
   const textareaRef = useRef<HTMLTextAreaElement>(null);
   const fileInputRef = useRef<HTMLInputElement>(null);
   const dropZoneRef = useRef<HTMLDivElement>(null);
+
+  // Get streaming state and stop function from store
+  const { isStreaming, stopStream } = useChatStore();
 
   const adjustHeight = () => {
     const textarea = textareaRef.current;
@@ -421,43 +425,57 @@ export const ChatInput: React.FC<ChatInputProps> = ({ onSend, disabled, forceRAG
             )}
           </div>
 
-          {/* 发送按钮 - 渐变边框风格 */}
+          {/* 发送/停止按钮 - 渐变边框风格，双功能 */}
           <button
-            onClick={() => handleSubmit()}
-            disabled={!canSend}
+            onClick={() => {
+              if (isStreaming) {
+                stopStream();
+              } else {
+                handleSubmit();
+              }
+            }}
+            disabled={!canSend && !isStreaming}
             className={`
               p-2.5 rounded-xl transition-all duration-200 flex items-center justify-center
-              ${canSend
+              ${(canSend || isStreaming)
                 ? 'hover:shadow-md active:scale-95'
                 : 'opacity-40 cursor-not-allowed'
               }
             `}
-            style={canSend ? {
+            style={(canSend || isStreaming) ? {
               background: 'white',
               border: '2px solid transparent',
-              backgroundImage: 'linear-gradient(white, white), linear-gradient(135deg, #00D4AA 0%, #8B5CF6 100%)',
+              backgroundImage: isStreaming
+                ? 'linear-gradient(white, white), linear-gradient(135deg, #ef4444 0%, #dc2626 100%)'
+                : 'linear-gradient(white, white), linear-gradient(135deg, #00D4AA 0%, #8B5CF6 100%)',
               backgroundOrigin: 'border-box',
               backgroundClip: 'padding-box, border-box',
             } : {
               background: '#f1f5f9',
               border: '2px solid #e2e8f0',
             }}
-            aria-label="Send message"
+            aria-label={isStreaming ? "Stop generating" : "Send message"}
           >
-            <svg
-              xmlns="http://www.w3.org/2000/svg"
-              viewBox="0 0 24 24"
-              fill="url(#sendGradient)"
-              className="w-5 h-5"
-            >
-              <defs>
-                <linearGradient id="sendGradient" x1="0%" y1="0%" x2="100%" y2="100%">
-                  <stop offset="0%" stopColor={canSend ? "#00D4AA" : "#94a3b8"} />
-                  <stop offset="100%" stopColor={canSend ? "#8B5CF6" : "#94a3b8"} />
-                </linearGradient>
-              </defs>
-              <path d="M3.478 2.405a.75.75 0 00-.926.94l2.432 7.905H13.5a.75.75 0 010 1.5H4.984l-2.432 7.905a.75.75 0 00.926.94 60.519 60.519 0 0018.445-8.986.75.75 0 000-1.218A60.517 60.517 0 003.478 2.405z" />
-            </svg>
+            {isStreaming ? (
+              /* 停止图标 - 方形 */
+              <Square size={18} fill="#ef4444" className="text-red-500" />
+            ) : (
+              /* 发送图标 */
+              <svg
+                xmlns="http://www.w3.org/2000/svg"
+                viewBox="0 0 24 24"
+                fill="url(#sendGradient)"
+                className="w-5 h-5"
+              >
+                <defs>
+                  <linearGradient id="sendGradient" x1="0%" y1="0%" x2="100%" y2="100%">
+                    <stop offset="0%" stopColor={canSend ? "#00D4AA" : "#94a3b8"} />
+                    <stop offset="100%" stopColor={canSend ? "#8B5CF6" : "#94a3b8"} />
+                  </linearGradient>
+                </defs>
+                <path d="M3.478 2.405a.75.75 0 00-.926.94l2.432 7.905H13.5a.75.75 0 010 1.5H4.984l-2.432 7.905a.75.75 0 00.926.94 60.519 60.519 0 0018.445-8.986.75.75 0 000-1.218A60.517 60.517 0 003.478 2.405z" />
+              </svg>
+            )}
           </button>
         </div>
       </div>

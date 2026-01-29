@@ -11,12 +11,95 @@ import {
   executeRAGWithSmartSummary,
   RAGToolCallResult
 } from '../../../services/rag-service';
+import { getSupabaseAdmin } from '../../../lib/supabase';
 
 // DeepSeek API configuration from environment variables
 const DEEPSEEK_API_KEY = process.env.DEEPSEEK_API_KEY;
 const DEEPSEEK_API_BASE = process.env.DEEPSEEK_API_BASE || 'https://api.deepseek.com';
 const DEEPSEEK_MODEL = process.env.DEEPSEEK_MODEL || 'deepseek-chat';
 const ENABLE_RAG = process.env.ENABLE_RAG === 'true';
+
+/**
+ * Save messages to database for logged-in users
+ */
+async function saveMessagesToDatabase(
+  userEmail: string,
+  userMessage: string,
+  aiResponse: string,
+  conversationId?: string,
+  sources?: Array<{ title: string; url: string; snippet?: string }>
+): Promise<string | null> {
+  try {
+    const supabase = getSupabaseAdmin();
+
+    // Get user
+    const { data: user, error: userError } = await supabase
+      .from('users')
+      .select('id')
+      .eq('email', userEmail)
+      .single();
+
+    if (userError || !user) {
+      console.log('[chat/stream] User not found, skipping message save');
+      return null;
+    }
+
+    let convId = conversationId;
+
+    // Create conversation if not provided
+    if (!convId) {
+      const title = userMessage.slice(0, 50) + (userMessage.length > 50 ? '...' : '');
+      const { data: newConv, error: convError } = await supabase
+        .from('conversations')
+        .insert({
+          user_id: user.id,
+          title,
+        })
+        .select('id')
+        .single();
+
+      if (convError) {
+        console.error('[chat/stream] Failed to create conversation:', convError);
+        return null;
+      }
+      convId = newConv.id;
+      console.log('[chat/stream] Created new conversation:', convId);
+    }
+
+    // Save user message
+    const { error: userMsgError } = await supabase
+      .from('messages')
+      .insert({
+        conversation_id: convId,
+        role: 'user',
+        content: userMessage,
+      });
+
+    if (userMsgError) {
+      console.error('[chat/stream] Failed to save user message:', userMsgError);
+    }
+
+    // Save AI response
+    const { error: aiMsgError } = await supabase
+      .from('messages')
+      .insert({
+        conversation_id: convId,
+        role: 'assistant',
+        content: aiResponse,
+        sources: sources || null,
+      });
+
+    if (aiMsgError) {
+      console.error('[chat/stream] Failed to save AI message:', aiMsgError);
+    }
+
+    console.log('[chat/stream] Messages saved to conversation:', convId);
+    return convId ?? null;
+  } catch (error) {
+    console.error('[chat/stream] Error saving messages:', error);
+    return null;
+  }
+}
 
 export const config = {
   api: {
@@ -54,6 +137,30 @@ export default async function handler(
     return res.status(500).json({ error: 'API key not configured' });
   }
 
+  // Create AbortController to cancel DeepSeek API calls when client disconnects
+  const abortController = new AbortController();
+  let clientDisconnected = false;
+
+  // Listen for client disconnect - multiple event listeners for reliability
+  const handleDisconnect = (eventName: string) => {
+    if (!clientDisconnected) {
+      console.log(`[chat/stream] ${eventName} event - client disconnecting`);
+      clientDisconnected = true;
+      abortController.abort();
+    }
+  };
+
+  res.on('close', () => handleDisconnect('close'));
+  res.on('finish', () => {
+    console.log('[chat/stream] Response finished normally');
+  });
+
+  // Also listen on socket for more reliable disconnect detection
+  if (res.socket) {
+    res.socket.on('close', () => handleDisconnect('socket.close'));
+    res.socket.on('error', () => handleDisconnect('socket.error'));
+  }
+
   try {
     // Get user ID from session or guest cookie (for logging/rate limiting)
     const session = await getServerSession(req, res, authOptions);
@@ -67,11 +174,14 @@ export default async function handler(
       userId = `guest_${Date.now()}_${Math.random().toString(36).slice(2, 9)}`;
     }
 
-    const { content, attachments, conversationHistory, userProfile, forceRAG } = req.body;
+    const { content, attachments, conversationHistory, userProfile, forceRAG, conversationId } = req.body;
 
     if (!content && (!attachments || attachments.length === 0)) {
       return res.status(400).json({ error: 'Message content required' });
     }
+
+    // Store user message for later saving
+    const userMessage = content || '';
 
     // Prepare conversation history for module identification
     const historyForModule: ChatMessage[] = Array.isArray(conversationHistory)
@@ -117,27 +227,85 @@ export default async function handler(
     res.setHeader('Connection', 'keep-alive');
     res.setHeader('X-Accel-Buffering', 'no');
 
+    // Shared accumulator to track content even if abort happens
+    const accumulator = { content: '', sources: [] as Array<{ title: string; url: string; snippet?: string }> };
+
     // Call DeepSeek with potential RAG tool support
-    await streamChatWithRAG(messages, res, forceRAG || false);
+    const { fullResponse, sources } = await streamChatWithRAG(messages, res, forceRAG || false, abortController.signal, accumulator);
+
+    // Final check if client is still connected before saving
+    const socketDestroyed = (res.socket as any)?.destroyed === true;
+    const isDisconnected = clientDisconnected || res.writableEnded || socketDestroyed;
+
+    console.log('[chat/stream] Pre-save check - disconnected:', isDisconnected,
+      'clientDisconnected:', clientDisconnected,
+      'writableEnded:', res.writableEnded,
+      'socketDestroyed:', socketDestroyed,
+      'responseLength:', fullResponse.length);
+
+    // Save messages to database for logged-in users
+    // Like ChatGPT/Claude.ai: Save partial response even if user clicked stop
+    if (session?.user?.email && fullResponse) {
+      if (isDisconnected) {
+        console.log('[chat/stream] Client disconnected, saving partial response');
+      }
+      const savedConvId = await saveMessagesToDatabase(
+        session.user.email,
+        userMessage,
+        fullResponse,
+        conversationId,
+        sources
+      );
+
+      // If a new conversation was created, send the ID to frontend
+      if (savedConvId && !conversationId) {
+        // Note: This is sent after [DONE], frontend should handle this
+        console.log('[chat/stream] New conversation created:', savedConvId);
+      }
+    }
 
   } catch (error) {
+    // Handle abort errors silently (client disconnect)
+    if (error instanceof Error && error.name === 'AbortError') {
+      console.log('[chat/stream] Request aborted due to client disconnect');
+      return;
+    }
     console.error('[chat/stream] Handler error:', error);
-    return res.status(500).json({
-      error: 'Internal server error',
-      message: error instanceof Error ? error.message : 'Unknown error',
-    });
+    // Don't try to send JSON response if headers already sent (SSE mode)
+    if (!res.headersSent) {
+      return res.status(500).json({
+        error: 'Internal server error',
+        message: error instanceof Error ? error.message : 'Unknown error',
+      });
+    }
   }
+}
+
+/**
+ * Shared accumulator type for tracking streamed content
+ */
+interface StreamAccumulator {
+  content: string;
+  sources: Array<{ title: string; url: string; snippet?: string }>;
 }
 
 /**
  * Stream chat with RAG tool calling support
  * Handles multi-turn tool calling workflow
+ * Returns the full AI response and sources for database storage
  */
 async function streamChatWithRAG(
   messages: ChatMessage[],
   res: NextApiResponse,
-  forceRAG: boolean = false
-): Promise<void> {
+  forceRAG: boolean = false,
+  abortSignal?: AbortSignal,
+  accumulator?: StreamAccumulator
+): Promise<{ fullResponse: string; sources: Array<{ title: string; url: string; snippet?: string }> }> {
+  // Use external accumulator if provided, otherwise create local one
+  const acc = accumulator || { content: '', sources: [] };
+  let fullResponse = '';
+  let collectedSources: Array<{ title: string; url: string; snippet?: string }> = [];
+
   try {
     // If forceRAG is enabled and ENABLE_RAG is true, make direct RAG call first
     // 使用双LLM架构：第一个LLM提取论文核心发现，第二个LLM与用户对话
@@ -162,10 +330,11 @@ async function streamChatWithRAG(
         // Log which mode was used
         console.log(`[chat/stream] Force RAG: Using ${ragResult.summaryMode} mode`);
 
-        // Send sources to frontend
+        // Send sources to frontend and collect for database
         if (ragResult.sources.length > 0) {
           console.log(`[chat/stream] Force RAG: Sending ${ragResult.sources.length} paper sources to frontend`);
           res.write(`data: ${JSON.stringify({ type: 'sources', sources: ragResult.sources })}\n\n`);
+          collectedSources = ragResult.sources;
         }
 
         // Inject RAG results into conversation as a system message
@@ -211,6 +380,7 @@ async function streamChatWithRAG(
         'Authorization': `Bearer ${DEEPSEEK_API_KEY}`,
       },
       body: JSON.stringify(requestBody),
+      signal: abortSignal,
     });
 
     if (!response.ok) {
@@ -218,18 +388,23 @@ async function streamChatWithRAG(
       console.error('[chat/stream] DeepSeek API error:', response.status, errorText);
       res.write(`data: ${JSON.stringify({ type: 'error', error: 'API request failed' })}\n\n`);
       res.end();
-      return;
+      return { fullResponse: '', sources: [] };
     }
 
     const reader = response.body?.getReader();
     if (!reader) {
       res.write(`data: ${JSON.stringify({ type: 'error', error: 'No response body' })}\n\n`);
       res.end();
-      return;
+      return { fullResponse: '', sources: [] };
     }
 
     // Process stream and check for tool calls
-    const { shouldExecuteTools, toolCalls, assistantMessage } = await processFirstStream(reader, res);
+    // Pass accumulator to update in real-time for partial saves
+    const { shouldExecuteTools, toolCalls, assistantMessage } = await processFirstStream(reader, res, abortSignal, acc);
+
+    // Track partial response (for saving even if user stops mid-stream)
+    fullResponse = assistantMessage;
+    acc.content = assistantMessage;
 
     // If AI requested tool calls, execute them and make second API call
     if (shouldExecuteTools && toolCalls.length > 0) {
@@ -291,10 +466,11 @@ async function streamChatWithRAG(
         }
       }
 
-      // Send sources to frontend immediately after tool execution
+      // Send sources to frontend immediately after tool execution and collect for database
       if (allSources.length > 0) {
         console.log(`[chat/stream] Sending ${allSources.length} paper sources to frontend`);
         res.write(`data: ${JSON.stringify({ type: 'sources', sources: allSources })}\n\n`);
+        collectedSources = allSources;
       }
 
       // Second API call with tool results
@@ -312,27 +488,61 @@ async function streamChatWithRAG(
           temperature: 0.7,
           max_tokens: 2048,
         }),
+        signal: abortSignal,
       });
 
       if (!secondResponse.ok) {
         console.error('[chat/stream] Second API call failed');
         res.write(`data: ${JSON.stringify({ type: 'error', error: 'Failed to generate response with research' })}\n\n`);
         res.end();
-        return;
+        return { fullResponse: '', sources: collectedSources };
       }
 
       const secondReader = secondResponse.body?.getReader();
       if (secondReader) {
-        await streamFinalResponse(secondReader, res);
+        fullResponse = await streamFinalResponse(secondReader, res, abortSignal);
       }
     }
 
     res.end();
+    return { fullResponse, sources: collectedSources };
   } catch (error) {
+    // Handle abort errors - return partial response for saving (like ChatGPT/Claude.ai)
+    if (error instanceof Error && error.name === 'AbortError') {
+      // Use accumulator content which is updated in real-time
+      const partialContent = acc.content || fullResponse;
+      console.log(`[chat/stream] Stream aborted, returning partial response (${partialContent.length} chars from accumulator)`);
+      if (!res.writableEnded) {
+        res.end();
+      }
+      // Return whatever was accumulated - will be saved to database
+      return { fullResponse: partialContent, sources: acc.sources.length > 0 ? acc.sources : collectedSources };
+    }
     console.error('[chat/stream] Stream error:', error);
-    res.write(`data: ${JSON.stringify({ type: 'error', error: 'Stream failed' })}\n\n`);
-    res.end();
+    if (!res.writableEnded) {
+      res.write(`data: ${JSON.stringify({ type: 'error', error: 'Stream failed' })}\n\n`);
+      res.end();
+    }
+    // On error, still return partial response if any
+    const partialContent = acc.content || fullResponse;
+    return { fullResponse: partialContent, sources: acc.sources.length > 0 ? acc.sources : collectedSources };
   }
+}
+
+/**
+ * Check if client connection is still alive
+ */
+function isClientConnected(res: NextApiResponse, abortSignal?: AbortSignal): boolean {
+  // Check multiple conditions
+  const socketDestroyed = (res.socket as any)?.destroyed === true;
+  const writableEnded = res.writableEnded;
+  const aborted = abortSignal?.aborted === true;
+
+  if (socketDestroyed || writableEnded || aborted) {
+    console.log('[chat/stream] Client disconnected check - socket:', socketDestroyed, 'writable:', writableEnded, 'aborted:', aborted);
+    return false;
+  }
+  return true;
 }
 
 /**
@@ -340,7 +550,9 @@ async function streamChatWithRAG(
  */
 async function processFirstStream(
   reader: ReadableStreamDefaultReader<Uint8Array>,
-  res: NextApiResponse
+  res: NextApiResponse,
+  abortSignal?: AbortSignal,
+  accumulator?: StreamAccumulator
 ): Promise<{
   shouldExecuteTools: boolean;
   toolCalls: Array<{ id: string; type: 'function'; function: { name: string; arguments: string } }>;
@@ -355,6 +567,12 @@ async function processFirstStream(
 
   try {
     while (true) {
+      // Check if client is still connected
+      if (!isClientConnected(res, abortSignal)) {
+        console.log('[chat/stream] Client disconnected during first stream processing');
+        break;
+      }
+
       const { done, value } = await reader.read();
       if (done) break;
 
@@ -379,6 +597,10 @@ async function processFirstStream(
             // Handle content delta (stream text to user)
             if (choice.delta?.content) {
               assistantMessage += choice.delta.content;
+              // Update accumulator in real-time for partial saves on abort
+              if (accumulator) {
+                accumulator.content = assistantMessage;
+              }
               res.write(`data: ${JSON.stringify({ type: 'token', content: choice.delta.content })}\n\n`);
             }
 
@@ -442,16 +664,25 @@ async function processFirstStream(
 
 /**
  * Stream final response after tool execution
+ * Returns the collected response text for database storage
  */
 async function streamFinalResponse(
   reader: ReadableStreamDefaultReader<Uint8Array>,
-  res: NextApiResponse
-): Promise<void> {
+  res: NextApiResponse,
+  abortSignal?: AbortSignal
+): Promise<string> {
   const decoder = new TextDecoder();
   let buffer = '';
+  let collectedResponse = '';
 
   try {
     while (true) {
+      // Check if client is still connected
+      if (!isClientConnected(res, abortSignal)) {
+        console.log('[chat/stream] Client disconnected during final stream');
+        break;
+      }
+
       const { done, value } = await reader.read();
       if (done) break;
 
@@ -475,6 +706,7 @@ async function streamFinalResponse(
             const tokenContent = data.choices?.[0]?.delta?.content;
 
             if (tokenContent) {
+              collectedResponse += tokenContent;
               res.write(`data: ${JSON.stringify({ type: 'token', content: tokenContent })}\n\n`);
             }
 
@@ -490,4 +722,6 @@ async function streamFinalResponse(
   } finally {
     reader.releaseLock();
   }
+
+  return collectedResponse;
 }

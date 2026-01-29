@@ -145,7 +145,6 @@ export default function Home() {
       <Head>
         <title>Qimi AI - Empowering Every ADHD Family</title>
         <meta name="description" content="Your 24/7 AI copilot for IEPs, routines, and emotional regulation." />
-        <link rel="icon" href="/favicon.svg" />
       </Head>
 
       {/* Navbar */}

@@ -1,4 +1,5 @@
 import React, { useState, useRef, useEffect, useCallback } from 'react';
+import ReactDOM from 'react-dom';
 import {
   PanelLeftClose,
   PanelLeft,
@@ -6,7 +7,6 @@ import {
   Search,
   MessageSquare,
   ChevronRight,
-  MoreHorizontal,
   Heart,
   BookOpen,
   Activity,
@@ -20,11 +20,292 @@ import {
   LogIn,
   User,
   Home,
+  AlertTriangle,
+  X,
+  Edit3,
+  Pin,
   LucideIcon
 } from 'lucide-react';
-import { signIn, signOut, useSession } from 'next-auth/react';
+import { signIn, signOut } from 'next-auth/react';
 import { useChatStore } from '../../stores/chatStore';
-import { Conversation as ConversationType } from '../../types/chat';
+
+// ============================================================================
+// 长按Hook - 用于移动端检测长按手势
+// ============================================================================
+
+function useLongPress(
+  onLongPress: (position: { x: number; y: number }) => void,
+  onClick?: () => void,
+  { delay = 500 }: { delay?: number } = {}
+) {
+  const timerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
+  const isLongPressRef = useRef(false);
+  const touchMoved = useRef(false);
+  const positionRef = useRef({ x: 0, y: 0 });
+
+  const start = useCallback((e: React.TouchEvent | React.MouseEvent) => {
+    isLongPressRef.current = false;
+    touchMoved.current = false;
+
+    // 保存触摸/点击位置，用于长按触发时使用
+    if ('touches' in e) {
+      positionRef.current = {
+        x: e.touches[0].clientX,
+        y: e.touches[0].clientY,
+      };
+    } else {
+      positionRef.current = {
+        x: e.clientX,
+        y: e.clientY,
+      };
+    }
+
+    timerRef.current = setTimeout(() => {
+      isLongPressRef.current = true;
+      onLongPress(positionRef.current);
+    }, delay);
+  }, [onLongPress, delay]);
+
+  const clear = useCallback((shouldTriggerClick = true) => {
+    if (timerRef.current) {
+      clearTimeout(timerRef.current);
+      timerRef.current = null;
+    }
+    if (shouldTriggerClick && !isLongPressRef.current && !touchMoved.current && onClick) {
+      onClick();
+    }
+  }, [onClick]);
+
+  const move = useCallback(() => {
+    touchMoved.current = true;
+    if (timerRef.current) {
+      clearTimeout(timerRef.current);
+      timerRef.current = null;
+    }
+  }, []);
+
+  return {
+    onTouchStart: start,
+    onTouchEnd: () => clear(true),
+    onTouchMove: move,
+    onMouseDown: start,
+    onMouseUp: () => clear(true),
+    onMouseLeave: () => clear(false),
+  };
+}
+
+// ============================================================================
+// 确认弹窗组件
+// ============================================================================
+
+interface ConfirmDialogProps {
+  isOpen: boolean;
+  title: string;
+  message: string;
+  confirmText?: string;
+  cancelText?: string;
+  onConfirm: () => void;
+  onCancel: () => void;
+  isLoading?: boolean;
+}
+
+const ConfirmDialog: React.FC<ConfirmDialogProps> = ({
+  isOpen,
+  title,
+  message,
+  confirmText = 'Delete',
+  cancelText = 'Cancel',
+  onConfirm,
+  onCancel,
+  isLoading = false,
+}) => {
+  const [mounted, setMounted] = useState(false);
+
+  useEffect(() => {
+    setMounted(true);
+    return () => setMounted(false);
+  }, []);
+
+  if (!isOpen || !mounted) return null;
+
+  const dialogContent = (
+    <div className="fixed inset-0 z-[9999] flex items-center justify-center p-4">
+      {/* 背景遮罩 */}
+      <div
+        className="absolute inset-0 bg-black/50 backdrop-blur-sm"
+        onClick={onCancel}
+      />
+
+      {/* 弹窗内容 */}
+      <div className="relative bg-white rounded-xl shadow-2xl w-full max-w-sm mx-4 overflow-hidden animate-in fade-in zoom-in-95 duration-200">
+        {/* 头部 */}
+        <div className="flex items-center gap-3 px-5 py-4 border-b border-slate-100">
+          <div className="w-10 h-10 rounded-full bg-red-100 flex items-center justify-center">
+            <AlertTriangle size={20} className="text-red-600" />
+          </div>
+          <div className="flex-1">
+            <h3 className="font-semibold text-slate-900">{title}</h3>
+          </div>
+          <button
+            onClick={onCancel}
+            className="p-1 rounded-lg hover:bg-slate-100 transition-colors"
+          >
+            <X size={18} className="text-slate-400" />
+          </button>
+        </div>
+
+        {/* 内容 */}
+        <div className="px-5 py-4">
+          <p className="text-sm text-slate-600">{message}</p>
+        </div>
+
+        {/* 按钮 */}
+        <div className="flex gap-3 px-5 py-4 bg-slate-50 border-t border-slate-100">
+          <button
+            onClick={onCancel}
+            disabled={isLoading}
+            className="flex-1 px-4 py-2.5 text-sm font-medium text-slate-700 bg-white border border-slate-200 rounded-lg hover:bg-slate-50 transition-colors disabled:opacity-50"
+          >
+            {cancelText}
+          </button>
+          <button
+            onClick={onConfirm}
+            disabled={isLoading}
+            className="flex-1 px-4 py-2.5 text-sm font-medium text-white bg-red-600 rounded-lg hover:bg-red-700 transition-colors disabled:opacity-50 flex items-center justify-center gap-2"
+          >
+            {isLoading ? (
+              <>
+                <Loader2 size={16} className="animate-spin" />
+                Deleting...
+              </>
+            ) : (
+              confirmText
+            )}
+          </button>
+        </div>
+      </div>
+    </div>
+  );
+
+  // 使用 Portal 渲染到 body，确保居中显示
+  return ReactDOM.createPortal(dialogContent, document.body);
+};
+
+// ============================================================================
+// 上下文菜单组件 - 用于移动端长按显示
+// ============================================================================
+
+interface ContextMenuProps {
+  isOpen: boolean;
+  position: { x: number; y: number };
+  onClose: () => void;
+  onRename: () => void;
+  onPinTop: () => void;
+  onDelete: () => void;
+  isPinned?: boolean;
+}
+
+const ContextMenu: React.FC<ContextMenuProps> = ({
+  isOpen,
+  position,
+  onClose,
+  onRename,
+  onPinTop,
+  onDelete,
+  isPinned = false,
+}) => {
+  const menuRef = useRef<HTMLDivElement>(null);
+  const [mounted, setMounted] = useState(false);
+
+  useEffect(() => {
+    setMounted(true);
+    return () => setMounted(false);
+  }, []);
+
+  // 调整菜单位置确保不超出屏幕
+  useEffect(() => {
+    if (isOpen && menuRef.current) {
+      const menu = menuRef.current;
+      const rect = menu.getBoundingClientRect();
+      const viewportWidth = window.innerWidth;
+      const viewportHeight = window.innerHeight;
+
+      // 水平方向调整
+      if (rect.right > viewportWidth) {
+        menu.style.left = `${viewportWidth - rect.width - 16}px`;
+      }
+      // 垂直方向调整
+      if (rect.bottom > viewportHeight) {
+        menu.style.top = `${viewportHeight - rect.height - 16}px`;
+      }
+    }
+  }, [isOpen, position]);
+
+  if (!isOpen || !mounted) return null;
+
+  const menuContent = (
+    <>
+      {/* 透明遮罩 */}
+      <div
+        className="fixed inset-0 z-[9998]"
+        onClick={onClose}
+        onTouchEnd={onClose}
+      />
+
+      {/* 菜单内容 */}
+      <div
+        ref={menuRef}
+        className="fixed z-[9999] bg-white rounded-xl shadow-xl border border-slate-200 py-2 min-w-[160px] animate-in fade-in zoom-in-95 duration-150"
+        style={{ left: position.x, top: position.y }}
+      >
+        {/* 重命名 */}
+        <button
+          onClick={(e) => {
+            e.stopPropagation();
+            onRename();
+            onClose();
+          }}
+          className="w-full flex items-center gap-3 px-4 py-2.5 text-sm text-slate-700 hover:bg-slate-50 transition-colors"
+        >
+          <Edit3 size={16} className="text-slate-500" />
+          <span>Rename</span>
+        </button>
+
+        {/* 置顶/取消置顶 */}
+        <button
+          onClick={(e) => {
+            e.stopPropagation();
+            onPinTop();
+            onClose();
+          }}
+          className="w-full flex items-center gap-3 px-4 py-2.5 text-sm text-slate-700 hover:bg-slate-50 transition-colors"
+        >
+          <Pin size={16} className={isPinned ? 'text-primary-teal' : 'text-slate-500'} />
+          <span>{isPinned ? 'Unpin' : 'Pin to Top'}</span>
+        </button>
+
+        {/* 分隔线 */}
+        <div className="my-1 mx-2 border-t border-slate-100" />
+
+        {/* 删除 */}
+        <button
+          onClick={(e) => {
+            e.stopPropagation();
+            onDelete();
+            onClose();
+          }}
+          className="w-full flex items-center gap-3 px-4 py-2.5 text-sm text-red-600 hover:bg-red-50 transition-colors"
+        >
+          <Trash2 size={16} />
+          <span>Delete</span>
+        </button>
+      </div>
+    </>
+  );
+
+  // 使用 Portal 渲染到 body
+  return ReactDOM.createPortal(menuContent, document.body);
+};
 
 // ============================================================================
 // 数据类型定义
@@ -109,23 +390,83 @@ const TopicCard: React.FC<TopicCardProps> = ({ folder, onClick, collapsed }) => 
 interface ConversationItemProps {
   conversation: ConversationDisplay;
   onClick: () => void;
-  onDelete: () => void;
+  onDelete: () => Promise<void>;
+  onRename?: () => void;
+  onPinTop?: () => void;
   isActive: boolean;
   collapsed: boolean;
+  isPinned?: boolean;
 }
 
-const ConversationItem: React.FC<ConversationItemProps> = ({ conversation, onClick, onDelete, isActive, collapsed }) => {
-  const [showDeleteConfirm, setShowDeleteConfirm] = useState(false);
+const ConversationItem: React.FC<ConversationItemProps> = ({
+  conversation,
+  onClick,
+  onDelete,
+  onRename,
+  onPinTop,
+  isActive,
+  collapsed,
+  isPinned = false,
+}) => {
+  const [isDeleting, setIsDeleting] = useState(false);
+  const [showConfirm, setShowConfirm] = useState(false);
+  const [showContextMenu, setShowContextMenu] = useState(false);
+  const [contextMenuPosition, setContextMenuPosition] = useState({ x: 0, y: 0 });
 
-  const handleDelete = (e: React.MouseEvent) => {
+  const handleDeleteClick = (e: React.MouseEvent) => {
     e.stopPropagation();
-    if (showDeleteConfirm) {
-      onDelete();
-      setShowDeleteConfirm(false);
+    e.preventDefault();
+    setShowConfirm(true);
+  };
+
+  const handleConfirmDelete = async () => {
+    setIsDeleting(true);
+    try {
+      await onDelete();
+      setShowConfirm(false);
+    } catch (error) {
+      // 保持弹窗打开，让用户知道失败了
+    } finally {
+      setIsDeleting(false);
+    }
+  };
+
+  // 长按处理 - 显示上下文菜单
+  const handleLongPress = useCallback((position: { x: number; y: number }) => {
+    setContextMenuPosition(position);
+    setShowContextMenu(true);
+
+    // 触觉反馈（如果设备支持）
+    if ('vibrate' in navigator) {
+      navigator.vibrate(50);
+    }
+  }, []);
+
+  // 长按hook
+  const longPressHandlers = useLongPress(handleLongPress, onClick, { delay: 500 });
+
+  // 从上下文菜单触发删除
+  const handleDeleteFromMenu = () => {
+    setShowConfirm(true);
+  };
+
+  // 重命名处理（目前只是占位，后续可以实现）
+  const handleRename = () => {
+    if (onRename) {
+      onRename();
     } else {
-      setShowDeleteConfirm(true);
-      // Auto-hide after 3 seconds
-      setTimeout(() => setShowDeleteConfirm(false), 3000);
+      // TODO: 实现重命名功能
+      console.log('[ConversationItem] Rename requested for:', conversation.id);
+    }
+  };
+
+  // 置顶处理（目前只是占位，后续可以实现）
+  const handlePinTop = () => {
+    if (onPinTop) {
+      onPinTop();
+    } else {
+      // TODO: 实现置顶功能
+      console.log('[ConversationItem] Pin to top requested for:', conversation.id);
     }
   };
 
@@ -147,29 +488,57 @@ const ConversationItem: React.FC<ConversationItemProps> = ({ conversation, onCli
   }
 
   return (
-    <div
-      onClick={onClick}
-      className={`w-full flex items-center gap-3 px-3 py-2.5 rounded-lg transition-colors group text-left cursor-pointer ${
-        isActive ? 'bg-primary-teal/10' : 'hover:bg-slate-50'
-      }`}
-    >
-      <span className={`flex-1 text-sm truncate ${
-        isActive ? 'text-primary-teal font-medium' : 'text-slate-600 group-hover:text-slate-900'
-      }`}>
-        {conversation.title}
-      </span>
-      <button
-        onClick={handleDelete}
-        className={`p-1 rounded transition-all ${
-          showDeleteConfirm
-            ? 'opacity-100 bg-red-100 text-red-600'
-            : 'opacity-0 group-hover:opacity-100 hover:bg-slate-200'
-        }`}
-        title={showDeleteConfirm ? 'Click again to confirm delete' : 'Delete conversation'}
+    <>
+      <div
+        {...longPressHandlers}
+        className={`w-full flex items-center gap-3 px-3 py-2.5 rounded-lg transition-colors group text-left cursor-pointer select-none ${
+          isActive ? 'bg-primary-teal/10' : 'hover:bg-slate-50'
+        } ${isPinned ? 'border-l-2 border-primary-teal' : ''}`}
       >
-        <Trash2 size={14} className={showDeleteConfirm ? 'text-red-600' : 'text-slate-400'} />
-      </button>
-    </div>
+        {isPinned && <Pin size={12} className="text-primary-teal flex-shrink-0" />}
+        <span className={`flex-1 text-sm truncate ${
+          isActive ? 'text-primary-teal font-medium' : 'text-slate-600 group-hover:text-slate-900'
+        }`}>
+          {conversation.title}
+        </span>
+        {/* 桌面端hover显示删除按钮 */}
+        <button
+          onClick={handleDeleteClick}
+          disabled={isDeleting}
+          className={`p-1 rounded transition-all hidden sm:block ${
+            isDeleting
+              ? 'opacity-100 bg-slate-100'
+              : 'opacity-0 group-hover:opacity-100 hover:bg-slate-200'
+          }`}
+          title="Delete"
+        >
+          <Trash2 size={14} className="text-slate-400 hover:text-red-500" />
+        </button>
+      </div>
+
+      {/* 移动端长按上下文菜单 */}
+      <ContextMenu
+        isOpen={showContextMenu}
+        position={contextMenuPosition}
+        onClose={() => setShowContextMenu(false)}
+        onRename={handleRename}
+        onPinTop={handlePinTop}
+        onDelete={handleDeleteFromMenu}
+        isPinned={isPinned}
+      />
+
+      {/* 删除确认弹窗 */}
+      <ConfirmDialog
+        isOpen={showConfirm}
+        title="Delete Conversation"
+        message={`Are you sure you want to delete "${conversation.title}"? This action cannot be undone.`}
+        confirmText="Delete"
+        cancelText="Cancel"
+        onConfirm={handleConfirmDelete}
+        onCancel={() => setShowConfirm(false)}
+        isLoading={isDeleting}
+      />
+    </>
   );
 };
 
@@ -246,11 +615,14 @@ export const SmartDrawer: React.FC<SmartDrawerProps> = ({
   );
 
   // Handle delete conversation
-  const handleDeleteConversation = async (conversationId: string) => {
+  const handleDeleteConversation = async (conversationId: string): Promise<void> => {
+    console.log('[SmartDrawer] Deleting conversation:', conversationId);
     try {
       await deleteConversationById(conversationId);
+      console.log('[SmartDrawer] Delete successful');
     } catch (error) {
-      console.error('Failed to delete conversation:', error);
+      console.error('[SmartDrawer] Failed to delete conversation:', error);
+      throw error; // 重新抛出让调用者知道失败了
     }
   };
 

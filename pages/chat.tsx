@@ -36,9 +36,7 @@ export default function ChatPage() {
     const {
         messages,
         isStreaming,
-        canStop,
         sendMessage,
-        stopGeneration,
         setMessages
     } = useChat();
 
@@ -349,7 +347,6 @@ export default function ChatPage() {
                                         statusMessage={msg.statusMessage}
                                         attachments={msg.attachments}
                                         isStreaming={msg.isStreaming}
-                                        onStop={canStop ? stopGeneration : undefined}
                                     />
                                 ))}
                                 <div ref={messagesEndRef} className="h-4" />

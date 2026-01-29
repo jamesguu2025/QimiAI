@@ -20,16 +20,64 @@ const WELCOME_MESSAGE: Message = {
   timestamp: new Date().toISOString(),
 };
 
+/** Local cache constants */
+const CACHE_KEY = 'qimi_conversations_cache';
+const CACHE_TIMESTAMP_KEY = 'qimi_conversations_cache_timestamp';
+const CACHE_TTL = 5 * 60 * 1000; // 5 minutes
+
+/** Save conversations to localStorage cache */
+function saveConversationsToCache(conversations: Conversation[]): void {
+  if (typeof window === 'undefined') return;
+  try {
+    localStorage.setItem(CACHE_KEY, JSON.stringify(conversations));
+    localStorage.setItem(CACHE_TIMESTAMP_KEY, Date.now().toString());
+  } catch (error) {
+    console.warn('[chatStore] Failed to save to cache:', error);
+  }
+}
+
+/** Load conversations from localStorage cache */
+function loadConversationsFromCache(): { conversations: Conversation[]; isStale: boolean } | null {
+  if (typeof window === 'undefined') return null;
+  try {
+    const cached = localStorage.getItem(CACHE_KEY);
+    const timestamp = localStorage.getItem(CACHE_TIMESTAMP_KEY);
+
+    if (!cached || !timestamp) return null;
+
+    const conversations = JSON.parse(cached) as Conversation[];
+    const cacheAge = Date.now() - parseInt(timestamp, 10);
+    const isStale = cacheAge > CACHE_TTL;
+
+    return { conversations, isStale };
+  } catch (error) {
+    console.warn('[chatStore] Failed to load from cache:', error);
+    return null;
+  }
+}
+
+/** Clear localStorage cache */
+function clearConversationsCache(): void {
+  if (typeof window === 'undefined') return;
+  try {
+    localStorage.removeItem(CACHE_KEY);
+    localStorage.removeItem(CACHE_TIMESTAMP_KEY);
+  } catch (error) {
+    console.warn('[chatStore] Failed to clear cache:', error);
+  }
+}
+
 /** Chat state */
 interface ChatState {
   // Messages
   messages: Message[];
   isStreaming: boolean;
+  isLoadingMessages: boolean; // Loading a specific conversation's messages
 
   // Current conversation
   currentConversation: Conversation | null;
   conversations: Conversation[];
-  isLoadingConversations: boolean;
+  isLoadingConversations: boolean; // Loading the conversations list
 
   // Abort controller for stopping stream
   abortController: AbortController | null;
@@ -68,6 +116,7 @@ export const useChatStore = create<ChatState & ChatActions>((set, get) => ({
   // Initial state
   messages: [WELCOME_MESSAGE],
   isStreaming: false,
+  isLoadingMessages: false,
   currentConversation: null,
   conversations: [],
   isLoadingConversations: false,
@@ -183,6 +232,8 @@ export const useChatStore = create<ChatState & ChatActions>((set, get) => ({
               isStreaming: false,
               abortController: null,
             }));
+            // 消息完成后刷新会话列表（登录用户才会有新会话）
+            get().loadConversations();
           },
           onError: (error) => {
             set(state => ({
@@ -272,18 +323,48 @@ export const useChatStore = create<ChatState & ChatActions>((set, get) => ({
     set({ conversations });
   },
 
-  // Load conversations from API
+  // Load conversations from API with cache-first (SWR) strategy
   // Note: This will fail for guests (401), which is expected behavior
   loadConversations: async () => {
+    // 1. 先从缓存加载（立即显示，无论是否过期）
+    const cached = loadConversationsFromCache();
+    if (cached) {
+      // 立即显示缓存数据，不显示 loading
+      set({ conversations: cached.conversations, isLoadingConversations: false });
+
+      // 后台静默刷新（无论缓存是否过期都刷新，保持数据最新）
+      listConversations()
+        .then(conversations => {
+          set({ conversations });
+          saveConversationsToCache(conversations);
+        })
+        .catch((error) => {
+          // 静默失败，已有缓存数据
+          const errorMsg = error instanceof Error ? error.message : '';
+          // 如果是未授权错误，清除缓存
+          if (errorMsg.includes('Unauthorized') || errorMsg.includes('401')) {
+            clearConversationsCache();
+            set({ conversations: [] });
+          }
+        });
+      return;
+    }
+
+    // 2. 缓存为空，显示 loading 并从服务器获取
     set({ isLoadingConversations: true, error: null });
     try {
       const conversations = await listConversations();
       set({ conversations, isLoadingConversations: false });
+      saveConversationsToCache(conversations);
     } catch (error) {
       // Don't log error for 401 (unauthorized/guest users)
       const errorMsg = error instanceof Error ? error.message : 'Failed to load conversations';
       if (!errorMsg.includes('Unauthorized') && !errorMsg.includes('401')) {
         console.error('[chatStore] Failed to load conversations:', error);
+      }
+      // 清除未授权用户的缓存
+      if (errorMsg.includes('Unauthorized') || errorMsg.includes('401')) {
+        clearConversationsCache();
       }
       set({
         isLoadingConversations: false,
@@ -295,7 +376,8 @@ export const useChatStore = create<ChatState & ChatActions>((set, get) => ({
 
   // Select a conversation and load its messages
   selectConversation: async (conversationId: string) => {
-    set({ isLoadingConversations: true, error: null });
+    // Use isLoadingMessages (not isLoadingConversations) to avoid replacing the list with a spinner
+    set({ isLoadingMessages: true, error: null });
     try {
       const conversationWithMessages = await getConversation(conversationId);
       const { messages: loadedMessages, ...conversation } = conversationWithMessages;
@@ -318,12 +400,12 @@ export const useChatStore = create<ChatState & ChatActions>((set, get) => ({
       set({
         currentConversation: conversation as Conversation,
         messages: formattedMessages,
-        isLoadingConversations: false,
+        isLoadingMessages: false,
       });
     } catch (error) {
       console.error('[chatStore] Failed to load conversation:', error);
       set({
-        isLoadingConversations: false,
+        isLoadingMessages: false,
         error: error instanceof Error ? error.message : 'Failed to load conversation',
       });
     }
@@ -342,11 +424,13 @@ export const useChatStore = create<ChatState & ChatActions>((set, get) => ({
   createConversation: async (title?: string, folderKey?: TopicFolder | null) => {
     try {
       const conversation = await createConversation({ title, folderKey });
-      set(state => ({
-        conversations: [conversation, ...state.conversations],
+      const newConversations = [conversation, ...get().conversations];
+      set({
+        conversations: newConversations,
         currentConversation: conversation,
         messages: [WELCOME_MESSAGE],
-      }));
+      });
+      saveConversationsToCache(newConversations);
       return conversation;
     } catch (error) {
       console.error('[chatStore] Failed to create conversation:', error);
@@ -363,12 +447,14 @@ export const useChatStore = create<ChatState & ChatActions>((set, get) => ({
 
     try {
       const updated = await updateConversation(currentConversation.id, { title, folderKey });
-      set(state => ({
+      const newConversations = get().conversations.map(c =>
+        c.id === updated.id ? updated : c
+      );
+      set({
         currentConversation: updated,
-        conversations: state.conversations.map(c =>
-          c.id === updated.id ? updated : c
-        ),
-      }));
+        conversations: newConversations,
+      });
+      saveConversationsToCache(newConversations);
     } catch (error) {
       console.error('[chatStore] Failed to update conversation:', error);
       throw error;
@@ -384,32 +470,51 @@ export const useChatStore = create<ChatState & ChatActions>((set, get) => ({
 
     try {
       await deleteConversation(currentConversation.id);
-      set(state => ({
-        conversations: state.conversations.filter(c => c.id !== currentConversation.id),
+      const newConversations = get().conversations.filter(c => c.id !== currentConversation.id);
+      set({
+        conversations: newConversations,
         currentConversation: null,
         messages: [WELCOME_MESSAGE],
-      }));
+      });
+      saveConversationsToCache(newConversations);
     } catch (error) {
       console.error('[chatStore] Failed to delete conversation:', error);
       throw error;
     }
   },
 
-  // Delete a conversation by ID
+  // Delete a conversation by ID (with optimistic update)
   deleteConversationById: async (conversationId: string) => {
+    const { conversations, currentConversation } = get();
+
+    // 保存原始状态用于回滚
+    const originalConversations = conversations;
+    const wasCurrentConversation = currentConversation?.id === conversationId;
+
+    // 乐观更新：立即从 UI 移除
+    set(state => ({
+      conversations: state.conversations.filter(c => c.id !== conversationId),
+      ...(wasCurrentConversation ? {
+        currentConversation: null,
+        messages: [WELCOME_MESSAGE],
+      } : {}),
+    }));
+
     try {
+      // 后台执行实际删除
       await deleteConversation(conversationId);
-      const { currentConversation } = get();
-      set(state => ({
-        conversations: state.conversations.filter(c => c.id !== conversationId),
-        // If we deleted the current conversation, reset
-        ...(currentConversation?.id === conversationId ? {
-          currentConversation: null,
-          messages: [WELCOME_MESSAGE],
-        } : {}),
-      }));
+      // 删除成功，更新本地缓存
+      saveConversationsToCache(get().conversations);
     } catch (error) {
-      console.error('[chatStore] Failed to delete conversation:', error);
+      // 删除失败，回滚到原始状态
+      console.error('[chatStore] Failed to delete conversation, rolling back:', error);
+      set({
+        conversations: originalConversations,
+        ...(wasCurrentConversation ? {
+          currentConversation: originalConversations.find(c => c.id === conversationId) || null,
+        } : {}),
+        error: 'Failed to delete conversation. Please try again.',
+      });
       throw error;
     }
   },

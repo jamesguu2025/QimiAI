@@ -2,7 +2,7 @@ import React from 'react';
 import ReactMarkdown from 'react-markdown';
 import { RAGSources } from './RAGSources';
 import { RAGSource } from '../../types/api';
-import { FileText, Image as ImageIcon, File, Square } from 'lucide-react';
+import { FileText, Image as ImageIcon, File } from 'lucide-react';
 import { formatFileSize } from '../../utils/format';
 import { Attachment } from '../../types';
 
@@ -13,7 +13,6 @@ interface StreamingMessageProps {
   statusMessage?: string;
   attachments?: Attachment[];
   isStreaming?: boolean;
-  onStop?: () => void;
 }
 
 // 获取文件图标
@@ -31,7 +30,6 @@ export const StreamingMessage: React.FC<StreamingMessageProps> = ({
   statusMessage,
   attachments,
   isStreaming,
-  onStop
 }) => {
   const isUser = role === 'user';
 
@@ -102,17 +100,6 @@ export const StreamingMessage: React.FC<StreamingMessageProps> = ({
             </svg>
             <span>{statusMessage}</span>
           </div>
-        )}
-
-        {/* Stop Generating 按钮 */}
-        {!isUser && isStreaming && onStop && (
-          <button
-            onClick={onStop}
-            className="mt-3 flex items-center gap-2 px-3 py-1.5 text-sm text-slate-500 hover:text-slate-700 bg-slate-100 hover:bg-slate-200 rounded-lg transition-colors"
-          >
-            <Square size={14} fill="currentColor" />
-            Stop generating
-          </button>
         )}
 
         {/* RAG 引用源 */}

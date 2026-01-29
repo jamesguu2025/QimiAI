@@ -40,7 +40,27 @@ export default async function handler(
 
     const userId = user.id;
 
-    // Verify conversation belongs to user
+    // For DELETE, skip the verification query - just delete directly
+    if (req.method === 'DELETE') {
+      const { error: deleteError, count } = await supabase
+        .from('conversations')
+        .delete({ count: 'exact' })
+        .eq('id', id)
+        .eq('user_id', userId);
+
+      if (deleteError) {
+        console.error('[conversations] Failed to delete:', deleteError);
+        return res.status(500).json({ error: 'Failed to delete conversation' });
+      }
+
+      if (count === 0) {
+        return res.status(404).json({ error: 'Conversation not found' });
+      }
+
+      return res.status(204).end();
+    }
+
+    // For GET and PATCH, verify conversation exists and belongs to user
     const { data: conversation, error: convError } = await supabase
       .from('conversations')
       .select('*')
@@ -120,21 +140,6 @@ export default async function handler(
       };
 
       return res.status(200).json(formattedConversation);
-
-    } else if (req.method === 'DELETE') {
-      // Delete conversation (messages will cascade)
-      const { error: deleteError } = await supabase
-        .from('conversations')
-        .delete()
-        .eq('id', id)
-        .eq('user_id', userId);
-
-      if (deleteError) {
-        console.error('[conversations] Failed to delete:', deleteError);
-        return res.status(500).json({ error: 'Failed to delete conversation' });
-      }
-
-      return res.status(204).end();
 
     } else {
       res.setHeader('Allow', ['GET', 'PATCH', 'DELETE']);
