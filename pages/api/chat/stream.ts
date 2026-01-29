@@ -93,6 +93,16 @@ async function saveMessagesToDatabase(
       console.error('[chat/stream] Failed to save AI message:', aiMsgError);
     }
 
+    // Update conversation's updated_at to move it to top of recent list
+    const { error: updateError } = await supabase
+      .from('conversations')
+      .update({ updated_at: new Date().toISOString() })
+      .eq('id', convId);
+
+    if (updateError) {
+      console.error('[chat/stream] Failed to update conversation timestamp:', updateError);
+    }
+
     console.log('[chat/stream] Messages saved to conversation:', convId);
     return convId ?? null;
   } catch (error) {

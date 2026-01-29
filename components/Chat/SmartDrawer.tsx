@@ -324,6 +324,7 @@ interface ConversationDisplay {
   id: string;
   title: string;
   folderKey: string | null;
+  isPinned?: boolean;
   updatedAt: string;
 }
 
@@ -391,7 +392,7 @@ interface ConversationItemProps {
   conversation: ConversationDisplay;
   onClick: () => void;
   onDelete: () => Promise<void>;
-  onRename?: () => void;
+  onRename: (newTitle: string) => Promise<void>;
   onPinTop?: () => void;
   isActive: boolean;
   collapsed: boolean;
@@ -412,6 +413,24 @@ const ConversationItem: React.FC<ConversationItemProps> = ({
   const [showConfirm, setShowConfirm] = useState(false);
   const [showContextMenu, setShowContextMenu] = useState(false);
   const [contextMenuPosition, setContextMenuPosition] = useState({ x: 0, y: 0 });
+
+  // Inline editing state
+  const [isEditing, setIsEditing] = useState(false);
+  const [editTitle, setEditTitle] = useState(conversation.title);
+  const inputRef = useRef<HTMLInputElement>(null);
+
+  // Focus input when editing starts
+  useEffect(() => {
+    if (isEditing && inputRef.current) {
+      inputRef.current.focus();
+      inputRef.current.select();
+    }
+  }, [isEditing]);
+
+  // Reset edit title when conversation changes
+  useEffect(() => {
+    setEditTitle(conversation.title);
+  }, [conversation.title]);
 
   const handleDeleteClick = (e: React.MouseEvent) => {
     e.stopPropagation();
@@ -450,13 +469,44 @@ const ConversationItem: React.FC<ConversationItemProps> = ({
     setShowConfirm(true);
   };
 
-  // 重命名处理（目前只是占位，后续可以实现）
-  const handleRename = () => {
-    if (onRename) {
-      onRename();
-    } else {
-      // TODO: 实现重命名功能
-      console.log('[ConversationItem] Rename requested for:', conversation.id);
+  // Start inline editing
+  const handleStartRename = () => {
+    setEditTitle(conversation.title);
+    setIsEditing(true);
+  };
+
+  // Save renamed title - 乐观更新，立即关闭编辑框
+  const handleSaveRename = () => {
+    const trimmedTitle = editTitle.trim();
+    if (!trimmedTitle || trimmedTitle === conversation.title) {
+      setIsEditing(false);
+      setEditTitle(conversation.title);
+      return;
+    }
+
+    // 立即关闭编辑框，后台静默保存
+    setIsEditing(false);
+
+    // 触发重命名（store 会乐观更新 UI）
+    onRename(trimmedTitle).catch(() => {
+      // 失败时 store 会自动回滚，无需额外处理
+    });
+  };
+
+  // Cancel editing
+  const handleCancelRename = () => {
+    setIsEditing(false);
+    setEditTitle(conversation.title);
+  };
+
+  // Handle keyboard events for editing
+  const handleKeyDown = (e: React.KeyboardEvent) => {
+    if (e.key === 'Enter') {
+      e.preventDefault();
+      handleSaveRename();
+    } else if (e.key === 'Escape') {
+      e.preventDefault();
+      handleCancelRename();
     }
   };
 
@@ -490,30 +540,60 @@ const ConversationItem: React.FC<ConversationItemProps> = ({
   return (
     <>
       <div
-        {...longPressHandlers}
+        {...(isEditing ? {} : longPressHandlers)}
         className={`w-full flex items-center gap-3 px-3 py-2.5 rounded-lg transition-colors group text-left cursor-pointer select-none ${
           isActive ? 'bg-primary-teal/10' : 'hover:bg-slate-50'
         } ${isPinned ? 'border-l-2 border-primary-teal' : ''}`}
       >
         {isPinned && <Pin size={12} className="text-primary-teal flex-shrink-0" />}
-        <span className={`flex-1 text-sm truncate ${
-          isActive ? 'text-primary-teal font-medium' : 'text-slate-600 group-hover:text-slate-900'
-        }`}>
-          {conversation.title}
-        </span>
-        {/* 桌面端hover显示删除按钮 */}
-        <button
-          onClick={handleDeleteClick}
-          disabled={isDeleting}
-          className={`p-1 rounded transition-all hidden sm:block ${
-            isDeleting
-              ? 'opacity-100 bg-slate-100'
-              : 'opacity-0 group-hover:opacity-100 hover:bg-slate-200'
-          }`}
-          title="Delete"
-        >
-          <Trash2 size={14} className="text-slate-400 hover:text-red-500" />
-        </button>
+
+        {/* Inline editing input or title display */}
+        {isEditing ? (
+          <input
+            ref={inputRef}
+            type="text"
+            value={editTitle}
+            onChange={(e) => setEditTitle(e.target.value)}
+            onBlur={handleSaveRename}
+            onKeyDown={handleKeyDown}
+            className="flex-1 text-sm px-2 py-1 bg-white border rounded outline-none focus:ring-2 focus:ring-primary-teal/30 focus:border-primary-teal"
+            onClick={(e) => e.stopPropagation()}
+          />
+        ) : (
+          <span className={`flex-1 text-sm truncate ${
+            isActive ? 'text-primary-teal font-medium' : 'text-slate-600 group-hover:text-slate-900'
+          }`}>
+            {conversation.title}
+          </span>
+        )}
+
+        {/* 桌面端hover显示编辑和删除按钮 - 只在lg+显示，且上下文菜单未打开时 */}
+        {!isEditing && !showContextMenu && (
+          <>
+            <button
+              onClick={(e) => {
+                e.stopPropagation();
+                handleStartRename();
+              }}
+              className="p-1 rounded transition-all hidden lg:block opacity-0 group-hover:opacity-100 hover:bg-slate-200"
+              title="Rename"
+            >
+              <Edit3 size={14} className="text-slate-400 hover:text-slate-600" />
+            </button>
+            <button
+              onClick={handleDeleteClick}
+              disabled={isDeleting}
+              className={`p-1 rounded transition-all hidden lg:block ${
+                isDeleting
+                  ? 'opacity-100 bg-slate-100'
+                  : 'opacity-0 group-hover:opacity-100 hover:bg-slate-200'
+              }`}
+              title="Delete"
+            >
+              <Trash2 size={14} className="text-slate-400 hover:text-red-500" />
+            </button>
+          </>
+        )}
       </div>
 
       {/* 移动端长按上下文菜单 */}
@@ -521,7 +601,7 @@ const ConversationItem: React.FC<ConversationItemProps> = ({
         isOpen={showContextMenu}
         position={contextMenuPosition}
         onClose={() => setShowContextMenu(false)}
-        onRename={handleRename}
+        onRename={handleStartRename}
         onPinTop={handlePinTop}
         onDelete={handleDeleteFromMenu}
         isPinned={isPinned}
@@ -578,6 +658,8 @@ export const SmartDrawer: React.FC<SmartDrawerProps> = ({
     isLoadingConversations,
     loadConversations,
     deleteConversationById,
+    renameConversation,
+    togglePinConversation,
   } = useChatStore();
 
   // Load conversations on mount (only for logged-in users)
@@ -601,18 +683,25 @@ export const SmartDrawer: React.FC<SmartDrawerProps> = ({
   const touchCurrentX = useRef<number>(0);
   const isDragging = useRef<boolean>(false);
 
-  // Convert store conversations to display format and filter
+  // Convert store conversations to display format
   const displayConversations: ConversationDisplay[] = conversations.map(c => ({
     id: c.id,
     title: c.title || 'Untitled',
     folderKey: c.folderKey,
+    isPinned: c.isPinned || false,
     updatedAt: c.updatedAt,
   }));
 
-  // 过滤对话
-  const filteredConversations = displayConversations.filter(c =>
-    c.title.toLowerCase().includes(searchQuery.toLowerCase())
-  );
+  // 过滤对话并按置顶排序（置顶在前）
+  const filteredConversations = displayConversations
+    .filter(c => c.title.toLowerCase().includes(searchQuery.toLowerCase()))
+    .sort((a, b) => {
+      // 置顶优先
+      if (a.isPinned && !b.isPinned) return -1;
+      if (!a.isPinned && b.isPinned) return 1;
+      // 同级别按更新时间排序
+      return new Date(b.updatedAt).getTime() - new Date(a.updatedAt).getTime();
+    });
 
   // Handle delete conversation
   const handleDeleteConversation = async (conversationId: string): Promise<void> => {
@@ -623,6 +712,30 @@ export const SmartDrawer: React.FC<SmartDrawerProps> = ({
     } catch (error) {
       console.error('[SmartDrawer] Failed to delete conversation:', error);
       throw error; // 重新抛出让调用者知道失败了
+    }
+  };
+
+  // Handle rename conversation
+  const handleRenameConversation = async (conversationId: string, newTitle: string): Promise<void> => {
+    console.log('[SmartDrawer] Renaming conversation:', conversationId, 'to:', newTitle);
+    try {
+      await renameConversation(conversationId, newTitle);
+      console.log('[SmartDrawer] Rename successful');
+    } catch (error) {
+      console.error('[SmartDrawer] Failed to rename conversation:', error);
+      throw error;
+    }
+  };
+
+  // Handle pin/unpin conversation
+  const handlePinConversation = async (conversationId: string): Promise<void> => {
+    console.log('[SmartDrawer] Toggling pin for conversation:', conversationId);
+    try {
+      await togglePinConversation(conversationId);
+      console.log('[SmartDrawer] Pin toggle successful');
+    } catch (error) {
+      console.error('[SmartDrawer] Failed to toggle pin:', error);
+      throw error;
     }
   };
 
@@ -804,8 +917,11 @@ export const SmartDrawer: React.FC<SmartDrawerProps> = ({
                     conversation={conversation}
                     onClick={() => onSelectConversation(conversation.id)}
                     onDelete={() => handleDeleteConversation(conversation.id)}
+                    onRename={(newTitle) => handleRenameConversation(conversation.id, newTitle)}
+                    onPinTop={() => handlePinConversation(conversation.id)}
                     isActive={currentConversation?.id === conversation.id}
                     collapsed={effectiveCollapsed}
+                    isPinned={conversation.isPinned}
                   />
                 ))
               ) : (

@@ -49,6 +49,7 @@ export interface Conversation {
   folderKey: TopicFolder | null;
   messageCount: number;
   lastMessage?: string;
+  isPinned?: boolean;
   createdAt: string;
   updatedAt: string;
 }

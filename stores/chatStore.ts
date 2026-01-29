@@ -106,6 +106,12 @@ interface ChatActions {
   deleteCurrentConversation: () => Promise<void>;
   deleteConversationById: (conversationId: string) => Promise<void>;
 
+  // Rename a conversation by ID
+  renameConversation: (conversationId: string, newTitle: string) => Promise<void>;
+
+  // Toggle pin status of a conversation
+  togglePinConversation: (conversationId: string) => Promise<void>;
+
   // Error handling
   setError: (error: string | null) => void;
   clearError: () => void;
@@ -151,11 +157,23 @@ export const useChatStore = create<ChatState & ChatActions>((set, get) => ({
       isStreaming: true,
     };
 
-    // Add messages to state
+    // Add messages to state and immediately move conversation to top (optimistic update)
+    const now = new Date().toISOString();
     set(state => ({
       messages: [...state.messages, userMessage, aiMessage],
       isStreaming: true,
       error: null,
+      // 乐观更新：立即将当前对话移到顶部
+      conversations: currentConversation
+        ? state.conversations.map(c =>
+            c.id === currentConversation.id
+              ? { ...c, updatedAt: now }
+              : c
+          )
+        : state.conversations,
+      currentConversation: currentConversation
+        ? { ...currentConversation, updatedAt: now }
+        : null,
     }));
 
     // Create new abort controller
@@ -514,6 +532,88 @@ export const useChatStore = create<ChatState & ChatActions>((set, get) => ({
           currentConversation: originalConversations.find(c => c.id === conversationId) || null,
         } : {}),
         error: 'Failed to delete conversation. Please try again.',
+      });
+      throw error;
+    }
+  },
+
+  // Rename a conversation by ID (with optimistic update)
+  renameConversation: async (conversationId: string, newTitle: string) => {
+    const { conversations, currentConversation } = get();
+
+    // 保存原始状态用于回滚
+    const originalConversations = conversations;
+    const originalCurrentConversation = currentConversation;
+
+    // 乐观更新：立即更新 UI
+    set(state => ({
+      conversations: state.conversations.map(c =>
+        c.id === conversationId ? { ...c, title: newTitle } : c
+      ),
+      ...(currentConversation?.id === conversationId ? {
+        currentConversation: { ...currentConversation, title: newTitle },
+      } : {}),
+    }));
+
+    try {
+      // 后台执行实际更新
+      await updateConversation(conversationId, { title: newTitle });
+      // 更新成功，保存到缓存
+      saveConversationsToCache(get().conversations);
+    } catch (error) {
+      // 更新失败，回滚到原始状态
+      console.error('[chatStore] Failed to rename conversation, rolling back:', error);
+      set({
+        conversations: originalConversations,
+        ...(originalCurrentConversation?.id === conversationId ? {
+          currentConversation: originalCurrentConversation,
+        } : {}),
+        error: 'Failed to rename conversation. Please try again.',
+      });
+      throw error;
+    }
+  },
+
+  // Toggle pin status of a conversation (with optimistic update)
+  togglePinConversation: async (conversationId: string) => {
+    const { conversations, currentConversation } = get();
+
+    // 找到要切换的会话
+    const conversation = conversations.find(c => c.id === conversationId);
+    if (!conversation) {
+      throw new Error('Conversation not found');
+    }
+
+    const newPinned = !conversation.isPinned;
+
+    // 保存原始状态用于回滚
+    const originalConversations = conversations;
+    const originalCurrentConversation = currentConversation;
+
+    // 乐观更新：立即更新 UI
+    set(state => ({
+      conversations: state.conversations.map(c =>
+        c.id === conversationId ? { ...c, isPinned: newPinned } : c
+      ),
+      ...(currentConversation?.id === conversationId ? {
+        currentConversation: { ...currentConversation, isPinned: newPinned },
+      } : {}),
+    }));
+
+    try {
+      // 后台执行实际更新
+      await updateConversation(conversationId, { isPinned: newPinned });
+      // 更新成功，保存到缓存
+      saveConversationsToCache(get().conversations);
+    } catch (error) {
+      // 更新失败，回滚到原始状态
+      console.error('[chatStore] Failed to toggle pin, rolling back:', error);
+      set({
+        conversations: originalConversations,
+        ...(originalCurrentConversation?.id === conversationId ? {
+          currentConversation: originalCurrentConversation,
+        } : {}),
+        error: 'Failed to pin/unpin conversation. Please try again.',
       });
       throw error;
     }

@@ -93,6 +93,7 @@ export default async function handler(
         folderKey: conversation.folder_key,
         messageCount: conversation.message_count,
         lastMessage: conversation.last_message,
+        isPinned: conversation.is_pinned || false,
         createdAt: conversation.created_at,
         updatedAt: conversation.updated_at,
         messages: messages.map(m => ({
@@ -109,11 +110,12 @@ export default async function handler(
 
     } else if (req.method === 'PATCH') {
       // Update conversation
-      const { title, folderKey } = req.body;
+      const { title, folderKey, isPinned } = req.body;
 
       const updateData: Record<string, unknown> = {};
       if (title !== undefined) updateData.title = title;
       if (folderKey !== undefined) updateData.folder_key = folderKey;
+      if (isPinned !== undefined) updateData.is_pinned = isPinned;
 
       const { data: updated, error: updateError } = await supabase
         .from('conversations')
@@ -135,6 +137,7 @@ export default async function handler(
         folderKey: updated.folder_key,
         messageCount: updated.message_count,
         lastMessage: updated.last_message,
+        isPinned: updated.is_pinned || false,
         createdAt: updated.created_at,
         updatedAt: updated.updated_at,
       };

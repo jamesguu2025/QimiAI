@@ -74,6 +74,7 @@ export default async function handler(
         folderKey: c.folder_key,
         messageCount: c.message_count,
         lastMessage: c.last_message,
+        isPinned: c.is_pinned || false,
         createdAt: c.created_at,
         updatedAt: c.updated_at,
       }));
@@ -107,6 +108,7 @@ export default async function handler(
         folderKey: conversation.folder_key,
         messageCount: conversation.message_count,
         lastMessage: conversation.last_message,
+        isPinned: conversation.is_pinned || false,
         createdAt: conversation.created_at,
         updatedAt: conversation.updated_at,
       };

@@ -18,6 +18,7 @@ export interface CreateConversationRequest {
 export interface UpdateConversationRequest {
   title?: string;
   folderKey?: TopicFolder | null;
+  isPinned?: boolean;
 }
 
 /**
