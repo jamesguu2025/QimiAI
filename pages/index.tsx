@@ -5,6 +5,8 @@ import Hero from '../components/Landing/Hero';
 import { PricingCard } from '../components/Landing/PricingCard';
 import { ArticleCard } from '../components/Landing/ArticleCard';
 import LoginModal from '../components/Auth/LoginModal';
+import ContactModal from '../components/Landing/ContactModal';
+import UserMenu from '@/components/UI/UserMenu';
 
 import { HowItWorks } from '../components/Landing/HowItWorks';
 import { FAQ } from '../components/Landing/FAQ';
@@ -17,7 +19,7 @@ import {
   X
 } from 'lucide-react';
 
-// 下拉菜单组件
+// Dropdown component
 interface DropdownItem {
   label: string;
   description: string;
@@ -89,14 +91,13 @@ export default function Home() {
   const [mobileMenuOpen, setMobileMenuOpen] = useState(false);
   const [loginModalOpen, setLoginModalOpen] = useState(false);
   const [loginModalTab, setLoginModalTab] = useState<'login' | 'signup'>('login');
+  const [contactModalOpen, setContactModalOpen] = useState(false);
 
-  // 导航菜单数据
   const aboutItems: DropdownItem[] = [
     { label: 'Our Story', description: 'Why we built Qimi AI', href: '/about', icon: <Users size={20} /> },
     { label: "Founder's Letter", description: 'A personal message from James', href: '/founder', icon: <User size={20} /> },
   ];
 
-  // 获取全球注册用户数（小程序 + 网页版）
   const fetchUserStats = async () => {
     try {
       const response = await fetch('/api/user-stats');
@@ -113,7 +114,6 @@ export default function Home() {
     fetchUserStats();
   }, []);
 
-  // 处理登录后的自动订阅 (Preserved Logic)
   useEffect(() => {
     const urlParams = new URLSearchParams(window.location.search);
     const subscribed = urlParams.get('subscribed');
@@ -147,70 +147,64 @@ export default function Home() {
         <meta name="description" content="Your 24/7 AI copilot for IEPs, routines, and emotional regulation." />
       </Head>
 
-      {/* Navbar */}
-      <nav className="fixed top-0 left-0 right-0 z-50 bg-white/80 backdrop-blur-md border-b border-slate-100">
-        <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
-          <div className="flex items-center justify-between h-16">
-            {/* Left: Hamburger (mobile) / Logo (desktop) */}
-            <div className="flex items-center gap-2 flex-1 md:flex-none">
-              <button
-                onClick={() => setMobileMenuOpen(!mobileMenuOpen)}
-                className="md:hidden p-2 rounded-lg hover:bg-slate-100 transition-colors"
-              >
-                {mobileMenuOpen ? <X size={24} className="text-slate-600" /> : <Menu size={24} className="text-slate-600" />}
-              </button>
-              <a href="/" className="hidden md:flex items-center gap-2 hover:opacity-80 transition-opacity">
-                <img src="/logo.svg" alt="Qimi AI" className="h-10 w-auto" />
-              </a>
-            </div>
-            {/* Center: Logo (mobile) / Nav (desktop) */}
-            <div className="flex items-center justify-center">
-              <a href="/" className="md:hidden flex items-center gap-2 hover:opacity-80 transition-opacity">
-                <img src="/logo.svg" alt="Qimi AI" className="h-10 w-auto" />
-              </a>
-              <div className="hidden md:flex items-center gap-6">
-                <a href="/chat" className="text-sm font-medium text-slate-600 hover:text-slate-900 transition-colors">
-                  AI Parenting Assistant
-                </a>
-                <a href="/blog" className="text-sm font-medium text-slate-600 hover:text-slate-900 transition-colors">
-                  ADHD Insights
-                </a>
-                <a href="#pricing" className="text-sm font-medium text-slate-600 hover:text-slate-900 transition-colors">Pricing</a>
-                <NavDropdown
-                  label="About"
-                  items={aboutItems}
-                  isOpen={openDropdown === 'about'}
-                  onToggle={() => setOpenDropdown(openDropdown === 'about' ? null : 'about')}
-                  onClose={() => setOpenDropdown(null)}
-                />
-              </div>
-            </div>
-            {/* Right: Counter + Auth */}
-            <div className="flex items-center gap-4 flex-1 md:flex-none justify-end">
-              {session ? (
-                <a href="/dashboard" className="text-sm font-bold text-slate-900 hover:text-primary-purple">
-                  Go to Dashboard
-                </a>
-              ) : (
-                <>
-                  {/* Live Counter - Always visible with context */}
-                  <div className="flex items-center gap-1.5 md:gap-2 px-2 md:px-3 py-1 md:py-1.5 bg-slate-50 rounded-full border border-slate-100">
-                    <span className="relative flex h-2 w-2">
-                      <span className="animate-ping absolute inline-flex h-full w-full rounded-full bg-green-400 opacity-75"></span>
-                      <span className="relative inline-flex rounded-full h-2 w-2 bg-green-500"></span>
-                    </span>
-                    <span className="text-xs font-medium text-slate-600">
-                      <span className="font-bold text-slate-900">{waitlistCount.toLocaleString()}</span> families empowered
-                    </span>
-                  </div>
+      {/* Navbar - xingbanai.cn style with navigation preserved */}
+      <nav className="fixed top-0 left-0 right-0 z-50" style={{ background: 'rgba(255, 255, 255, 0.8)', backdropFilter: 'blur(12px)', WebkitBackdropFilter: 'blur(12px)', borderBottom: '1px solid #f1f5f9' }}>
+        <div className="max-w-[1200px] mx-auto px-6 h-16 flex items-center justify-between">
+          {/* Left: Logo with gradient text */}
+          <div className="flex items-center gap-2">
+            <button
+              onClick={() => setMobileMenuOpen(!mobileMenuOpen)}
+              className="md:hidden p-2 rounded-lg hover:bg-slate-100 transition-colors mr-1"
+            >
+              {mobileMenuOpen ? <X size={24} className="text-slate-600" /> : <Menu size={24} className="text-slate-600" />}
+            </button>
+            <a href="/" className="flex items-center">
+              <span className="font-outfit text-xl font-semibold tracking-[-0.02em] text-transparent bg-clip-text bg-gradient-to-r from-primary-teal to-primary-purple">
+                Qimi AI
+              </span>
+            </a>
+          </div>
 
-                  <button onClick={() => { setLoginModalTab('login'); setLoginModalOpen(true); }} className="hidden md:block text-sm font-medium text-slate-600 hover:text-slate-900">Log in</button>
-                  <button onClick={() => { setLoginModalTab('signup'); setLoginModalOpen(true); }} className="hidden md:block px-4 py-2 rounded-lg bg-slate-900 text-white text-sm font-bold hover:bg-slate-800 transition-colors">
-                    Sign up
-                  </button>
-                </>
-              )}
-            </div>
+          {/* Center: Nav links (desktop) */}
+          <div className="hidden md:flex items-center gap-6">
+            <a href="/chat" className="text-sm font-medium text-slate-600 hover:text-slate-900 transition-colors">
+              AI Parenting Assistant
+            </a>
+            <a href="/blog" className="text-sm font-medium text-slate-600 hover:text-slate-900 transition-colors">
+              ADHD Insights
+            </a>
+            <a href="#pricing" className="text-sm font-medium text-slate-600 hover:text-slate-900 transition-colors">
+              Pricing
+            </a>
+            <NavDropdown
+              label="About"
+              items={aboutItems}
+              isOpen={openDropdown === 'about'}
+              onToggle={() => setOpenDropdown(openDropdown === 'about' ? null : 'about')}
+              onClose={() => setOpenDropdown(null)}
+            />
+          </div>
+
+          {/* Right: Auth + Contact */}
+          <div className="flex items-center gap-3">
+            {session ? (
+              <UserMenu />
+            ) : (
+              <>
+                <button onClick={() => { setLoginModalTab('login'); setLoginModalOpen(true); }} className="hidden md:block text-sm font-medium text-slate-600 hover:text-slate-900 transition-colors">
+                  Log in
+                </button>
+                <button onClick={() => { setLoginModalTab('signup'); setLoginModalOpen(true); }} className="hidden md:block text-sm font-medium text-slate-600 hover:text-slate-900 transition-colors">
+                  Sign up
+                </button>
+              </>
+            )}
+            <button
+              onClick={() => setContactModalOpen(true)}
+              className="px-5 py-2.5 text-sm font-semibold text-white bg-slate-900 rounded-full transition-all duration-200 hover:bg-slate-800 hover:-translate-y-px hover:shadow-[0_4px_12px_rgba(0,0,0,0.15)]"
+            >
+              Contact Us
+            </button>
           </div>
         </div>
       </nav>
@@ -218,69 +212,54 @@ export default function Home() {
       {/* Mobile menu drawer */}
       {mobileMenuOpen && (
         <div className="fixed inset-0 z-40 md:hidden">
-          {/* Backdrop */}
-          <div
-            className="fixed inset-0 bg-black/50"
-            onClick={() => setMobileMenuOpen(false)}
-          />
-          {/* Drawer */}
+          <div className="fixed inset-0 bg-black/50" onClick={() => setMobileMenuOpen(false)} />
           <div className="fixed top-16 left-0 right-0 bg-white border-b border-slate-100 shadow-lg">
             <div className="px-4 py-4 space-y-1">
-              <a
-                href="/"
-                className="block px-3 py-3 text-base font-medium text-slate-700 hover:bg-slate-50 rounded-lg"
-                onClick={() => setMobileMenuOpen(false)}
-              >
+              <a href="/" className="block px-3 py-3 text-base font-medium text-slate-700 hover:bg-slate-50 rounded-lg" onClick={() => setMobileMenuOpen(false)}>
                 Home
               </a>
-              <a
-                href="/chat"
-                className="block px-3 py-3 text-base font-medium text-slate-700 hover:bg-slate-50 rounded-lg"
-                onClick={() => setMobileMenuOpen(false)}
-              >
+              <a href="/chat" className="block px-3 py-3 text-base font-medium text-slate-700 hover:bg-slate-50 rounded-lg" onClick={() => setMobileMenuOpen(false)}>
                 AI Parenting Assistant
               </a>
-              <a
-                href="/blog"
-                className="block px-3 py-3 text-base font-medium text-slate-700 hover:bg-slate-50 rounded-lg"
-                onClick={() => setMobileMenuOpen(false)}
-              >
+              <a href="/blog" className="block px-3 py-3 text-base font-medium text-slate-700 hover:bg-slate-50 rounded-lg" onClick={() => setMobileMenuOpen(false)}>
                 ADHD Insights
               </a>
-              <a
-                href="#pricing"
-                className="block px-3 py-3 text-base font-medium text-slate-700 hover:bg-slate-50 rounded-lg"
-                onClick={() => setMobileMenuOpen(false)}
-              >
+              <a href="#pricing" className="block px-3 py-3 text-base font-medium text-slate-700 hover:bg-slate-50 rounded-lg" onClick={() => setMobileMenuOpen(false)}>
                 Pricing
               </a>
-              <a
-                href="/about"
-                className="block px-3 py-3 text-base font-medium text-slate-700 hover:bg-slate-50 rounded-lg"
-                onClick={() => setMobileMenuOpen(false)}
-              >
+              <a href="/about" className="block px-3 py-3 text-base font-medium text-slate-700 hover:bg-slate-50 rounded-lg" onClick={() => setMobileMenuOpen(false)}>
                 About Us
               </a>
-              <a
-                href="/founder"
-                className="block px-3 py-3 text-base font-medium text-slate-700 hover:bg-slate-50 rounded-lg"
-                onClick={() => setMobileMenuOpen(false)}
-              >
+              <a href="/founder" className="block px-3 py-3 text-base font-medium text-slate-700 hover:bg-slate-50 rounded-lg" onClick={() => setMobileMenuOpen(false)}>
                 Founder&apos;s Letter
               </a>
 
               <div className="pt-4 border-t border-slate-100 mt-4 space-y-2">
+                {session ? (
+                  <a href="/chat" className="block px-4 py-3 text-base font-medium text-slate-700 hover:bg-slate-50 rounded-lg" onClick={() => setMobileMenuOpen(false)}>
+                    Go to Chat
+                  </a>
+                ) : (
+                  <>
+                    <button
+                      onClick={() => { setMobileMenuOpen(false); setLoginModalTab('login'); setLoginModalOpen(true); }}
+                      className="w-full px-4 py-3 text-base font-medium text-slate-700 hover:bg-slate-50 rounded-lg text-left"
+                    >
+                      Log in
+                    </button>
+                    <button
+                      onClick={() => { setMobileMenuOpen(false); setLoginModalTab('signup'); setLoginModalOpen(true); }}
+                      className="w-full px-4 py-3 rounded-lg bg-slate-900 text-white text-base font-bold hover:bg-slate-800 transition-colors"
+                    >
+                      Sign up
+                    </button>
+                  </>
+                )}
                 <button
-                  onClick={() => { setMobileMenuOpen(false); setLoginModalTab('login'); setLoginModalOpen(true); }}
+                  onClick={() => { setMobileMenuOpen(false); setContactModalOpen(true); }}
                   className="w-full px-4 py-3 text-base font-medium text-slate-700 hover:bg-slate-50 rounded-lg text-left"
                 >
-                  Log in
-                </button>
-                <button
-                  onClick={() => { setMobileMenuOpen(false); setLoginModalTab('signup'); setLoginModalOpen(true); }}
-                  className="w-full px-4 py-3 rounded-lg bg-slate-900 text-white text-base font-bold hover:bg-slate-800 transition-colors"
-                >
-                  Sign up
+                  Contact Us
                 </button>
               </div>
             </div>
@@ -289,19 +268,15 @@ export default function Home() {
       )}
 
       <main>
-        {/* 1. Hero Section */}
-        <Hero />
+        {/* Hero Section */}
+        <Hero session={session} userCount={waitlistCount} />
 
-        {/* Social Proof moved inside Hero */}
-
-
-
-        {/* 4. How It Works (New) */}
+        {/* How It Works */}
         <div id="how-it-works">
           <HowItWorks />
         </div>
 
-        {/* 5. Resources Section */}
+        {/* Resources Section */}
         <section id="resources" className="py-24 bg-white">
           <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
             <div className="flex items-center justify-between mb-12">
@@ -340,7 +315,7 @@ export default function Home() {
           </div>
         </section>
 
-        {/* 6. Pricing Section */}
+        {/* Pricing Section */}
         <section id="pricing" className="py-24 bg-slate-50 overflow-hidden">
           <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
             <div className="text-center mb-16">
@@ -381,45 +356,37 @@ export default function Home() {
           </div>
         </section>
 
-        {/* 7. FAQ (New) */}
+        {/* FAQ */}
         <FAQ />
 
-        {/* Footer */}
-        <footer className="bg-slate-900 text-slate-300 py-12">
-          <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
-            <div className="grid grid-cols-1 md:grid-cols-4 gap-12 mb-12">
-              <div className="col-span-1 md:col-span-2">
-                <div className="flex items-center gap-2 mb-4 text-white">
-                  <img src="/logo.svg" alt="Qimi AI" className="h-8 w-8 brightness-0 invert" />
-                  <span className="font-bold text-xl">Qimi AI</span>
+        {/* Footer - xingbanai.cn simplified style */}
+        <footer className="bg-slate-900 text-slate-400" style={{ padding: '48px 24px 24px' }}>
+          <div className="max-w-[1200px] mx-auto">
+            {/* Top: Brand + Contact */}
+            <div className="flex flex-wrap justify-between items-start gap-8 pb-8 border-b border-slate-800">
+              <div className="max-w-[300px]">
+                <div className="flex items-center mb-3">
+                  <span className="font-outfit text-lg font-bold text-transparent bg-clip-text bg-gradient-to-r from-primary-teal to-primary-purple">Qimi AI</span>
                 </div>
-                <p className="text-slate-400 max-w-xs">
+                <p className="text-sm leading-relaxed">
                   Empowering ADHD families with intelligent tools, emotional support, and a path forward.
                 </p>
               </div>
               <div>
-                <h4 className="font-bold text-white mb-4">Product</h4>
-                <ul className="space-y-2 text-sm">
-                  <li><a href="#how-it-works" className="hover:text-white transition-colors">Features</a></li>
-                  <li><a href="#pricing" className="hover:text-white transition-colors">Pricing</a></li>
-                  <li><a href="/blog" className="hover:text-white transition-colors">Blog</a></li>
-                </ul>
-              </div>
-              <div>
-                <h4 className="font-bold text-white mb-4">Company</h4>
-                <ul className="space-y-2 text-sm">
-                  <li><a href="/about" className="hover:text-white transition-colors">About Us</a></li>
-                  <li><a href="/founder" className="hover:text-white transition-colors">Founder's Story</a></li>
-                  <li><a href="#" className="hover:text-white transition-colors">Contact</a></li>
-                </ul>
+                <h4 className="text-sm font-semibold text-white mb-3">Contact</h4>
+                <p className="text-sm">
+                  Email: <a href="mailto:support@qimiai.com" className="text-primary-teal hover:text-primary-teal/80 transition-colors">support@qimiai.com</a>
+                </p>
               </div>
             </div>
-            <div className="border-t border-slate-800 pt-8 flex flex-col md:flex-row justify-between items-center gap-4 text-sm">
-              <p>© 2025 Qimi AI. All rights reserved.</p>
-              <div className="flex gap-6">
-                <a href="#" className="hover:text-white transition-colors">Privacy Policy</a>
-                <a href="#" className="hover:text-white transition-colors">Terms of Service</a>
+
+            {/* Bottom: Legal + Copyright */}
+            <div className="pt-6 flex flex-wrap justify-between items-center gap-4 text-[13px]">
+              <div className="flex flex-wrap gap-4">
+                <a href="/privacy" className="text-slate-400 hover:text-white transition-colors">Privacy Policy</a>
+                <a href="/terms" className="text-slate-400 hover:text-white transition-colors">Terms of Service</a>
               </div>
+              <span>&copy; 2025 Qimi AI. All rights reserved.</span>
             </div>
           </div>
         </footer>
@@ -430,6 +397,12 @@ export default function Home() {
         isOpen={loginModalOpen}
         onClose={() => setLoginModalOpen(false)}
         defaultTab={loginModalTab}
+      />
+
+      {/* Contact Modal */}
+      <ContactModal
+        isOpen={contactModalOpen}
+        onClose={() => setContactModalOpen(false)}
       />
     </div>
   );

@@ -21,7 +21,8 @@ const config: Config = {
                 "gradient-primary": "linear-gradient(135deg, #00D4AA 0%, #8B5CF6 100%)",
             },
             fontFamily: {
-                sans: ["Inter", "sans-serif"],
+                sans: ["'Noto Sans SC'", "Inter", "-apple-system", "BlinkMacSystemFont", "sans-serif"],
+                outfit: ["Outfit", "'Noto Sans SC'", "sans-serif"],
             },
         },
     },
