@@ -78,20 +78,28 @@ export default function ChatPage() {
     // 保存 AI 回复到 guestStorage（当流式响应完成时）
     useEffect(() => {
         if (isGuest && !isStreaming && messages.length > 1) {
-            // 找到最后一条 AI 消息
-            const lastMessage = messages[messages.length - 1];
-            if (lastMessage.role === 'assistant' && lastMessage.id !== 'welcome' && lastMessage.content) {
-                // 检查是否已经保存过
-                const guestData = guestStorage.get();
-                const alreadySaved = guestData?.chatHistory?.some(m => m.id === lastMessage.id);
-                if (!alreadySaved) {
-                    guestStorage.addMessage({
-                        id: lastMessage.id,
-                        role: 'assistant',
-                        content: lastMessage.content
-                    });
-                }
-            }
+            // 获取当前已保存的消息列表
+            const guestData = guestStorage.get();
+            const savedMessageIds = new Set(guestData?.chatHistory?.map(m => m.id) || []);
+
+            // 找到所有未保存的 AI 消息
+            const unsavedAIMessages = messages.filter(msg =>
+                msg.role === 'assistant' &&
+                msg.id !== 'welcome' &&
+                msg.content &&
+                !msg.isStreaming &&
+                !savedMessageIds.has(msg.id)
+            );
+
+            // 批量保存未保存的 AI 消息
+            unsavedAIMessages.forEach(msg => {
+                guestStorage.addMessage({
+                    id: msg.id,
+                    role: 'assistant',
+                    content: msg.content
+                });
+                console.log('[Guest] Saved AI message:', msg.id);
+            });
         }
     }, [isGuest, isStreaming, messages]);
 
@@ -152,7 +160,20 @@ export default function ChatPage() {
             return;
         }
 
-        await sendMessage(content, attachments, forceRAG);
+        // 构造 userProfile 用于 AI 个性化回复
+        let userProfile = undefined;
+        if (isGuest) {
+            const guestData = guestStorage.get();
+            if (guestData?.childBirthday || guestData?.challenges) {
+                userProfile = {
+                    childBirthday: guestData.childBirthday,
+                    challenges: guestData.challenges,
+                };
+            }
+        }
+        // TODO: 登录用户从 Supabase 获取 userProfile (Phase 2)
+
+        await sendMessage(content, attachments, forceRAG, userProfile);
 
         if (isGuest) {
             guestStorage.addMessage({ id: Date.now().toString(), role: 'user', content });

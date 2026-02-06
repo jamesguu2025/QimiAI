@@ -4,6 +4,12 @@ import { useCallback } from 'react';
 import { useChatStore, WELCOME_MESSAGE } from '../stores/chatStore';
 import { Message, Attachment } from '../types/chat';
 
+/** User profile for context injection */
+export interface UserProfile {
+  childBirthday?: { year: number; month: number };
+  challenges?: Array<{ id: string; name: string; categoryId?: string; categoryName?: string }>;
+}
+
 /**
  * Chat hook return type
  */
@@ -12,7 +18,7 @@ export interface UseChatReturn {
   isStreaming: boolean;
   canStop: boolean;
   error: string | null;
-  sendMessage: (content: string, attachments?: Attachment[], forceRAG?: boolean) => Promise<void>;
+  sendMessage: (content: string, attachments?: Attachment[], forceRAG?: boolean, userProfile?: UserProfile) => Promise<void>;
   stopGeneration: () => void;
   clearHistory: () => void;
   setMessages: (messages: Message[]) => void;
@@ -36,8 +42,8 @@ export function useChat(initialMessages?: typeof WELCOME_MESSAGE[]): UseChatRetu
   // Note: The store is already initialized with WELCOME_MESSAGE
 
   const sendMessage = useCallback(
-    async (content: string, attachments?: Attachment[], forceRAG?: boolean) => {
-      await storeSendMessage(content, attachments, forceRAG);
+    async (content: string, attachments?: Attachment[], forceRAG?: boolean, userProfile?: UserProfile) => {
+      await storeSendMessage(content, attachments, forceRAG, userProfile);
     },
     [storeSendMessage]
   );

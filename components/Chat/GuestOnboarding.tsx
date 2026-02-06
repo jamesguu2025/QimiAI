@@ -778,10 +778,10 @@ export default function GuestOnboarding({ onComplete }: GuestOnboardingProps) {
               <span className="bg-gradient-to-r from-primary-teal to-primary-purple bg-clip-text text-transparent">Back</span>
             </button>
             <h1 className="text-2xl font-bold text-slate-900 mb-1 text-center">
-              Let&apos;s start chatting
+              Choose Your First Question
             </h1>
             <p className="text-slate-500 text-center">
-              Pick a question to begin your first conversation
+              Start building solutions for your challenges
             </p>
           </div>
 
@@ -853,7 +853,7 @@ export default function GuestOnboarding({ onComplete }: GuestOnboardingProps) {
               }}
             >
               <span className={canFinish ? 'bg-gradient-to-r from-primary-teal to-primary-purple bg-clip-text text-transparent' : 'text-slate-400'}>
-                Start Chatting
+                Continue
               </span>
               <ChevronRight size={18} className={canFinish ? 'text-primary-purple' : 'text-slate-400'} />
             </button>

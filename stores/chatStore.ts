@@ -89,7 +89,7 @@ interface ChatState {
 /** Chat actions */
 interface ChatActions {
   // Message actions
-  sendMessage: (content: string, attachments?: Attachment[], forceRAG?: boolean) => Promise<void>;
+  sendMessage: (content: string, attachments?: Attachment[], forceRAG?: boolean, userProfile?: { childBirthday?: { year: number; month: number }; challenges?: Array<{ id: string; name: string; categoryId?: string; categoryName?: string }> }) => Promise<void>;
   stopStream: () => void;
   clearMessages: () => void;
   setMessages: (messages: Message[]) => void;
@@ -130,7 +130,7 @@ export const useChatStore = create<ChatState & ChatActions>((set, get) => ({
   error: null,
 
   // Send message with streaming response
-  sendMessage: async (content: string, attachments?: Attachment[], forceRAG?: boolean) => {
+  sendMessage: async (content: string, attachments?: Attachment[], forceRAG?: boolean, userProfile?: { childBirthday?: { year: number; month: number }; challenges?: Array<{ id: string; name: string; categoryId?: string; categoryName?: string }> }) => {
     const { currentConversation, abortController: existingController } = get();
 
     // Cancel any existing stream
@@ -201,7 +201,7 @@ export const useChatStore = create<ChatState & ChatActions>((set, get) => ({
           signal: controller.signal,
           conversationHistory,
           forceRAG,
-          // TODO: Pass userProfile when available (from guest storage or user session)
+          userProfile,
         },
         {
           onToken: (token) => {

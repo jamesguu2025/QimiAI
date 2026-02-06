@@ -13,7 +13,11 @@ export default async function handler(
   // Get user session
   const session = await getServerSession(req, res, authOptions);
 
+  // For GET requests, guests get empty array instead of 401
   if (!session?.user?.email) {
+    if (req.method === 'GET') {
+      return res.status(200).json({ conversations: [] });
+    }
     return res.status(401).json({ error: 'Unauthorized - Please sign in' });
   }
 
