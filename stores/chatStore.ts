@@ -240,6 +240,22 @@ export const useChatStore = create<ChatState & ChatActions>((set, get) => ({
               ),
             }));
           },
+          onConversationCreated: (conversationId) => {
+            const newConversation: Conversation = {
+              id: conversationId,
+              userId: '',
+              title: content.slice(0, 50) + (content.length > 50 ? '...' : ''),
+              folderKey: null,
+              messageCount: 0,
+              createdAt: new Date().toISOString(),
+              updatedAt: new Date().toISOString(),
+            };
+            set({
+              currentConversation: newConversation,
+              conversations: [newConversation, ...get().conversations],
+            });
+            saveConversationsToCache([newConversation, ...get().conversations]);
+          },
           onDone: () => {
             set(state => ({
               messages: state.messages.map(msg =>

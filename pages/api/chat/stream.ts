@@ -237,6 +237,34 @@ export default async function handler(
     res.setHeader('Connection', 'keep-alive');
     res.setHeader('X-Accel-Buffering', 'no');
 
+    // Pre-create conversation for logged-in users (before streaming starts)
+    let activeConversationId = conversationId;
+
+    if (session?.user?.email && !activeConversationId) {
+      const supabase = getSupabaseAdmin();
+      const { data: user } = await supabase
+        .from('users')
+        .select('id')
+        .eq('email', session.user.email)
+        .single();
+
+      if (user) {
+        const title = userMessage.slice(0, 50) + (userMessage.length > 50 ? '...' : '');
+        const { data: newConv } = await supabase
+          .from('conversations')
+          .insert({ user_id: user.id, title })
+          .select('id')
+          .single();
+
+        if (newConv) {
+          activeConversationId = newConv.id;
+          console.log('[chat/stream] Pre-created conversation:', activeConversationId);
+          // Send as first SSE event so frontend gets the ID before any tokens
+          res.write(`data: ${JSON.stringify({ type: 'conversation_created', conversationId: newConv.id })}\n\n`);
+        }
+      }
+    }
+
     // Shared accumulator to track content even if abort happens
     const accumulator = { content: '', sources: [] as Array<{ title: string; url: string; snippet?: string }> };
 
@@ -259,19 +287,13 @@ export default async function handler(
       if (isDisconnected) {
         console.log('[chat/stream] Client disconnected, saving partial response');
       }
-      const savedConvId = await saveMessagesToDatabase(
+      await saveMessagesToDatabase(
         session.user.email,
         userMessage,
         fullResponse,
-        conversationId,
+        activeConversationId,
         sources
       );
-
-      // If a new conversation was created, send the ID to frontend
-      if (savedConvId && !conversationId) {
-        // Note: This is sent after [DONE], frontend should handle this
-        console.log('[chat/stream] New conversation created:', savedConvId);
-      }
     }
 
   } catch (error) {

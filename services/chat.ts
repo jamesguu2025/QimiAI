@@ -30,6 +30,7 @@ export interface ChatStreamCallbacks {
   onStatus: (message: string) => void;
   onDone: (totalTokens?: number) => void;
   onError: (error: string) => void;
+  onConversationCreated?: (conversationId: string) => void;
 }
 
 /**
@@ -114,6 +115,11 @@ export async function sendMessage(
               case 'done':
                 callbacks.onDone(chunk.totalTokens);
                 return;
+              case 'conversation_created':
+                if (chunk.conversationId) {
+                  callbacks.onConversationCreated?.(chunk.conversationId);
+                }
+                break;
               case 'error':
                 callbacks.onError(chunk.error || 'Unknown error');
                 return;

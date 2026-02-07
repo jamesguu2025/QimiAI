@@ -44,7 +44,6 @@ export default function ChatPage() {
     const {
         selectConversation,
         createNewChat,
-        createConversation,
     } = useChatStore();
 
     const messagesEndRef = useRef<HTMLDivElement>(null);
@@ -201,17 +200,9 @@ export default function ChatPage() {
         setDrawerOpen(false);
     };
 
-    const handleSelectTopic = async (folderKey: string) => {
-        try {
-            // Create a new conversation with the selected topic
-            await createConversation(
-                `${folderKey.charAt(0).toUpperCase() + folderKey.slice(1)} Chat`,
-                folderKey as any
-            );
-            setDrawerOpen(false);
-        } catch (error) {
-            console.error('Failed to create topic conversation:', error);
-        }
+    const handleSelectTopic = (folderKey: string) => {
+        createNewChat();
+        setDrawerOpen(false);
     };
 
     const handleSelectConversation = async (conversationId: string) => {
