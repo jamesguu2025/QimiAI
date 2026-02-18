@@ -199,68 +199,119 @@ export default function Home() {
 
       <main className="hero">
         <div className="hero-container">
-          <div className="tagline">
-            <h1 className="tagline-text">Practical AI Guidance for <span className="title-highlight">Every ADHD Family</span></h1>
-          </div>
-          <div className="letter-section">
-            <div className="letter-content">
-              <h1 className="letter-title">A Letter from James</h1>
-              <div className="letter-text">
-                <p>Dear fellow parent,</p>
-                
-                <p>This is James Guu. I grew up as a kid with ADHD—always being told to focus, to sit still, to behave. But no one ever told me how. I felt lost, misunderstood, and exhausted.</p>
-                
-                <p>Years later, when my son began showing the same signs, I made a promise: he wouldn't have to go through this alone like I did.</p>
-                
-                <p>That's why I created Qimi AI—not as a tech product, but as a parent's tool.</p>
-                
-                <p>I've been a teacher, an entrepreneur, and now a self-taught AI developer. I spent years connecting ancient Chinese medicine, modern science, and practical daily routines—then built a system that could actually support families like ours.</p>
-                
-                <p>Qimi AI is here to help. It's not perfect, but it's honest. And it comes from someone who truly understands what you're going through.</p>
-                
-                <p>From my family to yours,<br/>
-                Warmly,<br/><br/>
-                <strong>James Guu</strong><br/>
-                Founder of Qimi AI</p>
+          <div className="hero-split">
+            {/* Left: Headline + Subtitle + Features */}
+            <div className="hero-left">
+              <h1 className="hero-headline">
+                <span className="hero-headline-gradient">Empowering Every</span>
+                <br />
+                <span className="hero-headline-dark">ADHD Family</span>
+              </h1>
+              <p className="hero-subtitle">Your AI parenting companion</p>
+
+              <div className="hero-features">
+                <div className="hero-feature">
+                  <div className="hero-feature-icon" style={{background: 'rgba(59,130,246,0.1)', color: '#3B82F6'}}>&#9201;</div>
+                  <div className="hero-feature-text">
+                    <span className="hero-feature-title">24/7 Parenting Coach</span>
+                    <p>Late-night anxiety, sudden meltdowns — expert support whenever you need it.</p>
+                  </div>
+                </div>
+                <div className="hero-feature">
+                  <div className="hero-feature-icon" style={{background: 'rgba(139,92,246,0.1)', color: '#8B5CF6'}}>&#128214;</div>
+                  <div className="hero-feature-text">
+                    <div className="hero-feature-title-row">
+                      <span className="hero-feature-title">Expert Knowledge Base</span>
+                      <span className="hero-feature-badge">10,000+ Studies</span>
+                    </div>
+                    <p>Every recommendation backed by peer-reviewed ADHD research.</p>
+                  </div>
+                </div>
+                <div className="hero-feature">
+                  <div className="hero-feature-icon" style={{background: 'rgba(0,212,170,0.1)', color: '#00D4AA'}}>&#128101;</div>
+                  <div className="hero-feature-text">
+                    <span className="hero-feature-title">Personalized Plans</span>
+                    <p>A growth plan unique to your family, precisely matched to your child.</p>
+                  </div>
+                </div>
+                <div className="hero-feature">
+                  <div className="hero-feature-icon" style={{background: 'rgba(249,115,22,0.1)', color: '#F97316'}}>&#128161;</div>
+                  <div className="hero-feature-text">
+                    <span className="hero-feature-title">Adaptive Intelligence</span>
+                    <p>The more you use it, the smarter it gets — every suggestion more precise.</p>
+                  </div>
+                </div>
+                <div className="hero-feature">
+                  <div className="hero-feature-icon" style={{background: 'rgba(236,72,153,0.1)', color: '#EC4899'}}>&#128196;</div>
+                  <div className="hero-feature-text">
+                    <span className="hero-feature-title">Progress Tracking</span>
+                    <p>Upload reports, AI extracts structured insights — data at a glance.</p>
+                  </div>
+                </div>
               </div>
-              <div className="james-photo-section">
-                <img src="/james-family.jpg" alt="James Guu with family" className="james-family-photo" />
+            </div>
+
+            {/* Right: Signup Card */}
+            <div className="hero-right">
+              <div className="hero-signup-card">
+                <h2 className="hero-signup-title">Get Early Access</h2>
+                <p className="hero-signup-desc">Be the first to know when we launch</p>
+
+                <div className="hero-waitlist-stats">
+                  <div className="hero-waitlist-number">{waitlistCount.toLocaleString()}</div>
+                  <div className="hero-waitlist-label">
+                    <span className="hero-stats-dot" />
+                    families on the waitlist
+                  </div>
+                </div>
+
+                <div className="social-login">
+                  <button className="social-btn google-btn" onClick={() => signIn('google', { callbackUrl: 'https://www.qimiai.to?subscribed=true' })} aria-label="Continue with Google">
+                    <img src="/google.svg" alt="Google" />
+                    <span>Continue with Google</span>
+                  </button>
+                </div>
+                <div className="divider"><span>or</span></div>
+                <div className="email-form">
+                  <input type="text" placeholder="Your name (optional)" className="name-input" id="nameInput" />
+                  <input type="email" placeholder="Enter your email address" className="email-input" id="emailInput" />
+                  <button className="join-btn" onClick={handleEmailSubmit}>Join Waitlist</button>
+                </div>
+                <p className="hero-signup-note">Free to join, no credit card required</p>
               </div>
             </div>
           </div>
         </div>
       </main>
 
-      <section className="product-intro">
-        <div className="product-container">
-          <h2 className="section-title">How Qimi AI Helps Your Family</h2>
-          <div className="product-features">
-            <div className="product-feature">
-              <div className="feature-icon">💚</div>
-              <h3>Parent Emotional Support</h3>
-              <p>Helping ADHD parents manage stress from children, work, family, and school pressures with proven emotional wellness strategies</p>
-            </div>
-            <div className="product-feature">
-              <div className="feature-icon">🎯</div>
-              <h3>Comprehensive Action Plans</h3>
-              <p>Evidence-based strategies covering learning, exercise, nutrition, and daily routines to help your child thrive</p>
+      {/* Letter Section - standalone */}
+      <section className="letter-standalone">
+        <div className="letter-container">
+          <div className="letter-content">
+            <h2 className="letter-title">A Letter from James</h2>
+            <div className="letter-text">
+              <p>Dear fellow parent,</p>
+
+              <p>This is James Guu. I grew up as a kid with ADHD—always being told to focus, to sit still, to behave. But no one ever told me how. I felt lost, misunderstood, and exhausted.</p>
+
+              <p>Years later, when my son began showing the same signs, I made a promise: he wouldn't have to go through this alone like I did.</p>
+
+              <p>That's why I created Qimi AI—not as a tech product, but as a parent's tool.</p>
+
+              <p>I've been a teacher, an entrepreneur, and now a self-taught AI developer. I spent years connecting ancient Chinese medicine, modern science, and practical daily routines—then built a system that could actually support families like ours.</p>
+
+              <p>Qimi AI is here to help. It's not perfect, but it's honest. And it comes from someone who truly understands what you're going through.</p>
+
+              <p>From my family to yours,<br/>
+              Warmly,<br/><br/>
+              <strong>James Guu</strong><br/>
+              Founder of Qimi AI</p>
             </div>
           </div>
         </div>
       </section>
 
-      <section className="waitlist-section">
-        <div className="waitlist-container">
-          <div className="waitlist-content">
-            <h2 className="section-title">Join Our Community</h2>
-            <div className="waitlist-counter-display">
-              <div className="waitlist-number" id="waitlistCount">{waitlistCount}</div>
-              <div className="waitlist-label">Families Already Waiting</div>
-              <p className="waitlist-description">Be the first to experience Qimi AI when we launch. Get early access and exclusive benefits for your family's journey.</p>
-            </div>
-          </div>
-        </div>
-      </section>
+
 
       <section id="waitlist" className="waitlist">
         <div className="waitlist-container">
@@ -269,31 +320,6 @@ export default function Home() {
             <div className="waitlist-item"><div className="waitlist-icon">🎯</div><h3>First Access</h3><p>Be among the first to experience Qimi AI when we launch. Early users get exclusive access to beta features and special pricing.</p></div>
             <div className="waitlist-item"><div className="waitlist-icon">💡</div><h3>Shape the Product</h3><p>Your feedback matters! Help us build the perfect solution for ADHD families by sharing your needs and preferences.</p></div>
             <div className="waitlist-item"><div className="waitlist-icon">🎁</div><h3>Exclusive Benefits</h3><p>Waitlist members receive special discounts, priority support, and access to exclusive resources and content.</p></div>
-          </div>
-        </div>
-      </section>
-
-      <section className="top-login-section">
-        <div className="top-login-container">
-          <div className="login-content">
-            <h2>Get Early Access</h2>
-            <p>Be the first to know when we launch</p>
-            <div className="social-login">
-              <button className="social-btn google-btn" onClick={() => signIn('google', { callbackUrl: 'https://www.qimiai.to?subscribed=true' })} aria-label="Continue with Google">
-                <img src="/google.svg" alt="Google" />
-                <span>Continue with Google</span>
-              </button>
-              <button className="social-btn facebook-btn" onClick={() => signIn('facebook', { callbackUrl: 'https://www.qimiai.to' })} aria-label="Continue with Facebook">
-                <img src="/facebook-f.svg" alt="Facebook" />
-                <span>Continue with Facebook</span>
-              </button>
-            </div>
-            <div className="divider"><span>or</span></div>
-            <div className="email-form">
-              <input type="text" placeholder="Your name (optional)" className="name-input" id="nameInput" />
-              <input type="email" placeholder="Enter your email address" className="email-input" id="emailInput" />
-              <button className="join-btn" onClick={handleEmailSubmit}>Join Waitlist</button>
-            </div>
           </div>
         </div>
       </section>

@@ -12,7 +12,16 @@ export default async function handler(req: NextApiRequest, res: NextApiResponse)
     const MAILCHIMP_SERVER_PREFIX = process.env.MAILCHIMP_SERVER_PREFIX;
 
     if (!MAILCHIMP_API_KEY || !MAILCHIMP_AUDIENCE_ID || !MAILCHIMP_SERVER_PREFIX) {
-      console.error('Mailchimp API credentials not configured');
+      // 本地开发时从线上拉取真实数据
+      try {
+        const fallback = await fetch('https://www.qimiai.to/api/waitlist-count');
+        const fallbackData = await fallback.json();
+        if (fallbackData.success) {
+          return res.status(200).json(fallbackData);
+        }
+      } catch (e) {
+        // fallback also failed
+      }
       return res.status(500).json({ message: 'Service configuration error' });
     }
 
