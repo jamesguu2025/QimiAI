@@ -87,7 +87,8 @@ export default async function handler(
     await supabase
       .from('reports')
       .update({ status: 'analyzing' })
-      .eq('id', id);
+      .eq('id', id)
+      .eq('user_id', user!.id);
 
     // Check if GLM API is configured
     const glmUrl = process.env.GLM_API_URL;
@@ -152,6 +153,7 @@ export default async function handler(
         status: finalStatus,
       })
       .eq('id', id)
+      .eq('user_id', user!.id)
       .select('*')
       .single();
 

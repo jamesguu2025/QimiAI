@@ -108,11 +108,16 @@ export default async function handler(
       }
 
       // Delete DB row
-      await supabase
+      const { error: deleteError } = await supabase
         .from('reports')
         .delete()
         .eq('id', id)
         .eq('user_id', user!.id);
+
+      if (deleteError) {
+        console.error('[reports/[id]] delete error:', deleteError);
+        return res.status(500).json({ error: 'Internal server error' });
+      }
 
       return res.status(204).end();
     }

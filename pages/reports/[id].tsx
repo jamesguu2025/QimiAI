@@ -100,7 +100,7 @@ export default function ReportViewPage() {
     }
   };
 
-  if (authStatus === 'loading' || loading) {
+  if (authStatus === 'loading') {
     return (
       <AppLayout>
         <div className="flex items-center justify-center h-64">
@@ -113,6 +113,16 @@ export default function ReportViewPage() {
   if (!session) {
     router.push('/login');
     return null;
+  }
+
+  if (loading) {
+    return (
+      <AppLayout>
+        <div className="flex items-center justify-center h-64">
+          <span className="text-slate-400">Loading report...</span>
+        </div>
+      </AppLayout>
+    );
   }
 
   if (error) {
