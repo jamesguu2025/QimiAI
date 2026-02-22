@@ -79,10 +79,11 @@ export default async function handler(
         .order('created_at', { ascending: false });
 
       if (category) {
-        if (!VALID_CATEGORIES.includes(category as string)) {
+        const cat = Array.isArray(category) ? category[0] : category;
+        if (!VALID_CATEGORIES.includes(cat as string)) {
           return res.status(400).json({ error: 'Invalid category' });
         }
-        query = query.eq('category', category as string);
+        query = query.eq('category', cat as string);
       }
 
       const { data: rows, error } = await query;
@@ -161,10 +162,16 @@ export default async function handler(
       if (category !== undefined && !VALID_CATEGORIES.includes(category)) {
         return res.status(400).json({ error: 'Invalid category' });
       }
+      if (painPoint !== undefined && (typeof painPoint !== 'string' || !painPoint.trim())) {
+        return res.status(400).json({ error: 'Pain point must be a non-empty string' });
+      }
+      if (strategy !== undefined && (typeof strategy !== 'string' || !strategy.trim())) {
+        return res.status(400).json({ error: 'Strategy must be a non-empty string' });
+      }
 
       const updateObj: Record<string, unknown> = {};
-      if (painPoint !== undefined) updateObj.pain_point = painPoint.trim();
-      if (strategy !== undefined) updateObj.strategy = strategy.trim();
+      if (painPoint !== undefined) updateObj.pain_point = (painPoint as string).trim();
+      if (strategy !== undefined) updateObj.strategy = (strategy as string).trim();
       if (category !== undefined) updateObj.category = category;
       if (star !== undefined) updateObj.star = Boolean(star);
       if (checkInDays !== undefined) updateObj.check_in_days = checkInDays;
@@ -202,11 +209,16 @@ export default async function handler(
         return res.status(400).json({ error: 'Invalid id format' });
       }
 
-      await supabase
+      const { error } = await supabase
         .from('plan_items')
         .delete()
         .eq('id', id)
         .eq('user_id', userId);
+
+      if (error) {
+        console.error('[plan] delete error:', error);
+        return res.status(500).json({ error: 'Internal server error' });
+      }
 
       return res.status(204).end();
     }

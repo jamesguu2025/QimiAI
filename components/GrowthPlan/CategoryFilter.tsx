@@ -11,7 +11,7 @@ interface CategoryFilterProps {
 
 const CategoryFilter: React.FC<CategoryFilterProps> = ({ selected, onChange }) => {
   return (
-    <div className="flex gap-2 overflow-x-auto pb-1 scrollbar-hide">
+    <div className="flex flex-nowrap gap-2 overflow-x-auto pb-1 scrollbar-hide">
       <button
         type="button"
         onClick={() => onChange('all')}

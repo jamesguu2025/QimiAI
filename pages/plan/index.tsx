@@ -108,7 +108,11 @@ export default function PlanPage() {
         throw new Error(data.error || 'Failed to update');
       }
       const data = await res.json();
-      setItems((prev) => prev.map((i) => (i.id === editingItem.id ? data.item : i)));
+      setItems((prev) => {
+        const updated = prev.map((i) => (i.id === editingItem.id ? data.item : i));
+        setStarredCount(updated.filter((i) => i.star).length);
+        return updated;
+      });
       setEditingItem(null);
     } catch (err) {
       alert(err instanceof Error ? err.message : 'Failed to update item');
