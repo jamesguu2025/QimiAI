@@ -1,19 +1,27 @@
 // components/CrisisCalm/CalmControls.tsx - Exit button and sound toggle
 
 import React, { useState } from 'react';
-import { useRouter } from 'next/router';
 
-const CalmControls: React.FC = () => {
-  const router = useRouter();
-  const [soundOn, setSoundOn] = useState(false);
-  // TODO P2: wire to actual audio file in /public/sounds/calm.mp3
+interface CalmControlsProps {
+  onToggleSound: (on: boolean) => void;
+  onExit: () => void;
+}
+
+const CalmControls: React.FC<CalmControlsProps> = ({ onToggleSound, onExit }) => {
+  const [soundOn, setSoundOn] = useState(true);
+
+  const handleToggle = () => {
+    const next = !soundOn;
+    setSoundOn(next);
+    onToggleSound(next);
+  };
 
   return (
     <div className="fixed top-4 right-4 flex items-center gap-3 z-50">
       {/* Sound Toggle */}
       <button
         type="button"
-        onClick={() => setSoundOn((prev) => !prev)}
+        onClick={handleToggle}
         className="flex items-center gap-1.5 text-slate-400 hover:text-white transition-colors"
         aria-label="Toggle sound"
       >
@@ -30,13 +38,12 @@ const CalmControls: React.FC = () => {
             <line x1="17" y1="9" x2="23" y2="15" />
           </svg>
         )}
-        {soundOn && <span className="text-xs">Sound On</span>}
       </button>
 
       {/* Exit Button */}
       <button
         type="button"
-        onClick={() => router.back()}
+        onClick={onExit}
         className="flex items-center gap-1.5 text-slate-300 hover:text-white transition-colors"
       >
         <span className="text-sm">Exit</span>

@@ -1,101 +1,98 @@
-// components/CrisisCalm/BreathingCircle.tsx - Animated breathing circle with state machine
+// components/CrisisCalm/BreathingCircle.tsx - Breathing text with 4-phase cycle
+// The halo/glow is rendered by the parent (calm.tsx) for seamless transition from preparation
 
 import React, { useState, useEffect, useCallback } from 'react';
 
-type Phase = 'inhale' | 'hold' | 'exhale';
+type Phase = 'inhale' | 'hold1' | 'exhale' | 'hold2';
 
 const PHASE_CONFIG: Record<Phase, { duration: number; label: string; next: Phase }> = {
-  inhale: { duration: 4, label: 'Breathe In', next: 'hold' },
-  hold: { duration: 4, label: 'Hold', next: 'exhale' },
-  exhale: { duration: 6, label: 'Breathe Out', next: 'inhale' },
+  inhale: { duration: 4, label: 'Breathe In', next: 'hold1' },
+  hold1: { duration: 4, label: 'Hold', next: 'exhale' },
+  exhale: { duration: 4, label: 'Breathe Out', next: 'hold2' },
+  hold2: { duration: 4, label: 'Hold', next: 'inhale' },
 };
 
-const SCALE_MAP: Record<Phase, number> = {
-  inhale: 1,
-  hold: 1,
-  exhale: 0.6,
-};
+interface BreathingState {
+  phase: Phase;
+  countdown: number;
+  cycle: number;
+}
 
-const BreathingCircle: React.FC = () => {
-  const [phase, setPhase] = useState<Phase>('inhale');
-  const [countdown, setCountdown] = useState(PHASE_CONFIG.inhale.duration);
-  const [scale, setScale] = useState(0.6);
+interface BreathingCircleProps {
+  maxCycles?: number;
+  onComplete?: () => void;
+}
 
-  const advancePhase = useCallback(() => {
-    setPhase((prev) => {
-      const next = PHASE_CONFIG[prev].next;
-      setCountdown(PHASE_CONFIG[next].duration);
-      setScale(SCALE_MAP[next]);
-      return next;
-    });
-  }, []);
+const BreathingCircle: React.FC<BreathingCircleProps> = ({ maxCycles = 4, onComplete }) => {
+  const [state, setState] = useState<BreathingState>({
+    phase: 'inhale',
+    countdown: PHASE_CONFIG.inhale.duration,
+    cycle: 1,
+  });
+  const [completed, setCompleted] = useState(false);
+
+  const handleComplete = useCallback(() => {
+    setCompleted(true);
+    if (onComplete) onComplete();
+  }, [onComplete]);
 
   useEffect(() => {
-    // Start with inhale scale
-    setScale(SCALE_MAP.inhale);
-  }, []);
+    if (completed) return;
 
-  useEffect(() => {
     const timer = setInterval(() => {
-      setCountdown((prev) => {
-        if (prev <= 1) {
-          advancePhase();
-          return prev; // Will be reset by advancePhase
+      setState((prev) => {
+        if (prev.countdown <= 1) {
+          const nextPhase = PHASE_CONFIG[prev.phase].next;
+
+          if (nextPhase === 'inhale') {
+            const nextCycle = prev.cycle + 1;
+            if (nextCycle > maxCycles) {
+              return { ...prev, countdown: 0 };
+            }
+            return {
+              phase: nextPhase,
+              countdown: PHASE_CONFIG[nextPhase].duration,
+              cycle: nextCycle,
+            };
+          }
+
+          return {
+            ...prev,
+            phase: nextPhase,
+            countdown: PHASE_CONFIG[nextPhase].duration,
+          };
         }
-        return prev - 1;
+        return { ...prev, countdown: prev.countdown - 1 };
       });
     }, 1000);
 
     return () => clearInterval(timer);
-  }, [advancePhase]);
+  }, [completed, maxCycles]);
 
-  const config = PHASE_CONFIG[phase];
-  const transitionDuration = phase === 'exhale' ? 6 : 4;
+  useEffect(() => {
+    if (state.countdown === 0 && !completed) {
+      handleComplete();
+    }
+  }, [state.countdown, completed, handleComplete]);
+
+  if (completed) return null;
+
+  const config = PHASE_CONFIG[state.phase];
 
   return (
-    <div className="flex flex-col items-center gap-6">
-      <svg
-        width="200"
-        height="200"
-        viewBox="0 0 200 200"
-        className="overflow-visible"
-      >
-        <circle
-          cx="100"
-          cy="100"
-          r="80"
-          fill="rgba(0, 212, 170, 0.15)"
-          stroke="#00D4AA"
-          strokeWidth="3"
-          style={{
-            transform: `scale(${scale})`,
-            transformOrigin: '100px 100px',
-            transition: `transform ${transitionDuration}s ease-in-out`,
-          }}
-        />
-        <text
-          x="100"
-          y="95"
-          textAnchor="middle"
-          dominantBaseline="middle"
-          fill="white"
-          fontSize="20"
-          fontWeight="500"
-        >
-          {config.label}
-        </text>
-        <text
-          x="100"
-          y="120"
-          textAnchor="middle"
-          dominantBaseline="middle"
-          fill="rgba(255,255,255,0.7)"
-          fontSize="28"
-          fontWeight="300"
-        >
-          {countdown}
-        </text>
-      </svg>
+    <div className="w-full h-full flex flex-col items-center justify-center">
+      {/* Cycle indicator */}
+      <div className="text-xs text-slate-500 mb-3">
+        Round {state.cycle} / {maxCycles}
+      </div>
+      {/* Phase label */}
+      <span className="text-xl font-light text-white tracking-wide">
+        {config.label}
+      </span>
+      {/* Countdown */}
+      <span className="text-3xl font-extralight text-white/70 mt-1">
+        {state.countdown}
+      </span>
     </div>
   );
 };
