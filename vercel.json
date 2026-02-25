@@ -3,6 +3,16 @@
   "buildCommand": "npm run build",
   "outputDirectory": ".next",
   "installCommand": "npm install",
-  "devCommand": "npm run dev"
+  "devCommand": "npm run dev",
+  "crons": [
+    {
+      "path": "/api/followup/cron/extract",
+      "schedule": "0 14 * * *"
+    },
+    {
+      "path": "/api/followup/cron/notify",
+      "schedule": "0 15 * * *"
+    }
+  ]
 }
 
