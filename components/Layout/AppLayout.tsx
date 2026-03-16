@@ -3,6 +3,7 @@ import { useRouter } from 'next/router';
 import { useSession } from 'next-auth/react';
 import { Menu } from 'lucide-react';
 import { SmartDrawer } from '../Chat/SmartDrawer';
+import UserMenu from '../UI/UserMenu';
 
 interface AppLayoutProps {
     children: React.ReactNode;
@@ -40,7 +41,7 @@ const AppLayout: React.FC<AppLayoutProps> = ({
     };
 
     return (
-        <div className="h-screen bg-slate-50 flex overflow-hidden">
+        <div className="h-screen w-full bg-slate-50 flex overflow-hidden">
             <SmartDrawer
                 isOpen={drawerOpen}
                 onClose={() => setDrawerOpen(false)}
@@ -58,7 +59,7 @@ const AppLayout: React.FC<AppLayoutProps> = ({
                 onTouchEnd={handleTouchEnd}
             >
                 {/* Mobile Header */}
-                <div className="lg:hidden flex-shrink-0 flex items-center justify-between h-16 px-4 bg-white border-b border-slate-100">
+                <div className="lg:hidden flex-shrink-0 flex items-center justify-between h-16 px-4 bg-white border-b border-slate-100 z-10 relative">
                     <button
                         onClick={() => setDrawerOpen(true)}
                         className="p-2 -ml-2 text-slate-500 hover:text-slate-700"
@@ -66,8 +67,16 @@ const AppLayout: React.FC<AppLayoutProps> = ({
                         <Menu size={24} />
                     </button>
                     <img src="/logo.svg" alt="Qimi AI" className="h-9 w-auto" />
-                    <div className="w-8" /> {/* Spacer for centering */}
+                    <UserMenu />
                 </div>
+
+                {/* Desktop Header (non-fullScreen only) */}
+                {!fullScreen && (
+                    <div className="hidden lg:flex flex-shrink-0 items-center justify-between h-16 px-6 bg-white border-b border-slate-100">
+                        <img src="/logo.svg" alt="Qimi AI" className="h-9 w-auto" />
+                        <UserMenu />
+                    </div>
+                )}
 
                 {/* Main Content */}
                 <main className={`flex-1 flex flex-col min-h-0 ${fullScreen ? '' : 'overflow-y-auto p-4 lg:p-8'}`}>
