@@ -2,13 +2,13 @@ import { useState, useRef, useEffect } from 'react';
 import Head from 'next/head';
 import { useRouter } from 'next/router';
 import { useSession } from 'next-auth/react';
-import { Menu, Moon, BookOpen, Heart, Sparkles } from 'lucide-react';
+import { Moon, BookOpen, Heart, Sparkles } from 'lucide-react';
 import { StreamingMessage } from '../components/Chat/StreamingMessage';
 import { ChatInput, FileAttachment } from '../components/Chat/ChatInput';
-import { SmartDrawer } from '../components/Chat/SmartDrawer';
 import GuestOnboarding from '../components/Chat/GuestOnboarding';
 import LoginWall from '../components/Chat/LoginWall';
 import { ChatPageSkeleton } from '../components/UI/Skeleton';
+import AppLayout from '../components/Layout/AppLayout';
 import { guestStorage } from '../utils/guest-storage';
 import { useChat } from '../hooks/useChat';
 import { useChatStore, WELCOME_MESSAGE } from '../stores/chatStore';
@@ -24,10 +24,6 @@ export default function ChatPage() {
     const [showOnboarding, setShowOnboarding] = useState(false);
     const [showLoginWall, setShowLoginWall] = useState(false);
     const [guestMessageCount, setGuestMessageCount] = useState(0);
-
-    // 抽屉状态
-    const [drawerOpen, setDrawerOpen] = useState(false);
-    const [drawerCollapsed, setDrawerCollapsed] = useState(false);
 
     // RAG 强化模式状态 (Force RAG)
     const [forceRAG, setForceRAG] = useState(false);
@@ -47,7 +43,6 @@ export default function ChatPage() {
     } = useChatStore();
 
     const messagesEndRef = useRef<HTMLDivElement>(null);
-    const touchStartX = useRef<number>(0);
     const modeHandledRef = useRef<string | null>(null);
 
     // 自动滚动到底部
@@ -55,24 +50,29 @@ export default function ChatPage() {
         messagesEndRef.current?.scrollIntoView({ behavior: 'smooth' });
     };
 
-    // 触摸手势 - 从左边缘右滑打开抽屉（移动端）
-    const handleTouchStart = (e: React.TouchEvent) => {
-        touchStartX.current = e.touches[0].clientX;
-    };
-
-    const handleTouchEnd = (e: React.TouchEvent) => {
-        const touchEndX = e.changedTouches[0].clientX;
-        const diff = touchEndX - touchStartX.current;
-
-        // 从左边缘开始（<30px）且右滑超过 50px，打开抽屉
-        if (touchStartX.current < 30 && diff > 50 && !drawerOpen) {
-            setDrawerOpen(true);
-        }
-    };
-
     useEffect(() => {
         scrollToBottom();
     }, [messages]);
+
+    // Handle conversation query param from SmartDrawer navigation
+    useEffect(() => {
+        const conversationId = router.query.conversation as string;
+        if (conversationId) {
+            selectConversation(conversationId);
+            // Clean up the URL to avoid re-triggering
+            router.replace('/chat', undefined, { shallow: true });
+        }
+    }, [router.query.conversation]);
+
+    // Handle topic query param from SmartDrawer navigation
+    useEffect(() => {
+        const topic = router.query.topic as string;
+        if (topic) {
+            createNewChat();
+            // Topic-specific behavior can be added later
+            router.replace('/chat', undefined, { shallow: true });
+        }
+    }, [router.query.topic]);
 
     // 保存 AI 回复到 guestStorage（当流式响应完成时）
     useEffect(() => {
@@ -194,21 +194,20 @@ export default function ChatPage() {
         }
     };
 
-    // 抽屉操作
+    // 抽屉操作回调（传递给 AppLayout）
     const handleNewChat = () => {
         createNewChat();
-        setDrawerOpen(false);
+        setMessages([WELCOME_MESSAGE]);
     };
 
     const handleSelectTopic = (folderKey: string) => {
         createNewChat();
-        setDrawerOpen(false);
+        setMessages([WELCOME_MESSAGE]);
     };
 
     const handleSelectConversation = async (conversationId: string) => {
         try {
             await selectConversation(conversationId);
-            setDrawerOpen(false);
         } catch (error) {
             console.error('Failed to load conversation:', error);
         }
@@ -235,35 +234,17 @@ export default function ChatPage() {
     }
 
     return (
-        <div className="h-screen flex bg-white">
+        <AppLayout
+            fullScreen
+            onNewChat={handleNewChat}
+            onSelectConversation={handleSelectConversation}
+            onSelectTopic={handleSelectTopic}
+        >
             <Head><title>Chat - Qimi AI</title></Head>
 
-            {/* 智能抽屉 */}
-            <SmartDrawer
-                isOpen={drawerOpen}
-                onClose={() => setDrawerOpen(false)}
-                isCollapsed={drawerCollapsed}
-                onToggleCollapse={() => setDrawerCollapsed(!drawerCollapsed)}
-                onNewChat={handleNewChat}
-                onSelectTopic={handleSelectTopic}
-                onSelectConversation={handleSelectConversation}
-                isGuest={isGuest}
-            />
-
-            {/* 主内容区 */}
-            <div
-                className={`flex-1 flex flex-col transition-all duration-300 ${drawerCollapsed ? 'lg:ml-16' : 'lg:ml-72'}`}
-                onTouchStart={handleTouchStart}
-                onTouchEnd={handleTouchEnd}
-            >
-                {/* Header */}
-                <header className="flex-shrink-0 h-14 flex items-center justify-center px-4 border-b border-slate-100 bg-white relative">
-                    <button
-                        onClick={() => setDrawerOpen(true)}
-                        className="lg:hidden absolute left-4 p-2 rounded-lg hover:bg-slate-100 transition-colors"
-                    >
-                        <Menu size={20} className="text-slate-600" />
-                    </button>
+            <div className="flex-1 flex flex-col min-h-0 overflow-hidden">
+                {/* Desktop-only chat header (mobile uses AppLayout's header) */}
+                <header className="hidden lg:flex flex-shrink-0 h-14 items-center justify-center px-4 border-b border-slate-100 bg-white relative">
                     <button
                         onClick={() => {
                             createNewChat();
@@ -388,6 +369,6 @@ export default function ChatPage() {
                     />
                 </div>
             </div>
-        </div>
+        </AppLayout>
     );
 }

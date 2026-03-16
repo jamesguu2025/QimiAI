@@ -1,13 +1,15 @@
-import { useEffect } from 'react';
-import { useRouter } from 'next/router';
+import Head from 'next/head';
+import AppLayout from '../components/Layout/AppLayout';
 
-// Dashboard is now part of /chat - redirect for backwards compatibility
-export default function Dashboard() {
-    const router = useRouter();
-
-    useEffect(() => {
-        router.replace('/chat');
-    }, [router]);
-
-    return null;
+// Placeholder — full Dashboard module coming next
+export default function DashboardPage() {
+    return (
+        <AppLayout>
+            <Head><title>Dashboard - Qimi AI</title></Head>
+            <div className="flex flex-col items-center justify-center min-h-[60vh] text-center">
+                <h1 className="text-2xl font-bold text-slate-800 mb-2">Dashboard</h1>
+                <p className="text-slate-500">Coming soon — your family hub will live here.</p>
+            </div>
+        </AppLayout>
+    );
 }
