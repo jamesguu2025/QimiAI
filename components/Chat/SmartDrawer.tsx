@@ -18,7 +18,6 @@ import {
   Trash2,
   Loader2,
   LogIn,
-  User,
   Home,
   AlertTriangle,
   X,
