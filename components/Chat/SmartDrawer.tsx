@@ -26,6 +26,7 @@ import {
   Pin,
   LucideIcon
 } from 'lucide-react';
+import { useRouter } from 'next/router';
 import { signIn, signOut } from 'next-auth/react';
 import { useChatStore } from '../../stores/chatStore';
 
@@ -647,6 +648,7 @@ export const SmartDrawer: React.FC<SmartDrawerProps> = ({
   onSelectConversation,
   isGuest = false
 }) => {
+  const router = useRouter();
   const [searchQuery, setSearchQuery] = useState('');
   const [isMobile, setIsMobile] = useState(false);
   const drawerRef = useRef<HTMLDivElement>(null);
@@ -826,7 +828,7 @@ export const SmartDrawer: React.FC<SmartDrawerProps> = ({
 
           {/* Home/Dashboard 按钮 */}
           <button
-            onClick={onNewChat}
+            onClick={() => router.push('/dashboard')}
             className={`flex items-center gap-2 rounded-lg hover:bg-slate-100 transition-colors ${effectiveCollapsed ? 'p-2' : 'px-3 py-1.5'}`}
             title="Dashboard"
           >
@@ -933,33 +935,16 @@ export const SmartDrawer: React.FC<SmartDrawerProps> = ({
           </div>
         </div>
 
-        {/* Footer with Login/User */}
-        {!effectiveCollapsed && (
+        {/* Footer with Login (guest only - UserMenu handles logged-in users) */}
+        {!effectiveCollapsed && isGuest && (
           <div className="p-4 border-t border-slate-100">
-            {isGuest ? (
-              <button
-                onClick={() => signIn('google')}
-                className="w-full flex items-center justify-center gap-2 px-4 py-2.5 bg-primary-teal text-white rounded-lg hover:bg-primary-teal/90 transition-colors font-medium text-sm"
-              >
-                <LogIn size={18} />
-                Sign in for unlimited
-              </button>
-            ) : (
-              <div className="flex items-center gap-3">
-                <div className="w-9 h-9 rounded-full bg-primary-teal/10 flex items-center justify-center">
-                  <User size={18} className="text-primary-teal" />
-                </div>
-                <div className="flex-1 min-w-0">
-                  <p className="text-sm font-medium text-slate-700 truncate">Logged in</p>
-                  <button
-                    onClick={() => signOut()}
-                    className="text-xs text-slate-400 hover:text-slate-600"
-                  >
-                    Sign out
-                  </button>
-                </div>
-              </div>
-            )}
+            <button
+              onClick={() => signIn('google')}
+              className="w-full flex items-center justify-center gap-2 px-4 py-2.5 bg-primary-teal text-white rounded-lg hover:bg-primary-teal/90 transition-colors font-medium text-sm"
+            >
+              <LogIn size={18} />
+              Sign in for unlimited
+            </button>
           </div>
         )}
       </div>
