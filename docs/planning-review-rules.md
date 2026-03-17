@@ -156,8 +156,11 @@ Completed in 2026-03-17 planning pass:
 - `docs/specs/compliance.md` — new, MVP launch gate (6 items: system prompt, parental consent, privacy policy, terms of service, account deletion, RLS fix)
 - `docs/project-control.md` — compliance module added to status and execution order
 - `docs/formal-basis-entry.md` — compliance spec added
+- `docs/specs/membership-billing.md` — new, post-MVP monetization module (Stripe checkout, billing portal, entitlement sync)
+- `docs/project-control.md` — membership-billing added to status and placed at bottom of module order
+- `docs/formal-basis-entry.md` — membership-billing spec added
 
 Next documents to continue automatically:
 
-1. Self-review + cross-review for compliance spec (2026-03-17)
+1. Self-review + cross-review for membership-billing spec (2026-03-17)
 2. Implementation-phase alignment updates as code lands

@@ -110,6 +110,7 @@ Current baseline:
 - Report Analysis: `Planned`
 - Crisis Calm: `Planned`
 - Memory Profile Summary: `Planned`
+- Membership & Billing: `Planned` (post-MVP monetization module, spec: `docs/specs/membership-billing.md`)
 - ~~User Profile~~: `Superseded` — split into Family Profile + Settings (2026-03-16)
 
 ---
@@ -132,7 +133,8 @@ The project must move forward in this order unless the user explicitly overrides
 9. `report-analysis`
 10. `crisis-calm`
 11. `memory-profile-summary`
-12. Return to deeper follow-up reminder iteration only after the higher-frequency product paths above are stable
+12. `membership-billing` (post-MVP monetization; Stripe checkout, billing portal, entitlement sync)
+13. Return to deeper follow-up reminder iteration only after the higher-frequency product paths above are stable
 
 Rationale:
 
@@ -145,6 +147,7 @@ Rationale:
 - `growth-plan` and `report-analysis` follow as the next product-loop features.
 - `crisis-calm` is intentionally isolated and can be built later.
 - `memory-profile-summary` depends conceptually on stable profile and history foundations.
+- `membership-billing` is intentionally last. MVP should launch the free product first; monetization comes after the core feature loop and quota-bearing modules are stable in real code.
 
 ---
 
