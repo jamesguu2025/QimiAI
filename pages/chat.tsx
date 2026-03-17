@@ -12,6 +12,7 @@ import AppLayout from '../components/Layout/AppLayout';
 import { guestStorage } from '../utils/guest-storage';
 import { useChat } from '../hooks/useChat';
 import { useChatStore, WELCOME_MESSAGE } from '../stores/chatStore';
+import MemoryToast from '../components/Chat/MemoryToast';
 import { Message } from '../types/chat';
 
 export default function ChatPage() {
@@ -43,6 +44,7 @@ export default function ChatPage() {
     const {
         selectConversation,
         createNewChat,
+        currentConversation,
     } = useChatStore();
 
     const messagesEndRef = useRef<HTMLDivElement>(null);
@@ -359,6 +361,11 @@ export default function ChatPage() {
                     />
                 </div>
             </div>
+            {/* Memory extraction toast — shows when Qimi learns new facts */}
+            <MemoryToast
+                conversationId={currentConversation?.id || null}
+                isStreaming={isStreaming}
+            />
         </AppLayout>
     );
 }

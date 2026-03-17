@@ -1,13 +1,12 @@
 # Module Spec: Family Profile
 
-> Status: APPROVED — 2026-03-16 | Self-reviewed: 2026-03-16 | Second-pass reviewed: 2026-03-16 (P0: 0, P1: 0 after fixes) | Implementation status: Planned
+> Status: REDESIGNED — 2026-03-17 | Previous versions had incorrect ChallengeSelector on profile page. This version aligns with blueprint § 2.9.
 > Module: family-profile
 > Routes: `/family`
 > API routes: `pages/api/family/*`
 > Components: `components/Family/*`
-> Branch: `feature/user-profile` (continues from existing branch)
-> Scope: Child profile CRUD + challenge selection. Accessed from Dashboard card. Parent account settings (name, email, avatar) moved to `/settings` module.
-> Supersedes: `docs/specs/user-profile.md` (2026-03-16)
+> Branch: `feature/family-profile`
+> Scope: Child basic info editing + read-only onboarding challenge tags + AI-extracted facts display. Accessed from Dashboard card.
 
 ---
 
@@ -15,31 +14,41 @@
 
 This spec was written against:
 
-- The canonical Layer 1 architecture in `docs/system-architecture.md` (amended 2026-03-16)
-- The current repo structure in `/Users/jamesguu/qimi-ai-website/qimi-ai-website`
-- The cross-platform blueprint in `/Users/jamesguu/WeChatProjects/adhdhelper-cursor/docs/项目技术蓝图.md`
-- Official guidance for Auth.js / NextAuth protected routes and Supabase RLS
+- **Blueprint § 2.9** (个人中心): `展示孩子年龄与挑战标签摘要（来自 guide_child_profile）`
+- **Blueprint § 用户档案 data structure**: `child_birthday`, `challenges[]`, `familyNotes`, `extractedFacts[]`
+- **Blueprint § 2.3** (对话后台处理): `每次对话后自动提取用户家庭信息（Memory Extraction）→ 提取的事实存入用户档案`
+- The canonical Layer 1 architecture in `docs/system-architecture.md`
+- The memory layer spec in `docs/specs/memory-profile-summary.md`
 
-### Why this spec replaces user-profile.md
+### Blueprint Traceability
 
-The original `user-profile` spec combined parent account settings and child profile editing on a single `/profile` page. This was restructured (2026-03-16) for the following reasons (internal design choice):
+| UI Element | Blueprint Source | Type |
+|-----------|-----------------|------|
+| Child age display | § 2.9: `展示孩子年龄` | Blueprint |
+| Challenge tags (read-only) | § 2.9: `挑战标签摘要（来自 guide_child_profile）` | Blueprint |
+| Child name/gender editing | Web-only addition: blueprint has no name field, web adds for personalization | Web extension |
+| AI-extracted facts display | § 用户档案: `extractedFacts[]` with 10 categories | Blueprint |
+| Family notes / summary | § 用户档案: `familyNotes: "AI 生成的家庭情况摘要"` | Blueprint |
 
-1. **Navigation unification**: All logged-in pages now use SmartDrawer. Module pages are accessed from Dashboard cards or UserMenu, not from a separate Sidebar.
-2. **Separation of concerns**: "My account" (name, email, avatar, subscription) belongs in `/settings` (accessed via UserMenu). "My child's info" (name, birthday, challenges) belongs in `/family` (accessed via Dashboard card).
-3. **Onboarding data reuse**: Guest onboarding already collects birthday and challenges. This data must auto-populate the family profile on registration, not force users to re-enter it.
+### Design Principle
+
+> The challenges collected during Guest onboarding exist to give the AI **immediate context** — they are NOT a feature users come back to edit. Real family context comes from conversation-derived extraction (extractedFacts), which is more specific and valuable than generic onboarding checkboxes.
 
 ### MVP Boundary
 
-- This module owns child profile CRUD and challenge selection
-- Parent name editing moves to the `/settings` module (separate spec)
-- This module does **not** introduce `extracted_facts`, `memory_items`, or AI-generated memory summaries
-- Memory remains a separate planning pass
+- This module owns child basic info (name, birthday, gender) editing
+- Onboarding challenges are displayed as **read-only tags**, not an editable selector
+- AI-extracted facts display depends on `memory-profile-summary` module. If memory layer is not yet built, show an empty state with explanation text
+- Family notes / summary display depends on `profile_summaries` table. If not yet built, show empty state
+- Parent account settings (name, email, avatar) remain in `/settings` module
 - One child profile per user account (MVP constraint)
 
-### Execution Baseline
+### Guest Data Migration Rule
 
-- This repo currently has `build`, but does not define `lint` or `test` npm scripts
-- Validation commands use `npx eslint`, `npx tsc --noEmit`, and `npm run build`
+Per `docs/system-architecture.md` Section 7, when a guest registers:
+- `childBirthday` → `child_profiles.birth_year` + `child_profiles.birth_month`
+- `challenges` (SelectedChallenge[]) → `child_profiles.challenges` (JSONB)
+- The migration endpoint (`pages/api/user/migrate-guest-data.ts`) must write to `child_profiles`, NOT to legacy `users` table columns
 
 ---
 
@@ -47,68 +56,98 @@ The original `user-profile` spec combined parent account settings and child prof
 
 ### 1.1 Family Profile Page (`/family`)
 
-Users can view and edit their child's profile information.
+Page layout (top to bottom):
 
-- Page header: "Family Profile"
-- Subheading: "Keep your child's details current so Qimi can stay helpful and personalized."
-- Display child's computed age ("X years Y months") prominently if birthday is set
-- All form fields editable inline (no separate "edit mode")
-- Save button at the bottom
-- Profile completion indicator at the top
+```
+AppLayout (SmartDrawer + Content)
+├── Head: "Family Profile - Qimi AI"
+├── Section 1: Child Info Card
+│   ├── Child name (editable, text input)
+│   ├── Age display: "X years Y months" (computed from birthday, prominent)
+│   ├── Birthday (editable: year + month dropdowns)
+│   └── Gender (editable: Boy / Girl / Other pills)
+│
+├── Section 2: Onboarding Challenges (read-only)
+│   ├── Section heading: "Initial Concerns" with subtitle "From your onboarding session"
+│   └── Challenge tags displayed as colored read-only pills, grouped by category
+│       (e.g., "Emotions: Frequent tantrums, Mood swings" / "Attention: Easily distracted")
+│       If no challenges: "No challenges recorded from onboarding"
+│
+├── Section 3: What Qimi Has Learned (from conversations)
+│   ├── Section heading: "What Qimi Has Learned" with subtitle "Insights from your conversations"
+│   ├── If memory_items exist: display as cards grouped by category
+│   │   (e.g., "Child Info: Child's name is Alex, attends Lincoln Elementary")
+│   │   (e.g., "Behavior: Monday mornings are hardest, transitions take 15+ minutes")
+│   ├── If no memory_items: "As you chat with Qimi, insights about your family will appear here."
+│   └── Future: each card has confirm/archive actions (NOT in MVP)
+│
+├── Section 4: Family Summary
+│   ├── Section heading: "Family Summary"
+│   ├── If profile_summary exists: display as editable text area (max 800 chars)
+│   ├── If no summary: "A summary of your family's situation will be generated as you chat."
+│   └── Save button for summary edits
+│
+└── Medical disclaimer banner (bottom)
+```
 
-### 1.2 Child Profile Management
+### 1.2 Child Info Management
 
-One child profile per user account (MVP constraint).
+- Form fields: child name (text, max 50 chars), birth year (dropdown), birth month (dropdown), gender (3 pills)
+- **No ChallengeSelector component** — challenges are NOT editable on this page
+- Save button saves via POST `/api/family` (upsert)
+- Display child's computed age prominently next to birthday fields
 
-- Form fields: child name, birth year (dropdown), birth month (dropdown), gender (3 options: Boy / Girl / Other)
-- Challenge selector: multi-select grid from predefined ADHD challenge categories (see section 4.2)
-- Submit saves via POST `/api/family/child` (upsert — create on first save, update on subsequent saves)
-- Display child's computed age in years and months next to birth date fields (read-only, derived from birth_year + birth_month + today's date)
+### 1.3 Onboarding Challenges Display (Read-Only)
 
-### 1.3 Profile Completion Indicator
+- Read challenges from `child_profiles.challenges` (JSONB, `SelectedChallenge[]` format)
+- Display as colored pills grouped by category (use category color from GuestOnboarding CATEGORIES constant)
+- Pills are NOT clickable / NOT toggleable — purely visual
+- If user wants to change challenges, they would need to go through onboarding again (not supported in MVP)
 
-Progress bar + percentage shown at the top of the family profile page.
+### 1.4 AI-Extracted Facts Display
 
-Completion scoring (3 criteria):
-- Child name is set
-- Child birth year + month are set
-- At least one challenge is selected
+- Read from `memory_items` table via `GET /api/memory/relevant` (or a new endpoint)
+- Display grouped by category (child_info, school, family, behavior, preference, medical, concern, goal, progress, sports)
+- Each fact shows: content text + when it was learned
+- If `memory_items` table doesn't exist yet or is empty, show friendly empty state
+- **No editing in MVP** — facts are read-only. Future: confirm/archive actions
 
-Display: 0% (0/3), 33% (1/3), 67% (2/3), 100% (3/3). Use integer division rounding. Parent name completion is no longer tracked here (moved to settings).
+### 1.5 Family Summary Display
 
-### 1.4 Pre-population from Guest Onboarding
+- Read from `profile_summaries` table via `GET /api/memory/summary`
+- Display as an editable text area (max 800 chars)
+- Save via `PUT /api/memory/summary`
+- If `profile_summaries` table doesn't exist yet, show friendly empty state
+- **This section depends on memory-profile-summary module being implemented**
+
+### 1.6 Pre-population from Guest Onboarding
 
 If the user completed guest onboarding before registering:
-- `childBirthday` → pre-populate birth year and month fields
-- `challenges` → pre-populate selected challenges
+- `childBirthday` → pre-populate birth year and month
+- `challenges` → pre-populate the read-only challenge tags
+- The family page must show this data on first visit, not empty fields
 
-The family page must show this data on first visit, not an empty form. The migration happens at login time (see system-architecture.md Section 7, Guest Data Migration).
+### 1.7 Auth & Access
 
-### 1.5 Auth & Access
+- Page requires login. Redirect to `/login` if no session.
+- Guest users cannot access the family profile page.
 
-- Page requires login (per architecture doc permission matrix)
-- Redirect to `/login` if no session
-- Guest users cannot access the family profile page
+### 1.8 Medical Disclaimer
 
-### 1.6 Medical Disclaimer
+Static banner at page bottom: "Qimi AI is not a substitute for professional medical advice, diagnosis, or treatment. Always consult a qualified healthcare provider."
 
-- A static banner at the bottom of the page: "Qimi AI is not a substitute for professional medical advice, diagnosis, or treatment. Always consult a qualified healthcare provider."
-- Styled with a light gray background and small text
+### 1.9 Explicitly Out Of Scope
 
-### 1.7 Explicitly Out Of Scope
-
+- No ChallengeSelector / editable challenge grid (challenges are set during onboarding only)
 - No parent name/email/avatar editing (moved to `/settings`)
-- No `familyNotes` editor
-- No conversation-derived memory display
-- No recommendation engine or follow-up logic on this page
+- No memory item editing/confirming/archiving in MVP
+- No recommendation engine on this page
 
 ---
 
 ## 2. Database Schema
 
-File: `supabase/family-profile_tables.sql`
-
-The `child_profiles` table is unchanged from the original user-profile spec:
+File: `supabase/family_tables.sql`
 
 ```sql
 CREATE TABLE IF NOT EXISTS child_profiles (
@@ -118,7 +157,7 @@ CREATE TABLE IF NOT EXISTS child_profiles (
   birth_year INTEGER CHECK (birth_year >= 2000 AND birth_year <= 2030),
   birth_month INTEGER CHECK (birth_month >= 1 AND birth_month <= 12),
   gender TEXT CHECK (gender IN ('boy', 'girl', 'other')),
-  challenges TEXT[] NOT NULL DEFAULT '{}',
+  challenges JSONB NOT NULL DEFAULT '[]',
   created_at TIMESTAMPTZ DEFAULT NOW(),
   updated_at TIMESTAMPTZ DEFAULT NOW(),
   CONSTRAINT child_profiles_user_id_unique UNIQUE (user_id)
@@ -140,19 +179,23 @@ CREATE TRIGGER child_profiles_updated_at
   EXECUTE FUNCTION update_updated_at();
 ```
 
-Note: If the migration from the old `supabase/user-profile_tables.sql` has already been applied to the database, this file is a no-op. The table schema is identical.
+`challenges` is JSONB storing `SelectedChallenge[]` objects from GuestOnboarding:
+```json
+[
+  { "id": "tantrums", "name": "Frequent tantrums", "categoryId": "emotion", "categoryName": "Emotions" },
+  { "id": "distracted", "name": "Easily distracted", "categoryId": "focus", "categoryName": "Attention" }
+]
+```
+
+**Migration note**: If the table already exists with `TEXT[]` type, run: `ALTER TABLE child_profiles ALTER COLUMN challenges TYPE JSONB USING '[]'::jsonb;`
+
+**Note**: `memory_items` and `profile_summaries` tables are defined in `docs/specs/memory-profile-summary.md`. This module reads from them but does not create them.
 
 ---
 
 ## 3. API Routes
 
 All routes under `pages/api/family/`.
-
-### API Boundary Rule
-
-- Browser does not write family data directly to Supabase
-- All mutations happen through API routes after session validation
-- `child_profiles` still gets RLS policies even though the implementation writes through `getSupabaseAdmin()`
 
 ### 3.1 `GET /api/family` — Get child profile
 
@@ -161,90 +204,36 @@ All routes under `pages/api/family/`.
 {
   "childProfile": {
     "id": "uuid",
-    "userId": "uuid",
     "name": "Alex",
     "birthYear": 2018,
     "birthMonth": 4,
     "gender": "boy",
-    "challenges": ["Short attention span", "Fidgeting"],
-    "createdAt": "2026-01-15T00:00:00Z",
-    "updatedAt": "2026-02-20T00:00:00Z"
+    "challenges": [
+      { "id": "tantrums", "name": "Frequent tantrums", "categoryId": "emotion", "categoryName": "Emotions" }
+    ]
   }
 }
 ```
 
-Note: `childProfile` is `null` if the user has not created one yet.
+`childProfile` is `null` if the user has not created one yet.
 
-**Logic:**
-1. Auth check (getServerSession → 401 if no email)
-2. Get-or-create user by email (PGRST116 pattern)
-3. Query `child_profiles` where `user_id = userId` (single row)
-4. Return child profile row (or null) in camelCase format
+### 3.2 `POST /api/family` — Update child basic info (upsert)
 
-### 3.2 `POST /api/family/child` — Create or update child profile (upsert)
-
-**Request body:**
+**Request body** (only basic info fields — NO challenges):
 ```json
 {
   "name": "Alex",
   "birthYear": 2018,
   "birthMonth": 4,
-  "gender": "boy",
-  "challenges": ["Short attention span", "Fidgeting"]
+  "gender": "boy"
 }
 ```
 
-**Response (200):**
-```json
-{
-  "childProfile": {
-    "id": "uuid",
-    "userId": "uuid",
-    "name": "Alex",
-    "birthYear": 2018,
-    "birthMonth": 4,
-    "gender": "boy",
-    "challenges": ["Short attention span", "Fidgeting"],
-    "createdAt": "2026-01-15T00:00:00Z",
-    "updatedAt": "2026-02-22T00:00:00Z"
-  }
-}
-```
-
-**Logic:**
-1. Auth check → 401 if no session
-2. Validate fields:
-   - `birthYear`: integer 2000–2030 (if provided)
-   - `birthMonth`: integer 1–12 (if provided)
-   - `gender`: one of `'boy' | 'girl' | 'other'` (if provided)
-   - `challenges`: array of strings (if provided)
-   - At least one field must be present in the body → 400 if body is empty
-3. Get-or-create user (PGRST116 pattern)
-4. Upsert into `child_profiles` using `ON CONFLICT (user_id) DO UPDATE SET ...`
-5. Return upserted row in camelCase format
+Note: `challenges` are NOT accepted in this endpoint. Challenges are set during onboarding migration only.
 
 ### 3.3 `GET /api/family/summary` — Get summary for Dashboard card
 
-**Response (200):**
-```json
-{
-  "summary": {
-    "childName": "Alex",
-    "ageText": "8 yrs 6 mos",
-    "challengeCount": 3,
-    "completionPercent": 100
-  }
-}
-```
-
-Returns `null` summary if no child profile exists.
-
-**Logic:**
-1. Auth check
-2. Get user, query child_profiles
-3. Compute age from birth_year + birth_month + current date
-4. Compute completion percentage (3 criteria, each 33%)
-5. Return compact summary
+Same as before — returns child name, age text, challenge count, completion percentage.
 
 ---
 
@@ -252,108 +241,62 @@ Returns `null` summary if no child profile exists.
 
 All under `components/Family/`.
 
-### 4.1 `FamilyCompletionBar.tsx`
+### 4.1 `ChildInfoCard.tsx`
 
-Progress bar showing how complete the family profile is. Props: `childProfile: ChildProfile | null`.
+Editable card for child's basic information.
 
-- Compute completion from 3 criteria:
-  1. `childProfile?.name` is non-empty
-  2. `childProfile?.birthYear` and `childProfile?.birthMonth` are set
-  3. `childProfile?.challenges.length > 0`
-- Display: "Family Profile X% complete" — values: 0%, 33%, 67%, 100%
-- Bar fill color: teal (#00D4AA) for 67–100%, amber for 33%, gray for 0%
-- Below bar: list of incomplete items as small gray hint text
+Props: `childProfile: ChildProfile | null`, `onSaved(profile): void`
 
-### 4.2 `ChallengeSelector.tsx`
+Fields:
+- Child name: text input, max 50 chars
+- Birth year: `<select>` dropdown
+- Birth month: `<select>` dropdown
+- Gender: three toggle pills (Boy / Girl / Other)
+- Computed age display (read-only)
+- Save button
 
-Multi-select grid of predefined ADHD challenge items, grouped by category.
+Does NOT include challenges.
 
-Props: `selectedChallenges: string[]`, `onChange(challenges: string[]): void`.
+### 4.2 `ChallengeTags.tsx` (NEW — replaces ChallengeSelector)
 
-Hardcoded challenge categories (do NOT import from types — hardcode directly in this component):
+Read-only display of onboarding challenges as colored tag pills.
 
-```ts
-const CHALLENGE_CATEGORIES = [
-  {
-    name: 'Attention & Focus',
-    challenges: [
-      'Short attention span',
-      'Easily distracted',
-      'Difficulty following instructions',
-      'Forgetful in daily activities',
-    ],
-  },
-  {
-    name: 'Hyperactivity',
-    challenges: [
-      'Fidgeting',
-      'Difficulty staying seated',
-      'Excessive talking',
-      'Always on the go',
-    ],
-  },
-  {
-    name: 'Impulsivity',
-    challenges: [
-      'Interrupting others',
-      'Difficulty waiting turn',
-      'Acting without thinking',
-      'Emotional outbursts',
-    ],
-  },
-  {
-    name: 'Executive Function',
-    challenges: [
-      'Poor time management',
-      'Difficulty organizing',
-      'Trouble starting tasks',
-      'Losing things frequently',
-    ],
-  },
-  {
-    name: 'Social',
-    challenges: [
-      'Difficulty making friends',
-      'Missing social cues',
-      'Conflict with peers',
-      'Low self-esteem',
-    ],
-  },
-  {
-    name: 'Academic',
-    challenges: [
-      'Reading difficulties',
-      'Math challenges',
-      'Homework resistance',
-      'Test anxiety',
-    ],
-  },
-];
-```
+Props: `challenges: SelectedChallenge[]`
 
-- Each category renders its name as a section heading
-- Each challenge renders as a pill/chip button
-- Selected chips: teal background, white text
-- Unselected chips: white background, gray border, gray text
-- Clicking a chip toggles it on/off in `selectedChallenges`
-- Mobile-first: chips wrap naturally in a flex-wrap row
+- Group challenges by `categoryId`
+- Display category name as section label
+- Each challenge shown as a small colored pill (use category color from GuestOnboarding CATEGORIES)
+- Pills are NOT interactive — no onClick, no toggle
+- If challenges array is empty, show "No challenges recorded from onboarding"
 
-### 4.3 `ChildProfileForm.tsx`
+### 4.3 `ExtractedFactsSection.tsx` (NEW)
 
-Form for entering or editing child profile data. Props: `childProfile: ChildProfile | null`, `onSaved(childProfile: ChildProfile): void`.
+Display section for AI-extracted facts from conversations.
 
-- Fields:
-  - Child name: text input, max 50 characters
-  - Birth year: `<select>` dropdown, options range from current year down to 2000
-  - Birth month: `<select>` dropdown, options January–December (value 1–12)
-  - Gender: three toggle pills — Boy / Girl / Other
-  - Challenges: renders `<ChallengeSelector>` below the above fields
-- Computed display (read-only text below birth year/month): "Age: X years Y months"
-- If `birthYear` or `birthMonth` is not yet set, do not render the age display
-- Submit button: "Save" — calls POST `/api/family/child`, then calls `onSaved`
-- Loading state: disable submit button and show spinner while saving
-- Show inline success message "Saved!" for 2 seconds after successful save
-- **Pre-population**: If `childProfile` prop contains data (from migration or prior save), all fields start pre-filled
+Props: `facts: MemoryItem[] | null`, `loading: boolean`
+
+- If memory layer is not built yet (API returns 404), show: "As you chat with Qimi, insights about your family will appear here."
+- If facts exist, group by category and display as cards
+- Each card: category label + content text + "Learned on {date}"
+- Read-only in MVP
+
+### 4.4 `FamilySummarySection.tsx` (NEW)
+
+Display/edit section for family summary.
+
+Props: `summary: string | null`, `loading: boolean`, `onSave(text): void`
+
+- If memory layer is not built yet (API returns 404), show: "A summary of your family's situation will be generated as you chat."
+- If summary exists, show as editable `<textarea>` with max 800 chars
+- Save button calls `PUT /api/memory/summary`
+
+### 4.5 `FamilyCompletionBar.tsx` (KEEP)
+
+Same as current — shows completion percentage based on name, birthday, challenges.
+
+### 4.6 `ChallengeSelector.tsx` — DELETE
+
+This component should be **removed** from the Family module. It belongs only in `GuestOnboarding.tsx`. Delete `components/Family/ChallengeSelector.tsx`.
 
 ---
 
@@ -361,49 +304,30 @@ Form for entering or editing child profile data. Props: `childProfile: ChildProf
 
 ### 5.1 `pages/family.tsx` — Family profile page
 
-```
-AppLayout (SmartDrawer + Content)
-├── Head: "Family Profile - Qimi AI"
-├── Page header: "Family Profile"
-├── Subheading text
-├── FamilyCompletionBar (childProfile)
-├── ChildProfileForm (childProfile, onSaved)
-└── Medical disclaimer banner (bottom)
-```
+Auth pattern: `useSession()` → loading skeleton → redirect if no session → fetch data → render.
 
-Auth pattern: `useSession()` → loading skeleton → redirect if no session → fetch `GET /api/family` → render content.
+Data fetching on mount (parallel):
+1. `GET /api/family` → child profile (name, birthday, gender, challenges)
+2. `GET /api/memory/relevant?limit=20` → extracted facts (graceful 404 if memory module not built)
+3. `GET /api/memory/summary` → family summary (graceful 404 if memory module not built)
 
-Data flow:
-- On mount: fetch `GET /api/family` → store `childProfile` in local component state
-- `ChildProfileForm.onSaved` → update local `childProfile` state (optimistic, no re-fetch needed)
-- Pass updated state to `FamilyCompletionBar` so percentage recalculates live after saves
-
-Loading state: skeleton (gray rounded rectangles) while fetch is in progress.
-
-Error state: "Unable to load family profile. Please refresh." in red text.
-
-### 5.2 Accessibility
-
-- All form inputs must have associated `<label>` elements or `aria-label`
-- Gender selector pills should use `role="radiogroup"` with `role="radio"` on each option
-- Challenge chips should use `aria-pressed` to indicate selection state
+Layout: sections as described in 1.1.
 
 ---
 
 ## 6. Acceptance Criteria
 
-- [ ] Authenticated user can view child profile on the family page
-- [ ] Child profile form pre-populates with existing data (from migration or prior save)
-- [ ] Child profile can be created (first save) and updated (subsequent saves) via upsert
-- [ ] Challenge multi-select shows all 6 categories with correct items
-- [ ] Selected challenges are highlighted in teal; deselected are gray-bordered
-- [ ] Profile completion bar shows correct percentage and updates live after saves
+- [ ] Child basic info (name, birthday, gender) is editable and saves correctly
+- [ ] Onboarding challenges display as read-only colored tags (NOT an editable selector)
+- [ ] Challenge tags are grouped by category with correct category colors
+- [ ] If no challenges exist, appropriate empty state is shown
+- [ ] Extracted facts section shows friendly empty state when memory module is not built
+- [ ] Family summary section shows friendly empty state when memory module is not built
 - [ ] Child age is computed and displayed correctly
+- [ ] Pre-populated data from guest onboarding appears (after migration fix)
 - [ ] Unauthenticated users are redirected to `/login`
-- [ ] Medical disclaimer is visible at the bottom of the page
+- [ ] Medical disclaimer is visible at the bottom
 - [ ] Page is mobile responsive (tested at 375px width)
-- [ ] Summary API returns correct data for Dashboard card
-- [ ] `npx eslint` passes for touched files
 - [ ] `npx tsc --noEmit` passes
 - [ ] `npm run build` passes
 
@@ -415,80 +339,72 @@ Error state: "Unable to load family profile. Please refresh." in red text.
 
 - Implementation mode: `linear`
 - Acceptance mode: `single-item gate`
-- Machine gate:
-  - required checks: `npx eslint`, `npx tsc --noEmit`, `npm run build`
-  - smoke test: load `/family` and verify the core happy path manually
-  - contract consistency check: route, schema, and response shape must align with `docs/system-architecture.md` and this spec
-- Human gate: allowed only after machine gate passes and P0/P1 review findings are zero
+- Machine gate: `npx tsc --noEmit`, `npm run build`
 
-### Dependency
+### T001: Fix database schema — challenges column TEXT[] → JSONB
 
-This module requires the AppLayout → SmartDrawer unification (system-architecture.md Section 9, P0 blocker) to be completed first. Until then, the page can be developed using the SmartDrawer layout pattern from `pages/chat.tsx` directly.
+- **File**: `supabase/family_tables.sql`
+- **Do**: Update `challenges` column from `TEXT[]` to `JSONB NOT NULL DEFAULT '[]'`
+- **Verify**: File matches section 2 schema.
+- **Commit**: `[T001] fix: change challenges column to JSONB`
 
-### T000: Clean up legacy user-profile code
+### T002: Delete ChallengeSelector, create ChallengeTags (read-only)
 
-- **Context**: The `feature/user-profile` branch contains partially implemented code under the old `/api/profile` and `components/Profile/` paths (files: `pages/profile.tsx`, `pages/api/profile/index.ts`, `pages/api/profile/child.ts`, `components/Profile/*`, `supabase/user-profile_tables.sql`). This code was written against the superseded `user-profile.md` spec and has not been accepted. These files are live in the repo and will produce a working (but wrong) `/profile` page if not cleaned up.
-- **Do**:
-  1. Delete `pages/profile.tsx` (old page, superseded by `/family`)
-  2. Delete `pages/api/profile/index.ts` and `pages/api/profile/child.ts` (old API routes, replaced by `/api/family/*`)
-  3. Rename `components/Profile/` → `components/Family/` and rename files:
-     - `ProfileCompletionBar.tsx` → `FamilyCompletionBar.tsx`
-     - `ProfileHeader.tsx` → **delete** (parent name editing temporarily removed; will be restored when `/settings` module is built. This is an intentionally accepted product gap — see note below.)
-     - `ChallengeSelector.tsx` → keep as-is
-     - `ChildProfileForm.tsx` → keep as-is
-  4. Rename `supabase/user-profile_tables.sql` → `supabase/family-profile_tables.sql`
-  5. Update all internal imports in moved files
-- **Note on parent name editing gap**: Deleting `ProfileHeader.tsx` removes the ability to edit parent name. This functionality will be restored in the `/settings` module (project-control.md item 6). Until then, parent name is set from the OAuth provider (Google/Facebook) and cannot be changed in-app. This gap is intentionally accepted because name editing is low-frequency and the OAuth name is usually correct.
-- **Verify**: `npx tsc --noEmit` passes, no orphaned imports, `pages/profile.tsx` no longer exists.
-- **Commit**: `[T000] refactor: rename user-profile to family-profile, clean up legacy paths`
+- **Delete**: `components/Family/ChallengeSelector.tsx`
+- **Create**: `components/Family/ChallengeTags.tsx` — read-only colored tag pills grouped by category (see 4.2)
+- **Do**: Copy the category color mapping from `GuestOnboarding.tsx` CATEGORIES constant (only need `id`, `name`, `color`)
+- **Verify**: `npx tsc --noEmit`, `npm run build` pass.
+- **Commit**: `[T002] feat: replace ChallengeSelector with read-only ChallengeTags`
 
-### T001: Create database migration
+### T003: Rewrite ChildProfileForm → ChildInfoCard (no challenges)
 
-- **File**: `supabase/family-profile_tables.sql`
-- **Do**: Copy the SQL from section 2 above. If `supabase/user-profile_tables.sql` already exists with identical schema, rename it instead.
-- **Verify**: File exists with correct SQL.
-- **Commit**: `[T001] feat: add child_profiles table migration`
+- **Delete or rewrite**: `components/Family/ChildProfileForm.tsx` → `components/Family/ChildInfoCard.tsx`
+- **Do**: Remove ChallengeSelector import and usage. Form only has name, birthday, gender. POST body does not include challenges.
+- **Verify**: `npx tsc --noEmit`, `npm run build` pass.
+- **Commit**: `[T003] feat: simplify ChildInfoCard to basic info only`
 
-### T002: Create GET /api/family and POST /api/family/child routes
+### T004: Create ExtractedFactsSection and FamilySummarySection (empty-state ready)
 
-- **Files**: `pages/api/family/index.ts`, `pages/api/family/child.ts`
-- **Do**: Implement GET (fetch child profile) and POST (upsert child profile) as specified in section 3.
-- **Reference**: Follow `pages/api/conversations/index.ts` auth + get-or-create pattern.
-- **Verify**: `npx eslint`, `npx tsc --noEmit`, `npm run build` pass.
-- **Commit**: `[T002] feat: add family profile API routes`
+- **Files**: `components/Family/ExtractedFactsSection.tsx`, `components/Family/FamilySummarySection.tsx`
+- **Do**: Implement as specified in 4.3 and 4.4. Both must gracefully handle 404 (memory module not built yet) with friendly empty state text.
+- **Verify**: `npx tsc --noEmit`, `npm run build` pass.
+- **Commit**: `[T004] feat: add extracted facts and family summary sections`
 
-### T003: Create GET /api/family/summary route
-
-- **File**: `pages/api/family/summary.ts`
-- **Do**: Return compact summary for Dashboard card (child name, age text, challenge count, completion %).
-- **Verify**: `npx eslint`, `npx tsc --noEmit`, `npm run build` pass.
-- **Commit**: `[T003] feat: add family summary API for Dashboard card`
-
-### T004: Create FamilyCompletionBar and ChallengeSelector components
-
-- **Files**: `components/Family/FamilyCompletionBar.tsx`, `components/Family/ChallengeSelector.tsx`
-- **Do**: Implement as specified in sections 4.1 and 4.2.
-- **Styling**: Tailwind only. Teal (#00D4AA). Mobile-first.
-- **Verify**: `npx eslint`, `npx tsc --noEmit`, `npm run build` pass.
-- **Commit**: `[T004] feat: add FamilyCompletionBar and ChallengeSelector components`
-
-### T005: Create ChildProfileForm component
-
-- **File**: `components/Family/ChildProfileForm.tsx`
-- **Do**: Implement as specified in section 4.3. Import ChallengeSelector from same directory.
-- **Verify**: `npx eslint`, `npx tsc --noEmit`, `npm run build` pass.
-- **Commit**: `[T005] feat: add ChildProfileForm component`
-
-### T006: Create /family page
+### T005: Rewrite /family page with new layout
 
 - **File**: `pages/family.tsx`
-- **Do**: Implement as specified in section 5.1. Use AppLayout (or SmartDrawer layout if AppLayout unification is not yet done).
-- **Verify**: `npx eslint`, `npx tsc --noEmit`, `npm run build` pass.
-- **Commit**: `[T006] feat: add /family page`
+- **Do**: Replace current page with new layout: ChildInfoCard + ChallengeTags (read-only) + ExtractedFactsSection + FamilySummarySection + disclaimer. Parallel-fetch from 3 APIs with graceful error handling.
+- **Verify**: `npx tsc --noEmit`, `npm run build` pass.
+- **Commit**: `[T005] feat: redesign /family page with read-only challenges and memory sections`
 
-### T007: Add unit tests
+### T006: Fix POST /api/family — remove challenges from accepted fields
 
-- **File**: `__tests__/family-profile.test.ts`
-- **Do**: Test validation logic (birthYear range, birthMonth range, gender enum, challenges array). Test upsert behavior. Test auth (401 without session).
-- **Verify**: `npx eslint`, `npx tsc --noEmit`, `npm run build` pass.
-- **Commit**: `[T007] test: add family profile unit tests`
+- **File**: `pages/api/family/index.ts`
+- **Do**: POST should only accept `name`, `birthYear`, `birthMonth`, `gender`. Remove `challenges` from POST body handling. GET still returns challenges (read-only).
+- **Verify**: `npx tsc --noEmit`, `npm run build` pass.
+- **Commit**: `[T006] fix: remove challenges from POST /api/family`
+
+### T007: Fix guest data migration — write to child_profiles
+
+- **File**: `pages/api/user/migrate-guest-data.ts`
+- **Do**:
+  1. Fix request body parsing to match what `guestStorage.migrateToUser()` sends: `{ userId, guestData: { childBirthday, challenges, chatHistory, firstQuestion } }`
+  2. Write birthday + challenges to `child_profiles` table (JSONB), not `users` table
+  3. Remove `JSON.stringify(challenges)` — Supabase handles JSONB serialization automatically
+  4. Keep chat history migration as-is
+- **Verify**: `npx tsc --noEmit`, `npm run build` pass.
+- **Commit**: `[T007] fix: migrate guest data to child_profiles`
+
+### T008: Fix FamilyCompletionBar — handle JSONB challenges
+
+- **File**: `components/Family/FamilyCompletionBar.tsx`
+- **Do**: Update completion check for challenges from `string[]` to `SelectedChallenge[]` (object array).
+- **Verify**: `npx tsc --noEmit`, `npm run build` pass.
+- **Commit**: `[T008] fix: update FamilyCompletionBar for JSONB challenges`
+
+### T009: Fix summary API — handle JSONB challenges
+
+- **File**: `pages/api/family/summary.ts`
+- **Do**: Update `challengeCount` to handle JSONB array.
+- **Verify**: `npx tsc --noEmit`, `npm run build` pass.
+- **Commit**: `[T009] fix: update summary API for JSONB challenges`

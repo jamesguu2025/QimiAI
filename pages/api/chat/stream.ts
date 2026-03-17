@@ -201,10 +201,57 @@ export default async function handler(
         }))
       : [];
 
+    // Enrich userProfile with memory context (familyNotes + extractedFacts)
+    const supabaseMemory = getSupabaseAdmin();
+    let enrichedProfile = userProfile as UserProfile | null;
+    if (session?.user?.email) {
+      try {
+        const { data: userData } = await supabaseMemory
+          .from('users')
+          .select('id')
+          .eq('email', session.user.email)
+          .single();
+
+        if (userData) {
+          // Get profile summary
+          const { data: summaryData } = await supabaseMemory
+            .from('profile_summaries')
+            .select('summary')
+            .eq('user_id', userData.id)
+            .single();
+
+          // Get top 5 active memory items by recency
+          const { data: memoryItems } = await supabaseMemory
+            .from('memory_items')
+            .select('category, fact_key, fact_value')
+            .eq('user_id', userData.id)
+            .eq('status', 'active')
+            .order('updated_at', { ascending: false })
+            .limit(5);
+
+          const memoryContext: Record<string, unknown> = { ...(enrichedProfile || {}) };
+          if (summaryData?.summary) {
+            memoryContext.familyNotes = summaryData.summary;
+          }
+          if (memoryItems && memoryItems.length > 0) {
+            memoryContext.extractedFacts = memoryItems.map(
+              (i: { category: string; fact_key: string; fact_value: string }) =>
+                `[${i.category}] ${i.fact_key}: ${i.fact_value}`
+            );
+          }
+          enrichedProfile = memoryContext as UserProfile;
+          console.log(`[chat/stream] Injected memory context: summary=${!!summaryData?.summary}, facts=${memoryItems?.length || 0}`);
+        }
+      } catch (memErr) {
+        console.error('[chat/stream] Memory retrieval failed, skipping:', memErr);
+        // Silent failure — memory errors must not block chat
+      }
+    }
+
     // Build dynamic system prompt with module injection
     console.log(`[chat/stream] Building system prompt for user ${userId}`);
     const systemPrompt = await buildSystemMessage(
-      userProfile as UserProfile | null,
+      enrichedProfile,
       content || '',
       historyForModule
     );
@@ -294,6 +341,22 @@ export default async function handler(
         activeConversationId,
         sources
       );
+
+      // Fire-and-forget memory extraction after save completes
+      if (activeConversationId) {
+        const baseUrl = process.env.NEXTAUTH_URL || 'http://localhost:3000';
+        fetch(`${baseUrl}/api/memory/extract`, {
+          method: 'POST',
+          headers: {
+            'Content-Type': 'application/json',
+            cookie: req.headers.cookie || '',
+          },
+          body: JSON.stringify({ conversationId: activeConversationId }),
+        }).catch(() => {
+          // Silent failure — extraction errors must not affect chat
+        });
+        console.log('[chat/stream] Memory extraction triggered for conversation:', activeConversationId);
+      }
     }
 
   } catch (error) {
