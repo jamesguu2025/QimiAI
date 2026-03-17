@@ -175,7 +175,7 @@ export default function Home() {
 
           {/* Center: Nav links (desktop) */}
           <div className="hidden md:flex items-center gap-6">
-            <a href="/chat" className="text-sm font-medium text-slate-600 hover:text-slate-900 transition-colors">
+            <a href={session ? '/dashboard' : '/chat'} className="text-sm font-medium text-slate-600 hover:text-slate-900 transition-colors">
               AI Parenting Assistant
             </a>
             <a href="/blog" className="text-sm font-medium text-slate-600 hover:text-slate-900 transition-colors">
@@ -226,7 +226,7 @@ export default function Home() {
               <a href="/" className="block px-3 py-3 text-base font-medium text-slate-700 hover:bg-slate-50 rounded-lg" onClick={() => setMobileMenuOpen(false)}>
                 Home
               </a>
-              <a href="/chat" className="block px-3 py-3 text-base font-medium text-slate-700 hover:bg-slate-50 rounded-lg" onClick={() => setMobileMenuOpen(false)}>
+              <a href={session ? '/dashboard' : '/chat'} className="block px-3 py-3 text-base font-medium text-slate-700 hover:bg-slate-50 rounded-lg" onClick={() => setMobileMenuOpen(false)}>
                 AI Parenting Assistant
               </a>
               <a href="/blog" className="block px-3 py-3 text-base font-medium text-slate-700 hover:bg-slate-50 rounded-lg" onClick={() => setMobileMenuOpen(false)}>
