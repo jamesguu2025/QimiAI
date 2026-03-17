@@ -39,6 +39,7 @@ This file is the project-level formal-basis entry required by the SOP.
 - `/Users/jamesguu/qimi-ai-website/qimi-ai-website/docs/specs/report-analysis.md`
 - `/Users/jamesguu/qimi-ai-website/qimi-ai-website/docs/specs/crisis-calm.md`
 - `/Users/jamesguu/qimi-ai-website/qimi-ai-website/docs/specs/memory-profile-summary.md`
+- `/Users/jamesguu/qimi-ai-website/qimi-ai-website/docs/specs/compliance.md` (added 2026-03-17, MVP launch gate)
 - ~~`/Users/jamesguu/qimi-ai-website/qimi-ai-website/docs/specs/user-profile.md`~~ — SUPERSEDED by family-profile.md (2026-03-16)
 
 ### Planning Rules

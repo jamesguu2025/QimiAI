@@ -151,7 +151,13 @@ Completed in 2026-03-16 amendment pass:
 - `docs/project-control.md` — execution order updated
 - `docs/formal-basis-entry.md` — spec list updated
 
+Completed in 2026-03-17 planning pass:
+
+- `docs/specs/compliance.md` — new, MVP launch gate (6 items: system prompt, parental consent, privacy policy, terms of service, account deletion, RLS fix)
+- `docs/project-control.md` — compliance module added to status and execution order
+- `docs/formal-basis-entry.md` — compliance spec added
+
 Next documents to continue automatically:
 
-1. Self-review + cross-review for 2026-03-16 amendments
+1. Self-review + cross-review for compliance spec (2026-03-17)
 2. Implementation-phase alignment updates as code lands
