@@ -105,7 +105,7 @@ Current baseline:
 - Dashboard (feature hub): `Implemented, not yet human-accepted` (spec: `docs/specs/dashboard.md`, status DONE)
 - Family Profile (was User Profile): `Planned` (renamed + rescoped 2026-03-16, spec: `docs/specs/family-profile.md`)
 - **Compliance (MVP launch gate)**: `Planned` (added 2026-03-17, spec: `docs/specs/compliance.md`)
-- Settings (account): `Planned` (split from User Profile 2026-03-16, spec: TBD — minimal version created as part of compliance module)
+- Settings (account): `Planned` (split from User Profile 2026-03-16, spec: `docs/specs/settings.md` — minimal version created as part of compliance module)
 - Growth Plan: `Planned`
 - Report Analysis: `Planned`
 - Crisis Calm: `Planned`

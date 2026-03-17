@@ -34,6 +34,7 @@ This file is the project-level formal-basis entry required by the SOP.
 
 - `/Users/jamesguu/qimi-ai-website/qimi-ai-website/docs/specs/dashboard.md` (added 2026-03-16)
 - `/Users/jamesguu/qimi-ai-website/qimi-ai-website/docs/specs/family-profile.md` (added 2026-03-16, replaces user-profile.md)
+- `/Users/jamesguu/qimi-ai-website/qimi-ai-website/docs/specs/settings.md` (added 2026-03-17, account settings MVP)
 - `/Users/jamesguu/qimi-ai-website/qimi-ai-website/docs/specs/followup-reminder.md`
 - `/Users/jamesguu/qimi-ai-website/qimi-ai-website/docs/specs/growth-plan.md`
 - `/Users/jamesguu/qimi-ai-website/qimi-ai-website/docs/specs/report-analysis.md`

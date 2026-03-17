@@ -159,8 +159,12 @@ Completed in 2026-03-17 planning pass:
 - `docs/specs/membership-billing.md` — new, post-MVP monetization module (Stripe checkout, billing portal, entitlement sync)
 - `docs/project-control.md` — membership-billing added to status and placed at bottom of module order
 - `docs/formal-basis-entry.md` — membership-billing spec added
+- `docs/specs/settings.md` — new, account settings MVP spec (parent identity + delete-account reuse)
+- `docs/reviews/settings-aqs-2026-03-17.md` — settings spec self-review + second-pass review
+- `docs/project-control.md` — settings spec reference added
+- `docs/formal-basis-entry.md` — settings spec added
 
 Next documents to continue automatically:
 
-1. Self-review + cross-review for membership-billing spec (2026-03-17)
-2. Implementation-phase alignment updates as code lands
+1. Implementation-phase alignment updates as code lands
+2. Independent cross-agent review for settings and membership-billing when needed
