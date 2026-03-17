@@ -83,8 +83,8 @@ const Hero = ({ session, userCount = 0, paperCount = 0 }: HeroProps) => {
                   <div className="flex items-center gap-3 flex-wrap mb-1">
                     <span className="text-base font-semibold text-slate-900">{feature.title}</span>
                     {feature.stat && (
-                      <span className="text-[13px] font-medium text-primary-teal bg-primary-teal/10 px-2.5 py-0.5 rounded-full">
-                        {feature.stat}
+                      <span className="text-[13px] font-semibold animate-glow-text">
+                        {feature.stat} · Still Growing
                       </span>
                     )}
                   </div>
