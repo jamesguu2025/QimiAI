@@ -13,23 +13,33 @@ export default function DashboardPage() {
   // Stats state
   const [userCount, setUserCount] = useState<number | null>(null);
   const [paperCount, setPaperCount] = useState<number | null>(null);
+  const [familySummary, setFamilySummary] = useState<{
+    childName: string | null;
+    ageText: string | null;
+    challengeCount: number;
+    completionPercent: number;
+  } | null>(null);
   const [statsLoading, setStatsLoading] = useState(true);
 
-  // Fetch stats on parallel
+  // Fetch stats in parallel
   useEffect(() => {
     async function fetchStats() {
       setStatsLoading(true);
       try {
-        const [userRes, paperRes] = await Promise.all([
-        fetch('/api/user-stats').then(r => r.json()),
-        fetch('/api/rag/stats').then(r => r.json())
-      ]);
+        const [userRes, paperRes, familyRes] = await Promise.all([
+          fetch('/api/user-stats').then(r => r.json()),
+          fetch('/api/rag/stats').then(r => r.json()),
+          fetch('/api/family/summary').then(r => r.json())
+        ]);
 
         if (userRes.success) {
           setUserCount(userRes.count || 0);
         }
         if (paperRes.success) {
           setPaperCount(paperRes.totalPapers || 0);
+        }
+        if (familyRes.success && familyRes.summary) {
+          setFamilySummary(familyRes.summary);
         }
       } catch (error) {
         console.error('Failed to fetch stats:', error);
@@ -107,7 +117,7 @@ export default function DashboardPage() {
         <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
           <DashboardCard
             title="Family Profile"
-            summary={null}
+            summary={familySummary ? `${familySummary.childName || 'Child'} • ${familySummary.ageText || 'Age not set'} • ${familySummary.challengeCount} challenges` : null}
             emptyText="Set up your child's profile to get started"
             href="/family"
             icon={<User size={20} className="text-slate-600" />}
