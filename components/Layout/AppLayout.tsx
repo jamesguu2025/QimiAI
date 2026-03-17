@@ -70,13 +70,14 @@ const AppLayout: React.FC<AppLayoutProps> = ({
                     <UserMenu />
                 </div>
 
-                {/* Desktop Header (non-fullScreen only) */}
-                {!fullScreen && (
-                    <div className="hidden lg:flex flex-shrink-0 items-center justify-between h-16 px-6 bg-white border-b border-slate-100">
-                        <img src="/logo.svg" alt="Qimi AI" className="h-9 w-auto" />
+                {/* Desktop Header */}
+                <div className="hidden lg:flex flex-shrink-0 items-center justify-between h-16 px-6 bg-white border-b border-slate-100">
+                    <div className="w-10" />
+                    <img src="/logo.svg" alt="Qimi AI" className="h-9 w-auto" />
+                    <div className="flex-shrink-0 flex justify-end">
                         <UserMenu />
                     </div>
-                )}
+                </div>
 
                 {/* Main Content */}
                 <main className={`flex-1 flex flex-col min-h-0 ${fullScreen ? '' : 'overflow-y-auto p-4 lg:p-8'}`}>

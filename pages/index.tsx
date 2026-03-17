@@ -87,6 +87,7 @@ const NavDropdown = ({ label, items, isOpen, onToggle, onClose }: NavDropdownPro
 export default function Home() {
   const { data: session } = useSession();
   const [waitlistCount, setWaitlistCount] = useState(0);
+  const [paperCount, setPaperCount] = useState(0);
   const [openDropdown, setOpenDropdown] = useState<string | null>(null);
   const [mobileMenuOpen, setMobileMenuOpen] = useState(false);
   const [loginModalOpen, setLoginModalOpen] = useState(false);
@@ -100,13 +101,20 @@ export default function Home() {
 
   const fetchUserStats = async () => {
     try {
-      const response = await fetch('/api/user-stats');
-      const data = await response.json();
-      if (data.success) {
-        setWaitlistCount(data.count);
+      const [userRes, paperRes] = await Promise.all([
+        fetch('/api/user-stats'),
+        fetch('/api/rag/stats')
+      ]);
+      const userData = await userRes.json();
+      const paperData = await paperRes.json();
+      if (userData.success) {
+        setWaitlistCount(userData.count);
+      }
+      if (paperData.success) {
+        setPaperCount(paperData.totalPapers);
       }
     } catch (error) {
-      console.error('Failed to fetch user stats:', error);
+      console.error('Failed to fetch stats:', error);
     }
   };
 
@@ -269,7 +277,7 @@ export default function Home() {
 
       <main>
         {/* Hero Section */}
-        <Hero session={session} userCount={waitlistCount} />
+        <Hero session={session} userCount={waitlistCount} paperCount={paperCount} />
 
         {/* How It Works */}
         <div id="how-it-works">

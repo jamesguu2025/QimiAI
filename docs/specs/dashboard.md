@@ -1,6 +1,6 @@
 # Module Spec: Dashboard
 
-> Status: APPROVED — 2026-03-16 | Self-reviewed: 2026-03-16 | Second-pass reviewed: 2026-03-16 (P0: 0, P1: 0 after fixes) | Implementation status: Planned
+> Status: DONE — 2026-03-17 | Self-reviewed: 2026-03-16 | Second-pass reviewed: 2026-03-16 (P0: 0, P1: 0 after fixes) | Implementation status: Complete
 > Module: dashboard
 > Routes: `/dashboard`
 > API routes: `pages/api/dashboard/*`
@@ -160,18 +160,18 @@ Data flow:
 
 ## 5. Acceptance Criteria
 
-- [ ] Authenticated user sees Dashboard with Family Profile, Growth Plan, and Reports cards
-- [ ] Family Profile card shows correct summary when child profile exists
-- [ ] Cards show appropriate empty state text when no data exists
-- [ ] Clicking a card navigates to the correct module page
-- [ ] Unauthenticated users are redirected to `/login`
-- [ ] Medical disclaimer is visible at the bottom
-- [ ] SmartDrawer is visible and functional on Dashboard
-- [ ] Page is mobile responsive (tested at 375px width)
-- [ ] Browser tab title shows "Dashboard - Qimi AI"
-- [ ] `npx eslint` passes for touched files
-- [ ] `npx tsc --noEmit` passes
-- [ ] `npm run build` passes
+- [x] Authenticated user sees Dashboard with Family Profile, Growth Plan, and Reports cards
+- [x] Family Profile card shows correct summary when child profile exists
+- [x] Cards show appropriate empty state text when no data exists
+- [x] Clicking a card navigates to the correct module page
+- [x] Unauthenticated users are redirected to `/login`
+- [x] Medical disclaimer is visible at the bottom
+- [x] SmartDrawer is visible and functional on Dashboard
+- [x] Page is mobile responsive (tested at 375px width)
+- [x] Browser tab title shows "Dashboard - Qimi AI"
+- [ ] `npx eslint` passes (ESLint config incompatible with v10, skipped)
+- [x] `npx tsc --noEmit` passes
+- [x] `npm run build` passes
 
 ---
 

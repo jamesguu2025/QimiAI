@@ -6,9 +6,10 @@ import { Session } from 'next-auth';
 interface HeroProps {
   session: Session | null;
   userCount?: number;
+  paperCount?: number;
 }
 
-const features = [
+const getFeatures = (paperCount: number) => [
   {
     icon: Clock,
     title: '24/7 Parenting Coach',
@@ -19,7 +20,7 @@ const features = [
   {
     icon: BookOpen,
     title: 'Expert Knowledge Base',
-    stat: '10,000+ Studies',
+    stat: paperCount > 0 ? `${paperCount.toLocaleString()}+ Studies` : '10,000+ Studies',
     description: 'Every recommendation backed by peer-reviewed ADHD research.',
     iconColor: 'text-purple-500',
     iconBg: 'bg-purple-500/10',
@@ -47,7 +48,9 @@ const features = [
   },
 ];
 
-const Hero = ({ session, userCount = 0 }: HeroProps) => {
+const Hero = ({ session, userCount = 0, paperCount = 0 }: HeroProps) => {
+  const features = getFeatures(paperCount);
+  
   return (
     <section className="min-h-screen flex items-center" style={{ padding: '100px 0 60px' }}>
       <div className="w-full max-w-[1200px] mx-auto px-6 grid grid-cols-1 lg:grid-cols-[1fr_auto] gap-12 lg:gap-[60px] items-start">
