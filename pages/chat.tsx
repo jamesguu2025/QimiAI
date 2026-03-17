@@ -28,6 +28,9 @@ export default function ChatPage() {
     // RAG 强化模式状态 (Force RAG)
     const [forceRAG, setForceRAG] = useState(false);
 
+    // Paper count for RAG display
+    const [paperCount, setPaperCount] = useState(0);
+
     // 使用流式聊天 Hook (连接真实 API)
     const {
         messages,
@@ -53,6 +56,18 @@ export default function ChatPage() {
     useEffect(() => {
         scrollToBottom();
     }, [messages]);
+
+    // Fetch paper count for RAG display
+    useEffect(() => {
+        fetch('/api/rag/stats')
+            .then(res => res.json())
+            .then(data => {
+                if (data.success && data.totalPapers) {
+                    setPaperCount(data.totalPapers);
+                }
+            })
+            .catch(err => console.error('Failed to fetch paper count:', err));
+    }, []);
 
     // Handle conversation query param from SmartDrawer navigation
     useEffect(() => {
@@ -243,31 +258,6 @@ export default function ChatPage() {
             <Head><title>Chat - Qimi AI</title></Head>
 
             <div className="flex-1 flex flex-col min-h-0 overflow-hidden">
-                {/* Desktop-only chat header (mobile uses AppLayout's header) */}
-                <header className="hidden lg:flex flex-shrink-0 h-14 items-center justify-center px-4 border-b border-slate-100 bg-white relative">
-                    <button
-                        onClick={() => {
-                            createNewChat();
-                            setMessages([WELCOME_MESSAGE]);
-                        }}
-                        className="hover:opacity-80 transition-opacity"
-                        title="Back to Dashboard"
-                    >
-                        <img src="/logo.svg" alt="Qimi" className="h-8" />
-                    </button>
-                    {messages.length > 1 && (
-                        <button
-                            onClick={() => {
-                                createNewChat();
-                                setMessages([WELCOME_MESSAGE]);
-                            }}
-                            className="absolute right-4 px-3 py-1.5 text-sm font-medium text-slate-600 hover:text-slate-900 hover:bg-slate-100 rounded-lg transition-colors"
-                        >
-                            + New Chat
-                        </button>
-                    )}
-                </header>
-
                 {/* 访客剩余消息提示 */}
                 {isGuest && guestMessageCount > 0 && (
                     <div className="flex-shrink-0 px-4 py-2 bg-amber-50 border-b border-amber-100">
@@ -353,7 +343,7 @@ export default function ChatPage() {
                     <div className="flex-shrink-0 px-4 py-2 bg-gradient-to-r from-primary-teal/10 to-primary-purple/10 border-t border-primary-teal/20">
                         <div className="max-w-3xl mx-auto flex items-center justify-center gap-2 text-sm">
                             <span className="text-primary-teal font-medium animate-pulse">
-                                ✨ Searching 15,844 ADHD research papers • Response will take longer
+                                ✨ Searching {paperCount > 0 ? paperCount.toLocaleString() : '15,844'} ADHD research papers • Response will take longer
                             </span>
                         </div>
                     </div>
