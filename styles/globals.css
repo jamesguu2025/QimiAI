@@ -53,7 +53,11 @@ body {
 .hero-feature-title-row { display: flex; align-items: center; gap: 0.75rem; flex-wrap: wrap; margin-bottom: 0.25rem; }
 .hero-feature-title { font-size: 1rem; font-weight: 600; color: #2C3E50; display: block; margin-bottom: 0.25rem; }
 .hero-feature-title-row .hero-feature-title { margin-bottom: 0; }
-.hero-feature-badge { font-size: 0.8rem; font-weight: 500; color: #00D4AA; background: rgba(0,212,170,0.1); padding: 0.15rem 0.6rem; border-radius: 999px; }
+.hero-feature-badge { font-size: 0.8rem; font-weight: 700; color: #fff; background: linear-gradient(135deg, #00D4AA, #8B5CF6); padding: 0.25rem 0.75rem; border-radius: 999px; animation: badge-breathe 2.5s ease-in-out infinite; }
+@keyframes badge-breathe {
+  0%, 100% { opacity: 1; box-shadow: 0 0 4px 0 rgba(139,92,246,0.3); }
+  50% { opacity: 0.85; box-shadow: 0 0 14px 4px rgba(0,212,170,0.35); }
+}
 .hero-feature-text p { font-size: 0.9rem; color: #5A6C7D; line-height: 1.5; margin: 0; }
 
 /* Hero Right Column - Signup Card */

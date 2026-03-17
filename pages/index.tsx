@@ -5,6 +5,7 @@ import { useEffect, useState } from 'react';
 export default function Home() {
   const { data: session, status } = useSession();
   const [waitlistCount, setWaitlistCount] = useState(0);
+  const [paperCount, setPaperCount] = useState(0);
 
   // 获取等待列表数量
   const fetchWaitlistCount = async () => {
@@ -19,9 +20,23 @@ export default function Home() {
     }
   };
 
+  // 获取论文数量
+  const fetchPaperCount = async () => {
+    try {
+      const response = await fetch('/api/rag/stats');
+      const data = await response.json();
+      if (data.success && data.totalPapers) {
+        setPaperCount(data.totalPapers);
+      }
+    } catch (error) {
+      console.error('Failed to fetch paper count:', error);
+    }
+  };
+
   // 页面加载时获取数量
   useEffect(() => {
     fetchWaitlistCount();
+    fetchPaperCount();
   }, []);
 
   // 处理登录后的自动订阅
@@ -235,7 +250,7 @@ export default function Home() {
                   <div className="hero-feature-text">
                     <div className="hero-feature-title-row">
                       <span className="hero-feature-title">Expert Knowledge Base</span>
-                      <span className="hero-feature-badge">10,000+ Studies</span>
+                      <span className="hero-feature-badge">{paperCount > 0 ? `${paperCount.toLocaleString()} Studies & Still Growing` : '-- Studies & Still Growing'}</span>
                     </div>
                     <p>Every recommendation backed by peer-reviewed ADHD research.</p>
                   </div>
