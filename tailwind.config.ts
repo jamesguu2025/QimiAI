@@ -24,6 +24,21 @@ const config: Config = {
                 sans: ["'Noto Sans SC'", "Inter", "-apple-system", "BlinkMacSystemFont", "sans-serif"],
                 outfit: ["Outfit", "'Noto Sans SC'", "sans-serif"],
             },
+            keyframes: {
+                'glow-text': {
+                    '0%, 100%': {
+                        color: 'rgba(0, 212, 170, 0.5)',
+                        textShadow: 'none',
+                    },
+                    '50%': {
+                        color: 'rgba(0, 212, 170, 1)',
+                        textShadow: '0 0 8px rgba(0, 212, 170, 0.6), 0 0 20px rgba(0, 212, 170, 0.3)',
+                    },
+                },
+            },
+            animation: {
+                'glow-text': 'glow-text 2.5s ease-in-out infinite',
+            },
         },
     },
     plugins: [
