@@ -112,7 +112,7 @@ export default function LandingLayout({ children }: LandingLayoutProps) {
 
           {/* Center: Nav links (desktop) */}
           <div className="hidden md:flex items-center gap-6">
-            <Link href="/chat" className="text-sm font-medium text-slate-600 hover:text-slate-900 transition-colors">
+            <Link href={session ? '/dashboard' : '/chat'} className="text-sm font-medium text-slate-600 hover:text-slate-900 transition-colors">
               AI Parenting Assistant
             </Link>
             <Link href="/blog" className="text-sm font-medium text-slate-600 hover:text-slate-900 transition-colors">
@@ -166,7 +166,7 @@ export default function LandingLayout({ children }: LandingLayoutProps) {
               <Link href="/" className="block px-3 py-3 text-base font-medium text-slate-700 hover:bg-slate-50 rounded-lg" onClick={() => setMobileMenuOpen(false)}>
                 Home
               </Link>
-              <Link href="/chat" className="block px-3 py-3 text-base font-medium text-slate-700 hover:bg-slate-50 rounded-lg" onClick={() => setMobileMenuOpen(false)}>
+              <Link href={session ? '/dashboard' : '/chat'} className="block px-3 py-3 text-base font-medium text-slate-700 hover:bg-slate-50 rounded-lg" onClick={() => setMobileMenuOpen(false)}>
                 AI Parenting Assistant
               </Link>
               <Link href="/blog" className="block px-3 py-3 text-base font-medium text-slate-700 hover:bg-slate-50 rounded-lg" onClick={() => setMobileMenuOpen(false)}>

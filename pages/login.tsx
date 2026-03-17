@@ -22,7 +22,7 @@ export default function LoginPage() {
   // 已登录用户重定向
   useEffect(() => {
     if (session) {
-      router.push('/chat');
+      router.push('/dashboard');
     }
   }, [session, router]);
 
@@ -60,7 +60,7 @@ export default function LoginPage() {
         if (result?.error) {
           setError(result.error);
         } else {
-          router.push('/chat');
+          router.push('/dashboard');
         }
       } else {
         const res = await fetch('/api/auth/signup', {
@@ -81,7 +81,7 @@ export default function LoginPage() {
             redirect: false,
           });
           if (loginResult?.ok) {
-            router.push('/chat');
+            router.push('/dashboard');
           }
         }
       }
@@ -93,7 +93,7 @@ export default function LoginPage() {
   };
 
   const handleOAuthLogin = (provider: string) => {
-    signIn(provider, { callbackUrl: '/chat' });
+    signIn(provider, { callbackUrl: '/dashboard' });
   };
 
   if (status === 'loading') {
