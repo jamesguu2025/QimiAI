@@ -1,6 +1,6 @@
 # System Architecture Design — Qimi AI English Web Version
 
-> Status: APPROVED — 2026-02-21 | Amended: 2026-02-27 (mood-tracking archived) | Amended: 2026-03-16 (unified sidebar, Dashboard hub, route restructure) | Self-reviewed: 2026-03-16 | Second-pass reviewed: 2026-03-16 (P0: 0, P1: 0 after fixes)
+> Status: APPROVED — 2026-02-21 | Amended: 2026-02-27 (mood-tracking archived) | Amended: 2026-03-16 (unified sidebar, Dashboard hub, route restructure) | Amended: 2026-05-06 (current route/layout/migration reality + SOP v2.4 note) | Self-reviewed: 2026-03-16 | Second-pass reviewed: 2026-03-16 (P0: 0, P1: 0 after fixes)
 > Created: 2026-02-21
 > Context: Phase 1 Layer 1 of Agent Development SOP
 > Scope: Canonical Layer 1 architecture for the web app. All module specs must follow this document unless it is explicitly amended.
@@ -29,6 +29,8 @@ This document was re-checked against:
 - Follow-up reminders already rely on Vercel Cron via `vercel.json`
 - The current repo already implements `/followup/[id]` plus the supporting follow-up API routes, even though follow-up is not a primary navigation module
 - As of 2026-03-16, the navigation scheme has been unified to use SmartDrawer globally (see Section 2)
+- As of 2026-05-06, current code reality must be cited with line references in any future spec update, per SOP v2.4 internal fact evidence.
+- Current code evidence: `components/Layout/AppLayout.tsx:5-54` imports and renders SmartDrawer; `pages/dashboard.tsx:77-153`, `pages/family.tsx:99-162`, and `pages/settings.tsx:121-155` use AppLayout.
 
 ## 1. Platform And Deployment Baseline
 
@@ -66,7 +68,7 @@ The app uses **one** sidebar for all logged-in pages:
 
 - **SmartDrawer** (`components/Chat/SmartDrawer.tsx`) — visible on `/chat`, `/dashboard`, `/family`, `/plan`, `/reports`, `/settings`
 - **Sidebar** (`components/Layout/Sidebar.tsx`) — ~~used by AppLayout~~ **DEPRECATED**. Retained only as legacy code; new pages must not use it.
-- **AppLayout** will be refactored to use SmartDrawer instead of Sidebar, so all logged-in pages share the same navigation.
+- **AppLayout** uses SmartDrawer instead of Sidebar, so all logged-in pages share the same navigation.
 
 ### SmartDrawer Contents (global)
 
@@ -116,7 +118,7 @@ Implementation: use `<Head><title>...</title></Head>` in each page component.
 - Bottom action: no Tab Bar — consistent with drawer pattern
 
 ### Implementation Note
-To unify the sidebar, the maintainer must refactor `AppLayout` to use SmartDrawer instead of Sidebar. This is a one-time shared infrastructure change. `components/Layout/Sidebar.tsx` will no longer be actively used but should not be deleted until all references are removed.
+The SmartDrawer sidebar unification is implemented in `AppLayout`. `components/Layout/Sidebar.tsx` is retained only as legacy code and should not be used by new pages.
 
 ---
 
@@ -131,16 +133,16 @@ To unify the sidebar, the maintainer must refactor `AppLayout` to use SmartDrawe
 | `/founder` | Founder's letter | landing | No | LandingLayout | Implemented |
 | `/blog` | Blog listing | landing | No | LandingLayout | Implemented |
 | `/blog/[slug]` | Blog article | landing | No | LandingLayout | Implemented |
-| `/login` | Login / Sign up | auth | No | Standalone | Implemented |
+| `/login` | Login / Sign up | auth | No | Standalone | Superseded by modal auth; no current `pages/login.tsx` |
 | `/chat` | AI Chat (main app) | core | No (guest mode) | SmartDrawer + Chat UI | Implemented |
 | `/followup/[id]` | Follow-up landing page | followup-reminder | Yes | SmartDrawer + Content | Implemented |
-| `/dashboard` | Feature hub (summary cards) | dashboard | Yes | SmartDrawer + Content | Planned |
-| `/family` | Family profile (child info, challenges) | family-profile | Yes | SmartDrawer + Content | Planned |
+| `/dashboard` | Feature hub (summary cards) | dashboard | Yes | SmartDrawer + Content | Implemented, not yet human-accepted |
+| `/family` | Family profile (child info, challenges) | family-profile | Yes | SmartDrawer + Content | Implemented, not yet human-accepted |
 | `/plan` | Growth plan dashboard | growth-plan | Yes | SmartDrawer + Content | Planned |
 | `/reports` | Report history | report-analysis | Yes | SmartDrawer + Content | Planned |
 | `/reports/upload` | Upload new report | report-analysis | Yes | SmartDrawer + Content | Planned |
 | `/reports/[id]` | View report analysis | report-analysis | Yes | SmartDrawer + Content | Planned |
-| `/settings` | Account settings (name, email, subscription, notifications) | settings | Yes | SmartDrawer + Content | Planned |
+| `/settings` | Account settings (name, email, subscription placeholder, delete account) | settings | Yes | SmartDrawer + Content | Implemented, not yet human-accepted |
 | `/calm` | Crisis calm session | crisis-calm | No (guest ok) | Fullscreen (no nav) | Planned |
 | `/privacy` | Privacy policy | legal | No | LandingLayout | Planned |
 | `/terms` | Terms of service | legal | No | LandingLayout | Planned |
@@ -185,17 +187,17 @@ _app.tsx (SessionProvider + font)
 
 ### Logged-in Page Usage Pattern (for new module pages)
 
-The chat page already implements the SmartDrawer layout directly. New module pages should follow the same pattern. Once AppLayout is refactored to use SmartDrawer, new pages can use AppLayout:
+AppLayout now wraps SmartDrawer. New module pages should use AppLayout unless the module explicitly owns a fullscreen experience such as `/calm`.
 
 ```tsx
 import AppLayout from '@/components/Layout/AppLayout';
 
 export default function DashboardPage() {
   const { data: session, status } = useSession();
-  const router = useRouter();
+  const { openLoginModal } = useAuthUIStore();
 
   if (status === 'loading') return <div>Loading...</div>;
-  if (!session) { router.push('/login'); return null; }
+  if (!session) { openLoginModal(); return null; }
 
   return (
     <AppLayout>
@@ -207,7 +209,7 @@ export default function DashboardPage() {
 ```
 
 ### Implementation Note
-AppLayout must be refactored by the maintainer to replace Sidebar with SmartDrawer before new module pages can be built. Until that refactoring is done, new module pages should replicate the SmartDrawer layout pattern from `pages/chat.tsx`. This is a one-time shared infrastructure change.
+The AppLayout to SmartDrawer refactor is complete in the current working branch. Future module specs should treat SmartDrawer layout as implemented infrastructure and should verify behavior rather than duplicating the old inline chat layout.
 
 ---
 
@@ -221,7 +223,7 @@ Each module is self-contained. No global registration file. Modules connect via:
 2. **API routes** — Create `pages/api/{module-name}/*.ts`
 3. **Components** — Create `components/{ModuleName}/*.tsx`
 4. **Store** (if needed) — Create `stores/{moduleName}Store.ts`
-5. **DB migration** — Create `supabase/{module-name}_tables.sql`
+5. **DB migration** — Create a versioned SQL migration under `supabase/migrations/`
 
 ### Module Checklist (for each new module)
 
@@ -231,10 +233,12 @@ New module "{module-name}":
 ├── pages/api/{module-name}/    — API routes (auth pattern)
 ├── components/{ModuleName}/    — UI components
 ├── stores/{moduleName}Store.ts — Zustand store (if needed)
-└── supabase/{module-name}_tables.sql — DB migration + RLS
+└── supabase/migrations/{timestamp}_{module-name}.sql — DB migration + RLS
 ```
 
 Note: No sidebar entry is needed. Module pages are accessed via Dashboard cards or UserMenu. SmartDrawer content (conversation list + topic cards) is the same on all pages.
+
+Legacy module SQL files such as `supabase/family_tables.sql` may remain as snippets/reference, but acceptance and deployment use the versioned `supabase/migrations/` path.
 
 ### No Global Config Files to Edit
 - No `routes.ts` registry
@@ -362,8 +366,8 @@ When the family-profile module is implemented, the migration endpoint must be up
 | Role | How Identified | Description |
 |------|---------------|-------------|
 | **Guest** | No session, guestStorage exists | Unregistered visitor, localStorage only |
-| **Free User** | Session exists, users.subscription_tier = 'free' | Registered, limited quota |
-| **Pro User** | Session exists, users.subscription_tier = 'pro' | Paid subscriber, full access |
+| **Free User** | Session exists; no active billing entitlement in current schema | Registered, limited quota |
+| **Pro User** | Future billing entitlement from membership-billing module | Paid subscriber, full access after billing module exists |
 
 ### Access Matrix
 
@@ -385,12 +389,15 @@ When the family-profile module is implemented, the migration endpoint must be up
 
 ### Auth Enforcement Pattern
 
-**Page level** (client-side redirect):
+**Page level** (client-side auth gate):
 ```tsx
 const { data: session, status } = useSession();
+const { openLoginModal } = useAuthUIStore();
 if (status === 'loading') return <Loading />;
-if (!session) { router.push('/login'); return null; }
+if (!session) { openLoginModal(); return null; }
 ```
+
+There is no current standalone `pages/login.tsx`. Logged-in feature pages should open the shared auth modal for unauthenticated users unless a future auth spec explicitly reintroduces a standalone login route.
 
 **API level** (server-side 401):
 ```ts
@@ -413,7 +420,7 @@ if (quota.messagesUsed >= quota.messagesLimit) {
 
 - **Crisis calm** (`/calm`): No auth required — emergency tool must be accessible to everyone
 - **Chat guest mode**: 5-message limit enforced client-side (guestMessageCount) + should add server-side check
-- **Stripe subscription check**: Not implemented yet (P2). For now, all registered users = "Free" tier. Pro features gated but not enforced until Stripe module is built.
+- **Stripe subscription check**: Not implemented yet. Current schema has no `users.subscription_tier` column and no `GET /api/user/subscription` route. For now, all registered users are treated as Free tier. Pro features must not be treated as enforceable until the membership-billing module creates the billing schema/API.
 
 ---
 
@@ -425,12 +432,12 @@ These changes must be made by the maintainer to shared files before new module p
 
 | Change | File(s) | Description | Priority |
 |--------|---------|-------------|----------|
-| Unify AppLayout to use SmartDrawer | `components/Layout/AppLayout.tsx` | Replace Sidebar import with SmartDrawer. All logged-in pages get the same conversation-list sidebar. | **P0 — blocking** |
-| Add Dashboard button behavior | `components/Chat/SmartDrawer.tsx` | Dashboard button already exists. Ensure it links to `/dashboard` and is visually active when on non-chat pages. | P0 |
-| Guest data migration (challenges + birthday) | `pages/chat.tsx` or auth callback | After login, migrate `guestStorage` challenges and birthday to `POST /api/family/child` | P1 |
+| Unify AppLayout to use SmartDrawer | `components/Layout/AppLayout.tsx` | Implemented. Verify in acceptance rather than rebuilding. | Done |
+| Add Dashboard button behavior | `components/Chat/SmartDrawer.tsx` | Dashboard button already exists. Ensure it links to `/dashboard` and is visually active when on non-chat pages. | Verify |
+| Guest data migration (challenges + birthday) | `pages/api/user/migrate-guest-data.ts` | Implemented to write `birth_year`, `birth_month`, and `challenges` into `child_profiles` (`pages/api/user/migrate-guest-data.ts:118-141`). | Verify |
 | Add crisis entry affordance | `components/Layout/AppLayout.tsx` | Floating button visible on all logged-in pages (only if crisis module proceeds) | P2 |
 
-**Current conclusion:** AppLayout → SmartDrawer unification is the critical blocker. Must be done before Dashboard or any other module page can be built.
+**Current conclusion:** AppLayout → SmartDrawer unification is no longer the critical blocker. The current blockers are SOP v2.4 planning refresh for active specs, compliance launch-gate closure, and technical/human acceptance for already implemented pages.
 
 ## 10. Architecture Decision Record
 

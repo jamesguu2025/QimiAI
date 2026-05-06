@@ -1,6 +1,6 @@
 # Planning And Review Rules — Qimi Web
 
-> Created: 2026-03-14
+> Created: 2026-03-14 | Amended: 2026-05-06 (aligned with agent-dev-sop v2.4)
 > Purpose: Freeze the user's planning and documentation requirements so they remain stable across the full planning pass.
 
 ---
@@ -11,7 +11,11 @@ For each document:
 
 0. Read this file first. This is a mandatory pre-check, not optional guidance.
 1. Read current code, deployment shape, and relevant existing docs first
-2. Check mature industry practice before changing the document
+2. Apply the current `agent-dev-sop` pre-flight gates before changing the document:
+   - external evidence search and link verification for external practice claims
+   - Search Ledger / ADR-lite for P0/P1 or high-risk design decisions
+   - internal code fact evidence with `file_path:Lstart-Lend` references
+   - AQS self-review and, when required, cross-review
 3. Update the document
 4. Self-review the document
 5. Do a second-pass review and optimization
@@ -28,6 +32,10 @@ Do not stop between documents unless:
 
 Before starting any new architecture document, spec, review note, or planning update, this file must be read first:
 
+- `/Users/jamesguu/Library/CloudStorage/OneDrive-个人/work/Million Dollar Business/agent-dev-sop/01-总流程.md`
+- `/Users/jamesguu/Library/CloudStorage/OneDrive-个人/work/Million Dollar Business/agent-dev-sop/02-规划者手册.md`
+- `/Users/jamesguu/Library/CloudStorage/OneDrive-个人/work/Million Dollar Business/agent-dev-sop/07-架构质量标准(AQS).md`
+- `/Users/jamesguu/Library/CloudStorage/OneDrive-个人/work/Million Dollar Business/agent-dev-sop/08-设计阶段循证Gate(EBG).md`
 - `/Users/jamesguu/qimi-ai-website/qimi-ai-website/docs/formal-basis-entry.md`
 - `/Users/jamesguu/qimi-ai-website/qimi-ai-website/docs/planning-review-rules.md`
 - `/Users/jamesguu/qimi-ai-website/qimi-ai-website/docs/project-control.md`
@@ -41,12 +49,13 @@ Treat this as a required checklist gate. No new documentation pass should begin 
 When planning or reviewing, use this priority order:
 
 1. Real code and real deployed architecture in this repo
-2. `/Users/jamesguu/qimi-ai-website/qimi-ai-website/docs/formal-basis-entry.md`
-3. `/Users/jamesguu/qimi-ai-website/qimi-ai-website/docs/project-control.md`
-4. The canonical web planning docs in `docs/`
-5. The cross-platform blueprint in `/Users/jamesguu/WeChatProjects/adhdhelper-cursor/docs/项目技术蓝图.md`
-6. Official vendor docs and well-established industry practice
-7. Older handoff or temporary docs
+2. Latest `agent-dev-sop` process rules
+3. `/Users/jamesguu/qimi-ai-website/qimi-ai-website/docs/formal-basis-entry.md`
+4. `/Users/jamesguu/qimi-ai-website/qimi-ai-website/docs/project-control.md`
+5. The canonical web planning docs in `docs/`
+6. Official vendor docs and verified external evidence
+7. The cross-platform blueprint in `/Users/jamesguu/WeChatProjects/adhdhelper-cursor/docs/项目技术蓝图.md`
+8. Older handoff or temporary docs
 
 If a document disagrees with the real repo, the document must be corrected or explicitly marked as planned rather than implemented.
 
@@ -58,11 +67,14 @@ If a document disagrees with the real repo, the document must be corrected or ex
 
 ### Evidence Layering Rule
 
-When a planning doc makes a strong product, method, or domain claim, it must be categorized as one of:
+When a planning doc makes a strong product, method, or domain claim, it must use the SOP v2.4 evidence discipline:
 
-- external research supported
-- internal design choice
-- `Provisional`
+- External claims require verified links, source type, supported claim, and unsupported gap.
+- High-risk or P0/P1 decisions require ADR-lite and Search Ledger.
+- Existing code facts require `file_path:Lstart-Lend` references.
+- Key claims must be categorized on two axes:
+  - source axis: external research supported / internal design choice
+  - maturity axis: stable / `Provisional`
 
 Do not present an internal design choice as if it were an industry-wide standard.
 Do not present an unvalidated parameter or threshold as final truth.
@@ -164,7 +176,17 @@ Completed in 2026-03-17 planning pass:
 - `docs/project-control.md` — settings spec reference added
 - `docs/formal-basis-entry.md` — settings spec added
 
+Completed in 2026-05-06 SOP refresh pass:
+
+- `agent-dev-sop/` located and promoted as the method authority for this project
+- `docs/formal-basis-entry.md` updated with latest SOP entry points and reading strategy
+- `docs/planning-review-rules.md` updated with SOP v2.4 evidence gates
+- `docs/project-control.md` updated to reflect current implemented infrastructure/module state
+- `docs/system-architecture.md` updated to reflect current route/layout/migration reality
+- `docs/reviews/sop-planning-refresh-2026-05-06.md` added as the evidence-backed setup review record
+
 Next documents to continue automatically:
 
-1. Implementation-phase alignment updates as code lands
-2. Independent cross-agent review for settings and membership-billing when needed
+1. Bring the next active module spec up to SOP v2.4 before new implementation begins
+2. Add Search Ledger / ADR-lite blocks for compliance and other high-risk specs before launch gate acceptance
+3. Independent cross-agent review for settings, compliance, and membership-billing when needed

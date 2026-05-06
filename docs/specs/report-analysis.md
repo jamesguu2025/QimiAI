@@ -4,6 +4,7 @@
 > Module: report-analysis
 > Routes: `/reports`, `/reports/upload`, `/reports/[id]`
 > Branch: `feature/report-analysis`
+> SOP v2.4 status: Requires refresh before implementation; current-code facts and external storage claims must use line/source evidence.
 
 ---
 
@@ -14,7 +15,7 @@ This spec was re-checked against:
 - The current repo structure and scripts in `/Users/jamesguu/qimi-ai-website/qimi-ai-website`
 - The canonical Layer 1 architecture in `/Users/jamesguu/qimi-ai-website/qimi-ai-website/docs/system-architecture.md`
 - The cross-platform blueprint in `/Users/jamesguu/WeChatProjects/adhdhelper-cursor/docs/项目技术蓝图.md`
-- Existing subscription scaffolding in `/Users/jamesguu/qimi-ai-website/qimi-ai-website/supabase/stripe_columns.sql` and `/Users/jamesguu/qimi-ai-website/qimi-ai-website/pages/api/user/subscription.ts`
+- Membership and billing are not implemented yet; there is no current `pages/api/user/subscription.ts` route and no `users.subscription_tier` column in the local initial schema.
 - Existing review notes in `/Users/jamesguu/qimi-ai-website/qimi-ai-website/docs/technical-decisions-for-review.md`
 - Official Supabase Storage guidance for private buckets and signed URLs
 
@@ -80,7 +81,7 @@ Users can view the original image and the AI-generated analysis side by side.
 ### 1.4 Auth & Access
 
 - All three pages require login
-- Redirect to `/login` if no session (per CLAUDE.md page-level auth pattern)
+- Open the shared login modal if no session
 - Guest users cannot access report analysis
 
 ### 1.5 Quota Rules
@@ -110,7 +111,9 @@ Quota enforcement happens server-side in `POST /api/reports/upload`. Count recor
 
 ## 2. Database Schema
 
-File: `supabase/report-analysis_tables.sql`
+Migration source of truth: create a new versioned migration under `supabase/migrations/`.
+
+Legacy draft name from older planning: `supabase/report-analysis_tables.sql` (do not use as the deployment source of truth).
 
 ```sql
 -- ===========================================
@@ -232,8 +235,8 @@ export const config = { api: { bodyParser: false } };
 2. Parse multipart form with `formidable` [NEEDS_DEPENDENCY: formidable]
 3. Validate file type: check MIME header AND magic bytes (first 4 bytes: JPEG = `FF D8 FF`, PNG = `89 50 4E 47`). Reject if either check fails.
 4. Get-or-create user by email
-5. Quota check: count reports in current calendar month for this user. Reject if `user.subscription_tier !== 'pro'` and count >= 1
-6. Validate file size against user tier (free: 5MB = 5,242,880 bytes, pro: 20MB = 20,971,520 bytes)
+5. Quota check: count reports in current calendar month for this user. Until membership-billing exists, all registered users are Free; reject if count >= 1.
+6. Validate file size against current entitlement (Free default: 5MB = 5,242,880 bytes; future Pro: 20MB = 20,971,520 bytes)
 7. Generate a new UUID for the report ID
 8. Upload image buffer to the private Supabase Storage bucket at `{user_id}/{report_id}.{ext}` using `supabaseAdmin.storage`
 9. Insert row into `reports` with `storage_path`, `mime_type`, `file_size`, and `status = 'uploading'`
@@ -528,7 +531,7 @@ Fetch `GET /api/reports/[id]` on mount. If status is `analyzing`, poll every 3 s
 - [ ] Medical disclaimer appears on every page and at the end of every analysis
 - [ ] `AnalysisStatus` badge reflects correct state at all times
 - [ ] Polling stops when status reaches `completed` or `failed`
-- [ ] Unauthenticated users are redirected to `/login`
+- [ ] Unauthenticated users are blocked from protected report pages and prompted via the shared login modal
 - [ ] Mobile responsive (two-column view collapses to single column on small screens)
 - [ ] `npx eslint` passes for touched files
 - [ ] `npx tsc --noEmit` passes
@@ -551,7 +554,7 @@ Fetch `GET /api/reports/[id]` on mount. If status is `analyzing`, poll every 3 s
 Each task is one file (or closely related pair of files). Execute in order.
 
 ### T001: Create database migration
-- **File**: `supabase/report-analysis_tables.sql`
+- **File**: new `supabase/migrations/{timestamp}_report_analysis_tables.sql`
 - **Do**: Copy the SQL from section 2 above. Save the file.
 - **Verify**: File exists with correct SQL including RLS policies and indexes.
 - **Commit**: `[T001] feat: add reports table migration`
@@ -568,7 +571,7 @@ Each task is one file (or closely related pair of files). Execute in order.
 - **Do**: Handle `POST` with `multipart/form-data`. Parse with `formidable`. Validate file type and size. Enforce quota. Upload to Supabase Storage. Insert report row. Return 201 with report record.
 - **Config**: Export `export const config = { api: { bodyParser: false } };` at top of file.
 - **Dependency check**: Check `package.json` for `formidable`. If missing, add `[NEEDS_DEPENDENCY: npm install formidable @types/formidable]` to commit message and install it before coding.
-- **Quota logic**: Count rows in `reports` where `user_id = {user_id}` and `created_at >= start of current month`. Reject users with `subscription_tier !== 'pro'` at >= 1.
+- **Quota logic**: Count rows in `reports` where `user_id = {user_id}` and `created_at >= start of current month`. Until membership-billing exists, treat all registered users as Free and reject at >= 1.
 - **Storage rule**: Upload to the private `reports-private` bucket and save `storage_path` instead of a public URL.
 - **Verify**: `npx eslint pages/api/reports/upload.ts` passes, `npx tsc --noEmit` passes, `npm run build` passes.
 - **Commit**: `[T003] feat: add POST /api/reports/upload endpoint [NEEDS_DEPENDENCY: formidable]`

@@ -4,6 +4,7 @@
 > Module: growth-plan
 > Routes: `/plan`
 > Branch: `feature/growth-plan`
+> SOP v2.4 status: Requires refresh before implementation; current-code facts must use line evidence.
 
 ---
 
@@ -15,7 +16,7 @@ This spec was re-checked against:
 - The canonical Layer 1 architecture in `/Users/jamesguu/qimi-ai-website/qimi-ai-website/docs/system-architecture.md`
 - The cross-platform blueprint in `/Users/jamesguu/WeChatProjects/adhdhelper-cursor/docs/项目技术蓝图.md`
 - Existing shared type definitions in `/Users/jamesguu/qimi-ai-website/qimi-ai-website/types/plan.ts`
-- Existing subscription scaffolding in `/Users/jamesguu/qimi-ai-website/qimi-ai-website/supabase/stripe_columns.sql` and `/Users/jamesguu/qimi-ai-website/qimi-ai-website/pages/api/user/subscription.ts`
+- Membership and billing are not implemented yet; there is no current `pages/api/user/subscription.ts` route and no `users.subscription_tier` column in the local initial schema.
 
 ### Current Implementation Snapshot
 
@@ -90,15 +91,15 @@ Users can update any field of an existing item.
 
 ### 1.8 Auth & Access
 
-- Page requires login; redirect to `/login` if no session (per CLAUDE.md Page-Level Auth Protection pattern)
+- Page requires login; open the shared login modal if no session.
 - Free users: maximum 5 plan items. When the limit is reached, the "Add Plan Item" button is replaced with a "Upgrade to Pro" prompt. View, edit, star, delete, and check-in remain available.
 - Pro users: unlimited items
 
 ### 1.9 Subscription Source Of Truth
 
-- Plan-item quota should use the existing `users.subscription_tier` field when present
-- The current repo already contains the supporting migration and `GET /api/user/subscription` route
-- Do not add a second subscription source for this module
+- Plan-item quota should treat all registered users as Free until the membership-billing module creates a canonical subscription API and schema.
+- Do not add a second subscription source for this module.
+- If this module is implemented before membership-billing, use the 5-item Free limit and document the later handoff to `docs/specs/membership-billing.md`.
 
 ---
 
@@ -116,7 +117,9 @@ The following are explicitly NOT part of this module:
 
 ## 3. Database Schema
 
-File: `supabase/growth-plan_tables.sql`
+Migration source of truth: create a new versioned migration under `supabase/migrations/`.
+
+Legacy draft name from older planning: `supabase/growth-plan_tables.sql` (do not use as the deployment source of truth).
 
 ```sql
 -- ===========================================
@@ -281,7 +284,7 @@ All camelCase field mapping: `pain_point` → `painPoint`, `last_check_in` → `
 **Logic:**
 1. Auth + get-or-create user
 2. Validate: `category` must be one of the 7 valid values; `painPoint` and `strategy` must be non-empty strings. Return `400 { error: 'description' }` on failure.
-3. Free-user quota check: count existing items for this user. If count >= 5 and `user.subscription_tier !== 'pro'`, return `403 { error: 'Free plan limit reached. Upgrade to Pro for unlimited items.' }`.
+3. Free-user quota check: count existing items for this user. Until membership-billing exists, all registered users are Free; if count >= 5, return `403 { error: 'Free plan limit reached. Upgrade to Pro for unlimited items.' }`.
 4. Insert into `plan_items`, default `check_in_days` to `[]`, return inserted row mapped to camelCase
 5. Respond 201
 
@@ -489,14 +492,14 @@ AppLayout (from components/Layout/AppLayout)
 └── Medical disclaimer: "Not a substitute for professional medical advice" (small text, bottom of page)
 ```
 
-**Auth:** `useSession()` → if `status === 'loading'` render loading skeleton → if no session `router.push('/login')` and return null → else render content.
+**Auth:** `useSession()` → if `status === 'loading'` render loading skeleton → if no session open the shared login modal and return null → else render content.
 
 **State (local React state, no Zustand store needed for this module):**
 ```ts
 const [items, setItems] = useState<ActionPlanItem[]>([]);
 const [totalItems, setTotalItems] = useState(0);
 const [starredCount, setStarredCount] = useState(0);
-const [subscriptionTier, setSubscriptionTier] = useState<'free' | 'pro'>('free');
+const [entitlementTier, setEntitlementTier] = useState<'free' | 'pro'>('free');
 const [categoryFilter, setCategoryFilter] = useState<PlanCategory | 'all'>('all');
 const [isLoading, setIsLoading] = useState(true);
 const [error, setError] = useState<string | null>(null);
@@ -507,7 +510,7 @@ const [isSubmitting, setIsSubmitting] = useState(false);
 
 **Data fetching:**
 - On mount: fetch `GET /api/plan`. Store all items in state.
-- On mount: also fetch `GET /api/user/subscription` and store `tier` in local state.
+- Do not fetch `GET /api/user/subscription` until the membership-billing module creates that route. Default `entitlementTier` to `free` in this module's first implementation.
 - Category filter is applied client-side: `const visibleItems = categoryFilter === 'all' ? items : items.filter(i => i.category === categoryFilter)`.
 - No refetch on filter change (all items already loaded).
 
@@ -542,7 +545,7 @@ const [isSubmitting, setIsSubmitting] = useState(false);
 3. On success: remove from `items`, decrement `totalItems`, decrement `starredCount` if item was starred
 
 **Free user quota UI:**
-- After load, if `totalItems >= 5` and `subscriptionTier !== 'pro'`, replace "Add Plan Item" button with a disabled button labeled "Upgrade for More Items" styled in purple.
+- After load, if `totalItems >= 5` and `entitlementTier !== 'pro'`, replace "Add Plan Item" button with a disabled button labeled "Upgrade for More Items" styled in purple. Before membership-billing exists, all registered users remain Free.
 
 ---
 
@@ -560,7 +563,7 @@ const [isSubmitting, setIsSubmitting] = useState(false);
 - [ ] Check-in sets `last_check_in` to current timestamp; "Done Today" button reflects the updated state
 - [ ] Category filter correctly shows only items of the selected category
 - [ ] Free users are blocked from creating more than 5 items (upgrade prompt shown)
-- [ ] Unauthenticated users are redirected to `/login`
+- [ ] Unauthenticated users are blocked from the page and prompted via the shared login modal
 - [ ] Medical disclaimer is visible on the page
 - [ ] All fields in `PlanItemForm` are validated; empty field submission shows inline errors
 - [ ] Delete requires confirmation before removing an item
@@ -586,7 +589,7 @@ const [isSubmitting, setIsSubmitting] = useState(false);
 Each task is one file (or two tightly coupled files). Execute in order. Run `npx eslint`, `npx tsc --noEmit`, and `npm run build` after each task before committing.
 
 ### T001: Database migration
-- **File**: `supabase/growth-plan_tables.sql`
+- **File**: new `supabase/migrations/{timestamp}_growth_plan_tables.sql`
 - **Do**: Write the SQL from Section 3. Create the file.
 - **Verify**: File exists with correct SQL content. No lint/build step needed for SQL.
 - **Commit**: `[T001] feat: add plan_items table migration`
@@ -600,7 +603,7 @@ Each task is one file (or two tightly coupled files). Execute in order. Run `npx
 
 ### T003: POST /api/plan — create item
 - **File**: `pages/api/plan/index.ts` (same file as T002)
-- **Do**: Add POST handler in the same route file. Validate fields. Enforce the 5-item free-tier limit using `users.subscription_tier`. Insert and return `{ item }` with 201.
+- **Do**: Add POST handler in the same route file. Validate fields. Enforce the 5-item Free-tier limit by default until membership-billing creates the canonical entitlement API. Insert and return `{ item }` with 201.
 - **Verify**: `npx eslint pages/api/plan/index.ts` passes, `npx tsc --noEmit` passes, `npm run build` passes.
 - **Commit**: `[T003] feat: add POST /api/plan create endpoint`
 
@@ -636,6 +639,6 @@ Each task is one file (or two tightly coupled files). Execute in order. Run `npx
 
 ### T009: Add unit tests
 - **File**: `__tests__/growth-plan.test.ts`
-- **Do**: Test input validation logic: category must be one of the 7 valid values (reject invalid), painPoint and strategy must be non-empty strings (reject empty/missing). Test free-user quota enforcement: user with 5 existing items and `subscription_tier = 'free'` gets 403. Test CRUD flows: POST creates item (201), GET lists items (sorted: starred first, then by created_at DESC), PUT partial update only changes provided fields, DELETE returns 204. Test checkin endpoint: updates `last_check_in` and keeps `check_in_days` aligned. Test ownership: user cannot read/update/delete another user's items (404). Test auth: request without session returns 401.
+- **Do**: Test input validation logic: category must be one of the 7 valid values (reject invalid), painPoint and strategy must be non-empty strings (reject empty/missing). Test first-implementation Free quota enforcement: a user with 5 existing items gets 403 because membership-billing has not created Pro entitlement yet. Test CRUD flows: POST creates item (201), GET lists items (sorted: starred first, then by created_at DESC), PUT partial update only changes provided fields, DELETE returns 204. Test checkin endpoint: updates `last_check_in` and keeps `check_in_days` aligned. Test ownership: user cannot read/update/delete another user's items (404). Test auth: request without session returns 401.
 - **Verify**: add the test file together with the chosen test runner setup for this repo, then ensure `npx eslint`, `npx tsc --noEmit`, and `npm run build` still pass.
 - **Commit**: `[T009] test: add growth plan unit tests`

@@ -8,6 +8,8 @@
 > Scale Anchor: MVP, 3-5K users, <1K paid, team 1-3, US market
 > Level: L (external API — Mailchimp + DeepSeek LLM, PII — email + child info)
 
+> SOP v2.4 note (2026-05-06): This spec is implemented in older code snapshots but still references a legacy standalone login route and non-versioned SQL filename. Before further changes, verify the current code and migrate any new database work through `supabase/migrations/`.
+
 ---
 
 ## 0. Product Context & Email Marketing Strategy
@@ -45,7 +47,7 @@ The Mailchimp audience sync and tagging system built here enables future campaig
 
 The following are already present in the repo:
 
-- Supabase migration: `supabase/followup-reminder_tables.sql`
+- Supabase migration: legacy implementation snapshot referenced `supabase/followup-reminder_tables.sql`; current acceptance must verify or recreate this as a versioned migration under `supabase/migrations/`
 - API routes:
   - `pages/api/followup/pending.ts`
   - `pages/api/followup/[id].ts`
@@ -109,7 +111,7 @@ When a follow-up item is created, the system syncs the user to Mailchimp and tri
 
 When a user clicks the email link, they land on a dedicated follow-up page with full context.
 
-- Auth required — redirect to `/login?callbackUrl=/followup/{id}` if not logged in
+- Auth required. Current app uses the shared login modal, not a standalone `pages/login.tsx`; preserve the intended `/followup/{id}` return destination when opening auth.
 - Shows: method suggested, the original problem discussed, the follow-up question
 - "Chat with Qimi" button: navigates to `/chat` (user starts a new conversation naturally)
 - "Dismiss" button: marks follow-up as dismissed, redirects to `/chat`
@@ -168,7 +170,9 @@ When a user clicks the email link, they land on a dedicated follow-up page with 
 
 ## 3. Database Schema
 
-File: `supabase/followup-reminder_tables.sql`
+File: `supabase/migrations/{timestamp}_followup_reminder_tables.sql`
+
+Legacy reference snippet: `supabase/followup-reminder_tables.sql`
 
 ```sql
 -- ===========================================
@@ -772,7 +776,7 @@ AppLayout
 └── Medical disclaimer (footer)
 ```
 
-**Auth:** `useSession()` → loading skeleton → redirect to `/login?callbackUrl=/followup/{id}` if no session → render content.
+**Auth:** `useSession()` → loading skeleton → open shared login modal and preserve `/followup/{id}` as the post-auth return destination if no session → render content.
 
 **Data fetching:**
 1. On mount: fetch `GET /api/followup/{id}`
@@ -834,7 +838,7 @@ AppLayout
 - [ ] Follow-ups older than 7 days are excluded from active queries
 - [ ] All API errors are handled gracefully (no user-visible crashes)
 - [ ] Medical disclaimer appears on the follow-up page
-- [ ] Unauthenticated users are redirected to `/login` with callback URL
+- [ ] Unauthenticated users see the shared login modal and return to `/followup/{id}` after auth
 - [ ] Cron endpoints reject requests without valid `CRON_SECRET`
 - [ ] `npm run lint` passes with 0 errors
 - [ ] `npm run build` passes (next build)
@@ -856,7 +860,7 @@ AppLayout
 Each task is one file (or closely related pair). Execute in order. Run `npx eslint`, `npx tsc --noEmit`, and `npm run build` after each task.
 
 ### T001: Database migration
-- **File**: `supabase/followup-reminder_tables.sql`
+- **File**: `supabase/migrations/{timestamp}_followup_reminder_tables.sql`
 - **Do**: Copy the SQL from Section 3. Create the file with both tables, indexes, RLS policies, and triggers.
 - **Verify**: File exists with correct SQL.
 - **Commit**: `[T001] feat: add followup_items and followup_preferences table migrations`

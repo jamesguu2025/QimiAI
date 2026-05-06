@@ -5,6 +5,8 @@
 > Routes: `/calm`
 > Branch: `feature/crisis-calm`
 
+> SOP v2.4 status: Requires refresh before implementation; accessibility and crisis-support claims need source evidence, and current-code facts must use line evidence.
+
 ---
 
 ## 0. Planning Baseline
@@ -19,10 +21,9 @@ This spec was re-checked against:
 
 ### Current Implementation Snapshot
 
-- Route `/calm` is not implemented yet
-- There is no `pages/calm.tsx` page in the current branch
-- There is no full `components/CrisisCalm/*` module set in the current branch
-- There is one partial prototype component: `/Users/jamesguu/qimi-ai-website/qimi-ai-website/components/CrisisCalm/BreathingHalo.tsx`
+- Route `/calm` is not implemented yet; no `pages/calm.tsx` was found in the current branch on 2026-05-06.
+- There is no full `components/CrisisCalm/*` module set in the current branch.
+- There is one partial prototype component: `components/CrisisCalm/BreathingHalo.tsx:L1-L53`.
 
 ### MVP Boundary
 

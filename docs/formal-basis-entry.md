@@ -1,6 +1,6 @@
 # Formal Basis Entry — Qimi Web
 
-> Created: 2026-03-14
+> Created: 2026-03-14 | Amended: 2026-05-06 (SOP v2.4 evidence discipline)
 > Purpose: Define the single formal entry point for planning, review, and implementation so legacy material does not pollute current decisions.
 
 ---
@@ -9,14 +9,24 @@
 
 All future planning, review, and implementation work must start from these documents, in this order:
 
-1. `/Users/jamesguu/qimi-ai-website/qimi-ai-website/docs/formal-basis-entry.md`
-2. `/Users/jamesguu/qimi-ai-website/qimi-ai-website/docs/planning-review-rules.md`
-3. `/Users/jamesguu/qimi-ai-website/qimi-ai-website/docs/project-control.md`
-4. `/Users/jamesguu/qimi-ai-website/qimi-ai-website/docs/system-architecture.md`
-5. The relevant canonical spec under `/Users/jamesguu/qimi-ai-website/qimi-ai-website/docs/specs/`
-6. The matching review record under `/Users/jamesguu/qimi-ai-website/qimi-ai-website/docs/reviews/`
+1. `/Users/jamesguu/Library/CloudStorage/OneDrive-个人/work/Million Dollar Business/agent-dev-sop/01-总流程.md`
+2. `/Users/jamesguu/Library/CloudStorage/OneDrive-个人/work/Million Dollar Business/agent-dev-sop/02-规划者手册.md`
+3. `/Users/jamesguu/Library/CloudStorage/OneDrive-个人/work/Million Dollar Business/agent-dev-sop/07-架构质量标准(AQS).md`
+4. `/Users/jamesguu/Library/CloudStorage/OneDrive-个人/work/Million Dollar Business/agent-dev-sop/08-设计阶段循证Gate(EBG).md`
+5. `/Users/jamesguu/qimi-ai-website/qimi-ai-website/docs/formal-basis-entry.md`
+6. `/Users/jamesguu/qimi-ai-website/qimi-ai-website/docs/planning-review-rules.md`
+7. `/Users/jamesguu/qimi-ai-website/qimi-ai-website/docs/project-control.md`
+8. `/Users/jamesguu/qimi-ai-website/qimi-ai-website/docs/system-architecture.md`
+9. The relevant canonical spec under `/Users/jamesguu/qimi-ai-website/qimi-ai-website/docs/specs/`
+10. The matching review record under `/Users/jamesguu/qimi-ai-website/qimi-ai-website/docs/reviews/`
 
 This file is the project-level formal-basis entry required by the SOP.
+
+SOP interpretation rule:
+
+- The `agent-dev-sop/` directory is the method authority.
+- The Qimi `docs/` directory is the project authority.
+- If this project entry and the SOP disagree about process, follow the latest SOP and update this entry.
 
 ---
 
@@ -48,6 +58,10 @@ This file is the project-level formal-basis entry required by the SOP.
 
 - `/Users/jamesguu/qimi-ai-website/qimi-ai-website/docs/planning-review-rules.md`
 
+### Current SOP Review Records
+
+- `/Users/jamesguu/qimi-ai-website/qimi-ai-website/docs/reviews/sop-planning-refresh-2026-05-06.md`
+
 ---
 
 ## 3. Reference-Only Materials
@@ -71,9 +85,16 @@ Rules:
 
 Before any new planning pass, review pass, or implementation pass:
 
-1. Read this file
-2. Read `/Users/jamesguu/qimi-ai-website/qimi-ai-website/docs/planning-review-rules.md`
-3. Read `/Users/jamesguu/qimi-ai-website/qimi-ai-website/docs/project-control.md`
-4. Read the relevant canonical spec
+1. Read the latest `agent-dev-sop` entry and role-specific planning/review rules
+2. Read this file
+3. Read `/Users/jamesguu/qimi-ai-website/qimi-ai-website/docs/planning-review-rules.md`
+4. Read `/Users/jamesguu/qimi-ai-website/qimi-ai-website/docs/project-control.md`
+5. Read the relevant canonical spec
+
+Reading strategy:
+
+- New phase or gate request: full hydration of the SOP entry, planning rules, project control, architecture, target spec, and matching review record.
+- Same-phase ordinary subtask: minimum necessary hydration only; read the target spec, current gate policy, current review record, and directly affected code.
+- Rehydrate fully when a task is blocked, a formal basis conflict appears, ROQ changes, or a human gate is requested.
 
 No agent should start from a historical handoff doc by default.

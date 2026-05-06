@@ -1,6 +1,6 @@
 # Module Spec: Compliance — MVP Launch Gate
 
-> Status: APPROVED — 2026-03-17 | Self-reviewed: 2026-03-17 | Cross-reviewed: 2026-03-17 (P0: 2 fixed, P1: 5 fixed) | Amended: 2026-03-17 (OAuth consent gate + data deletion scope + third-party disclosure)
+> Status: PARTIALLY IMPLEMENTED — 2026-05-06 SOP refresh. Original approval was 2026-03-17, but public-launch acceptance is blocked until the COPPA consent method, legal copy, and RLS migration pass the SOP v2.4 evidence gate.
 > Module: compliance (cross-cutting)
 > Routes: `/privacy`, `/terms`, `/settings`, `/consent`
 > API routes: `pages/api/user/delete-account.ts`, `pages/api/compliance/consent.ts`, `pages/api/compliance/consent-status.ts`
@@ -19,11 +19,20 @@ This spec was written against:
 - `docs/project-control.md` for execution order
 - Real code audit of: `lib/system-prompt-lite.ts`, `supabase/schema.sql`, `public/privacy.html`, `public/terms.html`, `public/data-deletion.html`, auth flow, data collection patterns
 
+### SOP v2.4 Refresh Status (2026-05-06)
+
+This is a high-risk compliance spec. Before any public launch decision, create or update an ADR-lite/Search Ledger using official sources and counsel-reviewed product copy.
+
+- FTC COPPA FAQ states operators generally must obtain verifiable parental consent before collecting personal information online from children under 13, unless an exception applies: https://www.ftc.gov/business-guidance/resources/complying-coppa-frequently-asked-questions
+- FTC verifiable parental consent guidance says the selected method must be reasonably designed, in light of available technology, to ensure the person giving consent is the child's parent: https://www.ftc.gov/business-guidance/privacy-security/verifiable-parental-consent-childrens-online-privacy-rule
+- Current code evidence: shared modal signup exists in `components/Auth/LoginModal.tsx:284-291`; global auth modal is mounted in `pages/_app.tsx:1-24`; account deletion API exists in `pages/api/user/delete-account.ts:19-56`; current initial RLS policies still include `USING (true)` in `supabase/migrations/20260506000100_initial_schema.sql:51-61`.
+- Current missing implementation: no `pages/privacy.tsx`, `pages/terms.tsx`, `pages/consent.tsx`, or `pages/api/compliance/*` routes were found in the current working tree on 2026-05-06.
+
 ### Regulatory Scope (MVP only)
 
 | Regulation | Applicability | MVP Action Required |
 |-----------|--------------|-------------------|
-| **COPPA** | YES — app collects birth year/month, ADHD challenges, and medical-category memory items for children < 13 | Parental consent checkbox at registration |
+| **COPPA** | YES — app collects birth year/month, ADHD challenges, and medical-category memory items for children < 13 | Verifiable parental consent flow; checkbox-only is not accepted as public-launch evidence without ADR-lite/legal review |
 | **FTC Act § 5** | YES — deceptive practices if privacy policy doesn't match actual data collection | Accurate privacy policy + medical disclaimer in AI responses |
 | **CCPA/CPRA** | NO — revenue/user thresholds not met for first 5,000 users | No action needed at MVP |
 | **GDPR** | NO — not targeting EU users | No action needed at MVP |
@@ -36,15 +45,15 @@ Internal design choice: We defer CCPA, GDPR, and cookie consent to post-launch, 
 - Six items only — no cookie banners, no data export API, no GDPR machinery
 - Privacy Policy and Terms of Service are static Next.js pages (not dynamic)
 - Account deletion uses existing CASCADE infrastructure — no soft-delete, no retention period
-- Parental consent is a checkbox + timestamp — no email verification of parent identity
+- Parental consent checkbox + timestamp is only an internal/private-test placeholder until the verifiable-consent gate is closed
 - RLS fix is a SQL migration — no application-level changes needed
 
 ### Evidence Layering
 
 | Claim | Basis |
 |-------|-------|
-| COPPA requires verifiable parental consent for < 13 data | External research supported (16 CFR § 312.5) |
-| Checkbox consent is acceptable for MVP | Internal design choice — FTC accepts multiple consent methods; checkbox is the lowest-friction option. Must upgrade to email-based consent if FTC tightens enforcement |
+| COPPA requires verifiable parental consent for < 13 data | Official FTC evidence; see SOP v2.4 refresh status above |
+| Checkbox-only consent is limited to private/internal MVP testing | Internal design choice, not a public-launch compliance conclusion. Public launch needs a documented method reasonably designed to verify parent status, or counsel-approved scope reduction that avoids covered child data collection |
 | CCPA thresholds not met at 5K users | External research supported (Cal. Civ. Code § 1798.140(d)) |
 | RLS `USING(true)` is a security gap | Internal design choice — current API routes use service_role key which bypasses RLS, so the gap is not currently exploitable. Fix anyway as defense-in-depth |
 
@@ -64,9 +73,9 @@ Internal design choice: We defer CCPA, GDPR, and cookie consent to post-launch, 
 
 ### Item 2: Parental Consent Checkbox
 
-**Problem**: COPPA requires verifiable parental consent before collecting children's health/behavior data. Current registration flow has no consent mechanism.
+**Problem**: COPPA requires verifiable parental consent before collecting children's health/behavior data when the rule applies. Current registration flow has terms/privacy acknowledgement text only, and no implemented parental consent record or verification mechanism.
 
-**Fix**: Add a required checkbox to the registration flow:
+**Fix**: Add a required consent gate to the registration flow. The simple checkbox below is a minimum UI placeholder for internal testing; it is not sufficient by itself for public launch unless the ADR-lite/legal review explicitly determines that the final collection scope and consent method satisfy COPPA:
 - Text: "I confirm I am 18 or older and the parent or legal guardian of the child whose information I am providing. I agree to the Privacy Policy and Terms of Service."
 - Links to `/privacy` and `/terms`
 - Store `consent_at` (ISO timestamp) and `consent_text` (the exact text agreed to) in a new `parental_consents` table
@@ -106,8 +115,8 @@ Note: The `UNIQUE(user_id)` constraint implicitly creates an index on `user_id`,
 
 Two registration paths exist. Both must capture consent:
 
-**Path A — Email signup** (`pages/login.tsx`):
-1. Add checkbox to signup form. Block signup if unchecked.
+**Path A — Email signup** (`components/Auth/LoginModal.tsx`):
+1. Add a consent control to the signup tab. Block signup if unchecked.
 2. After successful signup + auto-login, call `POST /api/compliance/consent` with `{ consentText }`.
 
 **Path B — OAuth login (Google/Facebook)** — first-time users:
@@ -117,11 +126,11 @@ OAuth users never see the signup form, so they skip the checkbox. Fix:
 3. If no consent record exists → redirect to `/consent`. After consent submitted → redirect back to original destination.
 4. `GET /api/compliance/consent-status` (new) — returns `{ hasConsent: boolean }`. Lightweight check, no sensitive data.
 
-This is the standard industry pattern (Duolingo, Notion use similar post-OAuth consent gates for COPPA/parental flows).
+Do not rely on unsourced competitor claims as SOP evidence. Use official FTC sources plus counsel-reviewed product requirements for the final gate.
 
 **Files**:
-- `supabase/compliance_tables.sql` (new)
-- `pages/login.tsx` — add checkbox to email signup form (NOT in NEVER-modify list)
+- `supabase/migrations/{timestamp}_compliance_tables.sql` (new; legacy draft names such as `supabase/compliance_tables.sql` are reference snippets only)
+- `components/Auth/LoginModal.tsx` — add signup consent control to the current modal auth flow
 - `pages/consent.tsx` (new) — standalone consent page for OAuth users
 - `pages/api/compliance/consent.ts` (new) — POST: store consent record
 - `pages/api/compliance/consent-status.ts` (new) — GET: check if consent exists
@@ -199,7 +208,7 @@ No file storage exists (no Supabase Storage buckets, no uploaded images). `messa
 - Click → confirmation modal: "This will permanently delete your account and all data including your child's profile, conversations, and AI-learned insights. This cannot be undone."
 - User must type "DELETE" in a text input to enable the confirm button
 - On confirm → call API → redirect to `/` landing page
-- The `/settings` page follows the same layout pattern as the current `pages/dashboard.tsx`. If SmartDrawer unification is not yet done, replicate whatever layout pattern Dashboard currently uses.
+- The `/settings` page uses the implemented `AppLayout` + SmartDrawer pattern, matching the current `pages/dashboard.tsx`.
 
 **Files**:
 - `pages/api/user/delete-account.ts` (new)
@@ -208,11 +217,11 @@ No file storage exists (no Supabase Storage buckets, no uploaded images). `messa
 
 ### Item 6: RLS Policy Fix
 
-**Problem**: All RLS policies in `supabase/schema.sql` use `USING (true)`, which means any authenticated Supabase client can read/write any user's data. Current API routes use `getSupabaseAdmin()` (service_role key, bypasses RLS), so this isn't currently exploitable. But if any future code uses the anon client for mutations, it's a data leak.
+**Problem**: Current versioned migrations still include broad `USING (true)` policies for user-owned data (`supabase/migrations/20260506000100_initial_schema.sql:51-61`, plus similar module-table patterns in family and memory migrations). Current API routes use `getSupabaseAdmin()` (service_role key, bypasses RLS), so this is not the current server-route authorization layer. But if any future code uses the anon client for user-owned queries or mutations, this becomes a data leak.
 
 **Fix**: Update RLS policies to enforce `auth.uid() = user_id` (or `auth.uid() = id` for the users table). This is a defense-in-depth measure.
 
-**Migration SQL** (`supabase/fix_rls_policies.sql`):
+**Migration SQL** (`supabase/migrations/{timestamp}_fix_rls_policies.sql`):
 ```sql
 -- Users table
 DROP POLICY IF EXISTS "Users can view own data" ON users;
@@ -244,7 +253,7 @@ CREATE POLICY "messages_insert" ON messages FOR INSERT
   WITH CHECK (EXISTS (SELECT 1 FROM conversations WHERE conversations.id = messages.conversation_id AND conversations.user_id = auth.uid()));
 ```
 
-**File**: `supabase/fix_rls_policies.sql` (new)
+**File**: `supabase/migrations/{timestamp}_fix_rls_policies.sql` (new)
 
 **Important note**: Since all current API routes use `getSupabaseAdmin()` (service_role key), these RLS changes have zero impact on existing functionality. The admin client bypasses RLS entirely. This fix only matters if/when client-side Supabase queries are introduced.
 
@@ -254,9 +263,10 @@ CREATE POLICY "messages_insert" ON messages FOR INSERT
 
 - [ ] AI chat responses end with medical disclaimer text
 - [ ] System prompt contains no TCM references
-- [ ] Email signup requires parental consent checkbox before account creation
+- [ ] Email signup requires the selected parental-consent control before account creation
 - [ ] OAuth (Google/Facebook) first-time login redirects to `/consent` page before accessing app
-- [ ] Consent record (timestamp, text, IP) is stored in `parental_consents` table
+- [ ] Consent record (timestamp, text, IP/user agent, method/version) is stored in `parental_consents` table
+- [ ] Public-launch ADR-lite/Search Ledger documents why the selected COPPA consent method is reasonably designed to verify parent status, or documents a counsel-approved scope reduction
 - [ ] `/privacy` page loads with accurate, current content
 - [ ] `/terms` page loads with accurate, current content
 - [ ] User can delete their account from `/settings` page
@@ -288,14 +298,14 @@ CREATE POLICY "messages_insert" ON messages FOR INSERT
 
 ### T002: Create compliance database tables
 
-- **File**: `supabase/compliance_tables.sql`
+- **File**: `supabase/migrations/{timestamp}_compliance_tables.sql`
 - **Do**: Create `parental_consents` table as specified in Item 2. Include RLS policies with `auth.uid() = user_id`.
 - **Verify**: SQL syntax is valid
 - **Commit**: `[T002] feat: add parental_consents table`
 
 ### T003: Fix RLS policies on existing tables
 
-- **File**: `supabase/fix_rls_policies.sql`
+- **File**: `supabase/migrations/{timestamp}_fix_rls_policies.sql`
 - **Do**: Replace all `USING (true)` policies on users, conversations, messages tables with proper `auth.uid()` checks as specified in Item 6.
 - **Verify**: SQL syntax is valid
 - **Commit**: `[T003] fix: replace USING(true) RLS policies with auth.uid() checks`
@@ -331,7 +341,7 @@ CREATE POLICY "messages_insert" ON messages FOR INSERT
 
 - **File**: `pages/settings.tsx`
 - **Do**:
-  1. Auth check: `useSession()` → redirect to `/login` if not authenticated
+  1. Auth check: `useSession()` → open the shared login modal if not authenticated; there is no current standalone `pages/login.tsx`
   2. Page title: "Settings - Qimi AI"
   3. Layout: same pattern as `pages/dashboard.tsx` (SmartDrawer + content area)
   4. Content: heading "Account Settings" + `DeleteAccountSection` component
@@ -340,16 +350,16 @@ CREATE POLICY "messages_insert" ON messages FOR INSERT
 - **Verify**: `npx tsc --noEmit`, `npm run build` pass
 - **Commit**: `[T006] feat: create minimal /settings page with account deletion`
 
-### T007a: Add parental consent checkbox to login page
+### T007a: Add parental consent control to signup modal
 
-- **File**: `pages/login.tsx` (signup section)
+- **File**: `components/Auth/LoginModal.tsx` (signup tab)
 - **Do**:
-  1. Add checkbox below password field in signup form: "I confirm I am 18 or older and the parent or legal guardian of the child whose information I am providing. I agree to the [Privacy Policy](/privacy) and [Terms of Service](/terms)."
+  1. Add consent control below password field in signup form: "I confirm I am 18 or older and the parent or legal guardian of the child whose information I am providing. I agree to the [Privacy Policy](/privacy) and [Terms of Service](/terms)."
   2. Disable "Sign Up" button unless checkbox is checked
   3. After successful signup + auto-login, call `POST /api/compliance/consent` with `{ consentText }` (the exact checkbox text)
   4. Do NOT modify `pages/api/auth/signup.ts` — consent is stored via a separate API route
 - **Verify**: `npx tsc --noEmit`, `npm run build` pass
-- **Commit**: `[T007a] feat: add parental consent checkbox to signup form`
+- **Commit**: `[T007a] feat: add parental consent control to signup modal`
 
 ### T007b: Create consent API route
 
@@ -379,11 +389,11 @@ CREATE POLICY "messages_insert" ON messages FOR INSERT
 
 - **File**: `pages/consent.tsx` (new)
 - **Do**:
-  1. Auth check: `useSession()` → redirect to `/login` if not authenticated
+  1. Auth check: `useSession()` → open the shared login modal if not authenticated; there is no current standalone `pages/login.tsx`
   2. On mount: call `GET /api/compliance/consent-status` — if already consented, redirect to `/dashboard`
   3. Show consent checkbox (same text as T007a): "I confirm I am 18 or older and the parent or legal guardian..."
   4. On submit: call `POST /api/compliance/consent` → redirect to `/dashboard`
-  5. Layout: centered card, no SmartDrawer (standalone page like `/login`)
+  5. Layout: centered page, no SmartDrawer
 - **Verify**: `npx tsc --noEmit`, `npm run build` pass
 - **Commit**: `[T007d] feat: create /consent page for OAuth users`
 

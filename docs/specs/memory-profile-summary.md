@@ -1,9 +1,10 @@
 # Module Spec: Memory And Profile Summary
 
-> Status: REVISED — 2026-03-17 | Self-reviewed: 2026-03-17 | Cross-reviewed: 2026-03-17, 2 P0 + 5 P1 fixed | Implementation status: Planned
+> Status: REVISED — 2026-03-17 | Self-reviewed: 2026-03-17 | Cross-reviewed: 2026-03-17, 2 P0 + 5 P1 fixed | Implementation status: Partially implemented
 > Module: memory-profile-summary
 > Routes: `pages/api/memory/`
 > Scope: Conversation-derived memory extraction (A.U.D.N.) + editable family summary + prompt injection
+> SOP v2.4 status: Requires refresh before prompt/chat integration; current-code facts must use line evidence.
 
 ---
 
@@ -39,8 +40,8 @@
 ### Current Implementation Snapshot
 
 - `lib/prompts.ts` accepts `familyNotes?: string` and `extractedFacts?: string[]`
-- No database table for summary or memory items exists yet
-- No extraction worker or memory retrieval route exists yet
+- `profile_summaries` and `memory_items` tables exist in `supabase/migrations/20260506000300_memory_profile_summary_tables.sql:L3-L59`
+- Memory API routes exist under `pages/api/memory/`; extraction starts in `pages/api/memory/extract.ts:L1-L18`, and relevant retrieval starts in `pages/api/memory/relevant.ts:L1-L53`
 - Chat stream handler (`pages/api/chat/stream.ts`) has no post-completion hook
 
 ### Execution Baseline
@@ -67,7 +68,9 @@ This module is the backend intelligence layer. The Family Profile page displays 
 
 ### 2.1 `profile_summaries`
 
-File: `supabase/memory_profile_summary_tables.sql`
+Migration source of truth: `supabase/migrations/20260506000300_memory_profile_summary_tables.sql`
+
+Legacy reference snippet: `supabase/memory_profile_summary_tables.sql`
 
 ```sql
 CREATE TABLE IF NOT EXISTS profile_summaries (
@@ -513,7 +516,7 @@ Rules:
 - Human gate: allowed only after machine gate passes and P0/P1 review findings are zero
 
 ### T001: Add schema
-- **File**: `supabase/memory_profile_summary_tables.sql`
+- **File**: `supabase/migrations/20260506000300_memory_profile_summary_tables.sql`
 - **Do**: Create `profile_summaries` and `memory_items` tables per § 2.1 and § 2.2. Include RLS policies, indexes, and the unique constraint on `(user_id, category, fact_key)`.
 - **Verify**: SQL is valid, categories match the 10-value CHECK constraint, columns match § 2.4.
 - **Commit**: `[T001] feat: add memory_items and profile_summaries schema`

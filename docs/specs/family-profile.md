@@ -1,12 +1,13 @@
 # Module Spec: Family Profile
 
-> Status: REDESIGNED — 2026-03-17 | Previous versions had incorrect ChallengeSelector on profile page. This version aligns with blueprint § 2.9.
+> Status: REDESIGNED — 2026-03-17 | Implementation status: Implemented, not yet human-accepted | Previous versions had incorrect ChallengeSelector on profile page. This version aligns with blueprint § 2.9.
 > Module: family-profile
 > Routes: `/family`
 > API routes: `pages/api/family/*`
 > Components: `components/Family/*`
 > Branch: `feature/family-profile`
 > Scope: Child basic info editing + read-only onboarding challenge tags + AI-extracted facts display. Accessed from Dashboard card.
+> SOP v2.4 status: Requires refresh before further implementation; current-code facts must use line evidence.
 
 ---
 
@@ -19,6 +20,7 @@ This spec was written against:
 - **Blueprint § 2.3** (对话后台处理): `每次对话后自动提取用户家庭信息（Memory Extraction）→ 提取的事实存入用户档案`
 - The canonical Layer 1 architecture in `docs/system-architecture.md`
 - The memory layer spec in `docs/specs/memory-profile-summary.md`
+- Current code evidence: `pages/family.tsx:L99-L162` renders the implemented family page; `pages/api/user/migrate-guest-data.ts:L118-L141` writes guest child data to `child_profiles`.
 
 ### Blueprint Traceability
 
@@ -129,7 +131,7 @@ If the user completed guest onboarding before registering:
 
 ### 1.7 Auth & Access
 
-- Page requires login. Redirect to `/login` if no session.
+- Page requires login. Open the shared login modal if no session; there is no current standalone `pages/login.tsx`.
 - Guest users cannot access the family profile page.
 
 ### 1.8 Medical Disclaimer
@@ -147,7 +149,9 @@ Static banner at page bottom: "Qimi AI is not a substitute for professional medi
 
 ## 2. Database Schema
 
-File: `supabase/family_tables.sql`
+Migration source of truth: `supabase/migrations/20260506000200_family_tables.sql`
+
+Legacy reference snippet: `supabase/family_tables.sql`
 
 ```sql
 CREATE TABLE IF NOT EXISTS child_profiles (
@@ -304,7 +308,7 @@ This component should be **removed** from the Family module. It belongs only in 
 
 ### 5.1 `pages/family.tsx` — Family profile page
 
-Auth pattern: `useSession()` → loading skeleton → redirect if no session → fetch data → render.
+Auth pattern: `useSession()` → loading skeleton → open shared login modal if no session → fetch data → render.
 
 Data fetching on mount (parallel):
 1. `GET /api/family` → child profile (name, birthday, gender, challenges)
@@ -325,7 +329,7 @@ Layout: sections as described in 1.1.
 - [ ] Family summary section shows friendly empty state when memory module is not built
 - [ ] Child age is computed and displayed correctly
 - [ ] Pre-populated data from guest onboarding appears (after migration fix)
-- [ ] Unauthenticated users are redirected to `/login`
+- [ ] Unauthenticated users are blocked from the page and prompted via the shared login modal
 - [ ] Medical disclaimer is visible at the bottom
 - [ ] Page is mobile responsive (tested at 375px width)
 - [ ] `npx tsc --noEmit` passes
@@ -343,7 +347,7 @@ Layout: sections as described in 1.1.
 
 ### T001: Fix database schema — challenges column TEXT[] → JSONB
 
-- **File**: `supabase/family_tables.sql`
+- **File**: `supabase/migrations/20260506000200_family_tables.sql`
 - **Do**: Update `challenges` column from `TEXT[]` to `JSONB NOT NULL DEFAULT '[]'`
 - **Verify**: File matches section 2 schema.
 - **Commit**: `[T001] fix: change challenges column to JSONB`

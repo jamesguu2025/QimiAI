@@ -1,12 +1,13 @@
 # Module Spec: Dashboard
 
-> Status: DONE — 2026-03-17 | Self-reviewed: 2026-03-16 | Second-pass reviewed: 2026-03-16 (P0: 0, P1: 0 after fixes) | Implementation status: Complete
+> Status: DONE — 2026-03-17 | Self-reviewed: 2026-03-16 | Second-pass reviewed: 2026-03-16 (P0: 0, P1: 0 after fixes) | Implementation status: Implemented, not yet human-accepted
 > Module: dashboard
 > Routes: `/dashboard`
 > API routes: `pages/api/dashboard/*`
 > Components: `components/Dashboard/*`
 > Branch: TBD (may share branch with infrastructure unification)
 > Scope: Feature hub page with summary cards linking to Family Profile, Growth Plan, and Reports.
+> SOP v2.4 status: Historical implementation spec. Do not use for new execution until refreshed with Search Ledger and current-code line evidence.
 
 ---
 
@@ -14,9 +15,10 @@
 
 This spec was written against:
 
-- The canonical Layer 1 architecture in `docs/system-architecture.md` (amended 2026-03-16)
+- The canonical Layer 1 architecture in `docs/system-architecture.md` (amended 2026-05-06)
 - The WeChat mini-program "我的" page design (reference-only, adapted for web)
 - The current repo structure
+- Current code evidence: `pages/dashboard.tsx:L77-L153` implements the Dashboard page with AppLayout and feature cards.
 
 ### Design Rationale
 
@@ -90,7 +92,7 @@ SmartDrawer + Content area
 ### 1.6 Auth & Access
 
 - Page requires login
-- Redirect to `/login` if no session
+- Open the shared login modal if no session; there is no current standalone `pages/login.tsx`
 - Guest users cannot access Dashboard
 
 ### 1.7 Medical Disclaimer
@@ -147,9 +149,9 @@ No `dashboardStore` is needed. Dashboard cards fetch summary data on mount and h
 
 ### 4.1 `pages/dashboard.tsx` — Dashboard hub page
 
-Note: `pages/dashboard.tsx` currently exists as a redirect to `/chat`. This file will be **replaced** with the new Dashboard page. The redirect is no longer needed since Dashboard is now a real page.
+Current reality: `pages/dashboard.tsx` is already a Dashboard page, not a redirect.
 
-Auth pattern: `useSession()` → loading skeleton → redirect if no session → parallel fetch summaries → render cards.
+Auth pattern: `useSession()` → loading skeleton → open shared login modal if no session → parallel fetch summaries → render cards.
 
 Data flow:
 - On mount: fetch summary APIs in parallel
@@ -164,7 +166,7 @@ Data flow:
 - [x] Family Profile card shows correct summary when child profile exists
 - [x] Cards show appropriate empty state text when no data exists
 - [x] Clicking a card navigates to the correct module page
-- [x] Unauthenticated users are redirected to `/login`
+- [x] Unauthenticated users are blocked from the page and prompted via the shared login modal
 - [x] Medical disclaimer is visible at the bottom
 - [x] SmartDrawer is visible and functional on Dashboard
 - [x] Page is mobile responsive (tested at 375px width)
@@ -195,10 +197,10 @@ This module requires the AppLayout → SmartDrawer unification to be completed f
 - **Verify**: `npx eslint`, `npx tsc --noEmit`, `npm run build` pass.
 - **Commit**: `[T001] feat: add DashboardCard component`
 
-### T002: Create /dashboard page (replace redirect)
+### T002: Create /dashboard page (historical task; already implemented)
 
 - **File**: `pages/dashboard.tsx`
-- **Do**: Replace existing redirect with new Dashboard hub page. Auth check, fetch family summary, render 3 cards. Growth Plan and Reports cards show empty-state text for now.
+- **Do**: Historical task only. Current code already implements the Dashboard hub page.
 - **Verify**: `npx eslint`, `npx tsc --noEmit`, `npm run build` pass.
 - **Commit**: `[T002] feat: replace /dashboard redirect with feature hub page`
 

@@ -1,16 +1,17 @@
 # Infrastructure Spec: AppLayout → SmartDrawer Unification
 
-> Status: DONE — 2026-03-16 | Implementation status: Complete
+> Status: DONE — 2026-03-16 | Implementation status: Implemented
 > Type: Shared infrastructure change (not a feature module)
 > Files affected: `components/Layout/AppLayout.tsx`, `components/Chat/SmartDrawer.tsx`, `pages/chat.tsx`
-> Priority: **P0 — blocks all new module pages**
+> Priority: Historical P0, no longer blocking as of 2026-05-06
 > Branch: current working branch (docs/architecture-v2 or dedicated branch)
+> SOP v2.4 status: Historical completed infrastructure spec. Do not execute task list as new work; verify current code instead.
 
 ---
 
 ## 0. Problem Statement
 
-Currently, the app has two incompatible layout patterns:
+Historical problem statement. Before this infrastructure task, the app had two incompatible layout patterns:
 
 1. **Chat page** (`pages/chat.tsx`): Uses `SmartDrawer` directly, manages drawer state locally (drawerOpen, drawerCollapsed), has its own header with menu button.
 2. **Other pages** (`AppLayout`): Uses `Sidebar` (`components/Layout/Sidebar.tsx`) which is a navigation sidebar (Dashboard, Chat, Blog, Settings links). Completely different from SmartDrawer.

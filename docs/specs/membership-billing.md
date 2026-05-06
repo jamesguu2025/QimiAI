@@ -6,6 +6,8 @@
 > API routes: `pages/api/billing/*`, `pages/api/user/subscription.ts`, `pages/api/stripe/webhook.ts`
 > Scope: Stripe-backed subscription purchase, billing portal, and subscription-state sync for Free/Pro gating after MVP launch.
 
+> SOP v2.4 note (2026-05-06): This is a planned post-MVP spec. Current code has no `users.subscription_tier` column, no Stripe routes, and no `pages/api/user/subscription.ts`; all other specs should treat registered users as Free until this module creates the billing schema/API.
+
 ---
 
 ## 0. Planning Baseline
@@ -20,8 +22,8 @@ This spec was written against:
 
 ### Current Implementation Snapshot
 
-- `users.subscription_tier` is already assumed by multiple specs as the quota source of truth
-- The architecture already distinguishes Free User vs Pro User
+- Earlier specs referenced `users.subscription_tier`, but the 2026-05-06 SOP refresh corrected active specs to treat it as future billing infrastructure rather than current schema
+- The product architecture distinguishes Free User vs Pro User as a planned entitlement model
 - The current web app does not implement Stripe checkout, billing portal, webhook processing, or a canonical subscription API route
 - Current reality remains: all registered users behave as Free users until the billing module exists
 
@@ -86,7 +88,7 @@ Webhook handler updates local subscription fields in the `users` table.
 
 ### 1.5 Entitlement Source Of Truth
 
-All product quota gates continue to read from one field:
+After this module is implemented, product quota gates read from one canonical entitlement field:
 
 - `users.subscription_tier`
 
@@ -95,7 +97,7 @@ Allowed values for the first implementation:
 - `free`
 - `pro`
 
-Do not introduce a second entitlement system.
+Do not introduce a second entitlement system. Until this module lands, quota gates must default registered users to Free and must not call a non-existent subscription endpoint.
 
 ### 1.6 Settings UI Scope
 
@@ -150,7 +152,7 @@ The app may read subscription state through one server endpoint, but the databas
 
 ## 3. Data Model
 
-Billing may start with minimal fields on `users`, or use a dedicated migration if they do not yet exist.
+Billing may start with minimal fields on `users`, or use a dedicated migration if they do not yet exist. As of 2026-05-06, these fields do not exist in the current local initial schema and must be added by this module before any dependent quota gates are enforced.
 
 Minimum required fields:
 

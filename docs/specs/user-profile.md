@@ -5,7 +5,7 @@
 > Module: user-profile → split into family-profile (`/family`) + settings (`/settings`)
 > Reason: Navigation unified to SmartDrawer. Profile split into child data (family-profile) and account settings (settings). See system-architecture.md amendment 2026-03-16.
 >
-> **Do not implement from this spec. Use `docs/specs/family-profile.md` instead.**
+> **Do not implement from this spec. Use `docs/specs/family-profile.md` and `docs/specs/settings.md` instead. Historical references below may mention old `/profile`, `/login`, and non-versioned SQL paths; those are superseded and must not be copied into new work.**
 
 ---
 
@@ -64,7 +64,7 @@ Completion scoring (each worth 25%):
 ### 1.4 Auth & Access
 
 - Page requires login (per architecture doc permission matrix)
-- Redirect to `/login` if no session
+- Historical behavior: redirect to `/login` if no session. Current behavior is superseded by shared login modal in the active family/settings specs.
 - Guest users cannot access the profile page
 
 ### 1.5 Medical Disclaimer
@@ -83,7 +83,7 @@ Completion scoring (each worth 25%):
 
 ## 2. Database Schema
 
-File: `supabase/user-profile_tables.sql`
+Historical file: `supabase/user-profile_tables.sql` (superseded; active migrations use `supabase/migrations/`)
 
 ```sql
 -- ===========================================
@@ -410,7 +410,7 @@ Error state: if fetch fails, show "Unable to load profile. Please refresh." in r
 - [ ] Challenge multi-select shows all 6 categories with correct items
 - [ ] Selected challenges are highlighted in teal; deselected are gray-bordered
 - [ ] Profile completion bar shows correct percentage and updates live after saves
-- [ ] Unauthenticated users are redirected to `/login`
+- [ ] Historical only: unauthenticated users were redirected to `/login`; active specs use the shared login modal
 - [ ] Medical disclaimer is visible at the bottom of the page
 - [ ] Page is mobile responsive (tested at 375px width)
 - [ ] `npx eslint` passes for touched files
@@ -434,7 +434,7 @@ Error state: if fetch fails, show "Unable to load profile. Please refresh." in r
 Each task is one file or one logical unit. Execute in order. Commit after each task passes lint + build.
 
 ### T001: Create database migration
-- **File**: `supabase/user-profile_tables.sql`
+- **File**: historical `supabase/user-profile_tables.sql` (do not use; active migrations use `supabase/migrations/`)
 - **Do**: Copy the SQL from section 2 above. Save the file.
 - **Verify**: File exists with correct SQL.
 - **Commit**: `[T001] feat: add child_profiles table migration`
@@ -481,7 +481,7 @@ Each task is one file or one logical unit. Execute in order. Commit after each t
 
 ### T007: Create /profile page
 - **File**: `pages/profile/index.tsx`
-- **Do**: Auth check with `useSession` (loading skeleton → redirect to `/login` if no session). Fetch `GET /api/profile` on mount. Render `AppLayout` wrapping `ProfileCompletionBar`, `ProfileHeader`, `ChildProfileForm`, and the medical disclaimer banner. Wire up `onNameSaved` and `onSaved` callbacks to update local state. Handle fetch error state.
+- **Do**: Historical auth check with `useSession` (loading skeleton → old `/login` redirect if no session). Do not copy this into active work; active specs use the shared login modal. Fetch `GET /api/profile` on mount. Render `AppLayout` wrapping `ProfileCompletionBar`, `ProfileHeader`, `ChildProfileForm`, and the medical disclaimer banner. Wire up `onNameSaved` and `onSaved` callbacks to update local state. Handle fetch error state.
 - **Reference**: Auth pattern from CLAUDE.md. Import `AppLayout` from `components/Layout/AppLayout`.
 - **Medical disclaimer**: `<p className="text-xs text-gray-500 ...">Qimi AI is not a substitute for professional medical advice, diagnosis, or treatment. Always consult a qualified healthcare provider.</p>` inside a light gray `<div>` at the bottom.
 - **Verify**: `npx eslint pages/profile/index.tsx` passes, `npx tsc --noEmit` passes, `npm run build` passes.

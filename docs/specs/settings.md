@@ -1,12 +1,13 @@
 # Module Spec: Settings
 
-> Status: APPROVED — 2026-03-17 | Self-reviewed: 2026-03-17 | Second-pass reviewed: 2026-03-17
+> Status: APPROVED — 2026-03-17 | Implementation status: Implemented, not yet human-accepted | Self-reviewed: 2026-03-17 | Second-pass reviewed: 2026-03-17
 > Module: settings
 > Route: `/settings`
 > API routes: `pages/api/settings/index.ts`, `pages/api/user/delete-account.ts`
 > Components: `components/Settings/*`
 > Branch: `codex/settings-module` or current working branch
 > Scope: Complete the account-settings MVP on top of the compliance-created minimal settings page. Keep the scope to parent account identity management plus the existing delete-account flow.
+> SOP v2.4 status: Requires refresh before further implementation; current-code facts must use line evidence.
 
 ---
 
@@ -22,10 +23,9 @@ This spec was written against:
 
 ### Current Implementation Reality
 
-- `pages/settings.tsx` already exists, but it is only a minimal compliance page with read-only account info plus `DeleteAccountSection`
+- `pages/settings.tsx` exists and currently renders account profile editing, membership placeholder, and `DeleteAccountSection` (`pages/settings.tsx:L121-L155`)
 - `pages/api/user/delete-account.ts` already exists and is the current delete-account implementation
-- There is no canonical `settings` spec yet
-- There is no dedicated `GET /api/settings` or `PUT /api/settings` route yet
+- `pages/api/settings/index.ts` exists and supports authenticated GET profile and PUT name update (`pages/api/settings/index.ts:L77-L139`)
 - The real `users` schema currently contains only: `email`, `name`, `avatar_url`, `provider`, `created_at`, `updated_at`
 - The real schema does **not** currently contain notification-preference columns or a working billing/subscription implementation
 
@@ -127,7 +127,7 @@ Retain the delete-account section from the compliance module.
 ### 1.5 Auth And Access
 
 - `/settings` requires login
-- unauthenticated users redirect to `/login`
+- unauthenticated users open the shared login modal; there is no current standalone `pages/login.tsx`
 - guest users cannot access the page
 
 ### 1.6 Layout And Navigation
@@ -335,7 +335,7 @@ Settings
 
 ## 6. Acceptance Criteria
 
-- [ ] `/settings` redirects unauthenticated users to `/login`
+- [ ] `/settings` blocks unauthenticated users and prompts via the shared login modal
 - [ ] signed-in user sees current name, email, avatar fallback/image, and provider
 - [ ] user can update name successfully from `/settings`
 - [ ] invalid name input shows a clear error and does not save
