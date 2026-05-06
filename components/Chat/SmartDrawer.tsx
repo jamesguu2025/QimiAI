@@ -28,6 +28,7 @@ import {
 import { useRouter } from 'next/router';
 import { signIn, signOut } from 'next-auth/react';
 import { useChatStore } from '../../stores/chatStore';
+import { useAuthUIStore } from '../../stores/authUIStore';
 
 // ============================================================================
 // 长按Hook - 用于移动端检测长按手势
@@ -938,11 +939,11 @@ export const SmartDrawer: React.FC<SmartDrawerProps> = ({
         {!effectiveCollapsed && isGuest && (
           <div className="p-4 border-t border-slate-100">
             <button
-              onClick={() => signIn('google')}
+              onClick={() => useAuthUIStore.getState().openLoginModal()}
               className="w-full flex items-center justify-center gap-2 px-4 py-2.5 bg-primary-teal text-white rounded-lg hover:bg-primary-teal/90 transition-colors font-medium text-sm"
             >
               <LogIn size={18} />
-              Sign in for unlimited
+              Sign in to continue
             </button>
           </div>
         )}

@@ -4,7 +4,7 @@
 
 import Head from 'next/head';
 import { useSession } from 'next-auth/react';
-import { useRouter } from 'next/router';
+import { useAuthUIStore } from '@/stores/authUIStore';
 import { useState, useEffect } from 'react';
 import AppLayout from '../components/Layout/AppLayout';
 import { FamilyCompletionBar } from '../components/Family/FamilyCompletionBar';
@@ -27,7 +27,7 @@ interface ChildProfileData {
 
 export default function FamilyPage() {
   const { data: session, status } = useSession();
-  const router = useRouter();
+  const { openLoginModal } = useAuthUIStore();
 
   // State
   const [childProfile, setChildProfile] = useState<ChildProfileData | null>(null);
@@ -59,6 +59,12 @@ export default function FamilyPage() {
     }
   }, [session]);
 
+  useEffect(() => {
+    if (status !== 'loading' && !session) {
+      openLoginModal();
+    }
+  }, [status, session, openLoginModal]);
+
   // Auth check - loading state
   if (status === 'loading') {
     return (
@@ -73,7 +79,6 @@ export default function FamilyPage() {
 
   // Auth check - redirect if no session
   if (!session) {
-    router.push('/login');
     return null;
   }
 

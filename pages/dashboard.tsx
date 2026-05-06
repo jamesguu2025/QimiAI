@@ -1,14 +1,14 @@
 import Head from 'next/head';
 import { useSession } from 'next-auth/react';
-import { useRouter } from 'next/router';
 import { User, BookOpen, FileText } from 'lucide-react';
+import { useAuthUIStore } from '@/stores/authUIStore';
 import { useState, useEffect } from 'react';
 import AppLayout from '../components/Layout/AppLayout';
 import { DashboardCard } from '../components/Dashboard/DashboardCard';
 
 export default function DashboardPage() {
   const { data: session, status } = useSession();
-  const router = useRouter();
+  const { openLoginModal } = useAuthUIStore();
 
   // Stats state
   const [userCount, setUserCount] = useState<number | null>(null);
@@ -50,6 +50,12 @@ export default function DashboardPage() {
     fetchStats();
   }, []);
 
+  useEffect(() => {
+    if (status !== 'loading' && !session) {
+      openLoginModal();
+    }
+  }, [status, session, openLoginModal]);
+
   // Auth check
   if (status === 'loading') {
     return (
@@ -63,7 +69,6 @@ export default function DashboardPage() {
   }
 
   if (!session) {
-    router.push('/login');
     return null;
   }
 
