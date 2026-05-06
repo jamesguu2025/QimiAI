@@ -31,8 +31,76 @@ export interface GuestData {
 }
 
 const GUEST_KEY = 'qimi_guest_data';
+const GUEST_MIGRATION_KEY = 'qimi_guest_migration';
+const MIGRATION_LOCK_TTL_MS = 2 * 60 * 1000;
 // TODO: 测试阶段暂时禁用消息限制，上线前改回 5
 const MAX_GUEST_MESSAGES = 999;
+
+function normalizeChatHistory(messages: Message[]): Message[] {
+  const deduped = new Map<string, Message>();
+
+  messages.forEach((message, index) => {
+    const timestamp = message.timestamp || new Date(index).toISOString();
+    deduped.set(message.id, {
+      ...message,
+      timestamp,
+    });
+  });
+
+  return Array.from(deduped.values()).sort((a, b) => {
+    const aTime = Date.parse(a.timestamp || '');
+    const bTime = Date.parse(b.timestamp || '');
+
+    if (Number.isNaN(aTime) || Number.isNaN(bTime)) {
+      return 0;
+    }
+
+    return aTime - bTime;
+  });
+}
+
+function getMigrationId(userId: string, guestData: GuestData): string {
+  const lastMessageId = guestData.chatHistory?.at(-1)?.id || '';
+  return [
+    'guest',
+    encodeURIComponent(userId),
+    guestData.createdAt,
+    guestData.messageCount,
+    lastMessageId,
+  ].join(':');
+}
+
+function isMigrationLocked(migrationKey: string): boolean {
+  if (typeof window === 'undefined') return false;
+
+  const rawLock = localStorage.getItem(GUEST_MIGRATION_KEY);
+  if (!rawLock) return false;
+
+  try {
+    const lock = JSON.parse(rawLock) as { key?: string; startedAt?: string };
+    if (lock.key !== migrationKey || !lock.startedAt) return false;
+
+    const lockAge = Date.now() - Date.parse(lock.startedAt);
+    return lockAge >= 0 && lockAge < MIGRATION_LOCK_TTL_MS;
+  } catch {
+    localStorage.removeItem(GUEST_MIGRATION_KEY);
+    return false;
+  }
+}
+
+function setMigrationLock(migrationKey: string): void {
+  if (typeof window === 'undefined') return;
+
+  localStorage.setItem(GUEST_MIGRATION_KEY, JSON.stringify({
+    key: migrationKey,
+    startedAt: new Date().toISOString(),
+  }));
+}
+
+function clearMigrationLock(): void {
+  if (typeof window === 'undefined') return;
+  localStorage.removeItem(GUEST_MIGRATION_KEY);
+}
 
 export const guestStorage = {
   /**
@@ -99,7 +167,13 @@ export const guestStorage = {
       createdAt: new Date().toISOString(),
       chatHistory: []
     };
-    const chatHistory = [...(data.chatHistory || []), message];
+    const chatHistory = normalizeChatHistory([
+      ...(data.chatHistory || []),
+      {
+        ...message,
+        timestamp: message.timestamp || new Date().toISOString(),
+      },
+    ]);
     guestStorage.save({ ...data, chatHistory });
   },
 
@@ -157,6 +231,7 @@ export const guestStorage = {
   clear: () => {
     if (typeof window === 'undefined') return;
     localStorage.removeItem(GUEST_KEY);
+    localStorage.removeItem(GUEST_MIGRATION_KEY);
   },
 
   /**
@@ -167,22 +242,31 @@ export const guestStorage = {
     const guestData = guestStorage.get();
     if (!guestData) return false;
 
+    const migrationId = getMigrationId(userId, guestData);
+    if (isMigrationLocked(migrationId)) {
+      return false;
+    }
+
+    setMigrationLock(migrationId);
+
     try {
       const response = await fetch('/api/user/migrate-guest-data', {
         method: 'POST',
         headers: {
           'Content-Type': 'application/json'
         },
-        body: JSON.stringify({ userId, guestData })
+        body: JSON.stringify({ userId, guestData, migrationId })
       });
 
       if (response.ok) {
         guestStorage.clear();
         return true;
       }
+      clearMigrationLock();
       return false;
     } catch (error) {
       console.error('Failed to migrate guest data:', error);
+      clearMigrationLock();
       return false;
     }
   },

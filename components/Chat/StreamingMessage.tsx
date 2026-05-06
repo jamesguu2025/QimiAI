@@ -5,6 +5,8 @@ import { RAGSource } from '../../types/api';
 import { FileText, Image as ImageIcon, File } from 'lucide-react';
 import { formatFileSize } from '../../utils/format';
 import { Attachment } from '../../types';
+import remarkGfm from 'remark-gfm';
+import { parseChatContent } from '../../utils/chat-message-format';
 
 interface StreamingMessageProps {
   role: 'user' | 'assistant';
@@ -32,6 +34,7 @@ export const StreamingMessage: React.FC<StreamingMessageProps> = ({
   isStreaming,
 }) => {
   const isUser = role === 'user';
+  const { displayContent } = isUser ? { displayContent: content } : parseChatContent(content);
 
   return (
     <div className={`flex w-full mb-6 group ${isUser ? 'justify-end' : 'justify-start'}`}>
@@ -79,10 +82,10 @@ export const StreamingMessage: React.FC<StreamingMessageProps> = ({
             : 'text-slate-600'}
         `}>
           {isUser ? (
-            <p className="whitespace-pre-wrap">{content}</p>
+            <p className="whitespace-pre-wrap">{displayContent}</p>
           ) : (
-            <div className="prose prose-slate max-w-none prose-p:text-[15px] prose-p:leading-relaxed prose-p:text-slate-600 prose-p:font-medium prose-headings:font-semibold prose-headings:text-slate-800 prose-a:text-primary-teal prose-strong:text-slate-700 prose-strong:font-semibold prose-ul:my-2 prose-li:my-0.5 prose-li:text-[15px] prose-li:text-slate-600">
-              <ReactMarkdown>{content}</ReactMarkdown>
+            <div className="prose prose-slate max-w-none prose-p:text-[15px] prose-p:leading-relaxed prose-p:text-slate-600 prose-p:font-medium prose-headings:font-semibold prose-headings:text-slate-800 prose-a:text-primary-teal prose-strong:text-slate-700 prose-strong:font-semibold prose-ul:my-2 prose-li:my-0.5 prose-li:text-[15px] prose-li:text-slate-600 prose-table:block prose-table:w-full prose-table:overflow-x-auto prose-table:border-collapse prose-th:border prose-th:border-slate-300 prose-th:bg-slate-50 prose-th:px-3 prose-th:py-2 prose-th:text-left prose-th:text-sm prose-td:border prose-td:border-slate-200 prose-td:px-3 prose-td:py-2 prose-td:text-sm">
+              <ReactMarkdown remarkPlugins={[remarkGfm]}>{displayContent}</ReactMarkdown>
               {/* 流式输出光标 */}
               {isStreaming && (
                 <span className="inline-block w-0.5 h-4 ml-0.5 bg-slate-400 animate-pulse" />

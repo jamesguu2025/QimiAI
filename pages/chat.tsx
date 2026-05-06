@@ -45,10 +45,12 @@ export default function ChatPage() {
         selectConversation,
         createNewChat,
         currentConversation,
+        loadConversations,
     } = useChatStore();
 
     const messagesEndRef = useRef<HTMLDivElement>(null);
     const modeHandledRef = useRef<string | null>(null);
+    const guestMigrationKeyRef = useRef<string | null>(null);
 
     // 自动滚动到底部
     const scrollToBottom = () => {
@@ -128,7 +130,24 @@ export default function ChatPage() {
             setShowOnboarding(false);
             const guestData = guestStorage.get();
             if (guestData && session.user?.email) {
-                guestStorage.migrateToUser(session.user.email);
+                const migrationKey = JSON.stringify({
+                    email: session.user.email,
+                    createdAt: guestData.createdAt,
+                    messageCount: guestData.messageCount,
+                    lastMessageId: guestData.chatHistory?.at(-1)?.id,
+                });
+
+                if (guestMigrationKeyRef.current !== migrationKey) {
+                    guestMigrationKeyRef.current = migrationKey;
+                    guestStorage.migrateToUser(session.user.email).then((migrated) => {
+                        if (migrated) {
+                            setMessages([WELCOME_MESSAGE]);
+                            loadConversations();
+                        } else {
+                            guestMigrationKeyRef.current = null;
+                        }
+                    });
+                }
             }
         } else {
             setIsGuest(true);
@@ -152,7 +171,7 @@ export default function ChatPage() {
                 }
             }
         }
-    }, [session, status, setMessages]);
+    }, [session, status, setMessages, loadConversations]);
 
     // 处理初始模式 - 使用 ref 防止刷新时重复触发
     useEffect(() => {
@@ -176,6 +195,17 @@ export default function ChatPage() {
             return;
         }
 
+        if (isGuest) {
+            guestStorage.addMessage({
+                id: `guest-user-${Date.now()}`,
+                role: 'user',
+                content,
+                timestamp: new Date().toISOString(),
+            });
+            guestStorage.incrementMessageCount();
+            setGuestMessageCount(prev => prev + 1);
+        }
+
         // 构造 userProfile 用于 AI 个性化回复
         let userProfile = undefined;
         if (isGuest) {
@@ -190,12 +220,6 @@ export default function ChatPage() {
         // TODO: 登录用户从 Supabase 获取 userProfile (Phase 2)
 
         await sendMessage(content, attachments, forceRAG, userProfile);
-
-        if (isGuest) {
-            guestStorage.addMessage({ id: Date.now().toString(), role: 'user', content });
-            guestStorage.incrementMessageCount();
-            setGuestMessageCount(prev => prev + 1);
-        }
     };
 
     // 访客引导完成
@@ -267,7 +291,7 @@ export default function ChatPage() {
                             <span>
                                 {guestStorage.getRemainingMessages()} free messages remaining.{' '}
                                 <button onClick={() => setShowLoginWall(true)} className="font-semibold underline hover:text-amber-800">
-                                    Sign up for unlimited
+                                    Sign in for more
                                 </button>
                             </span>
                         </div>

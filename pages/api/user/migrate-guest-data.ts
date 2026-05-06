@@ -23,12 +23,14 @@ interface GuestData {
     id: string;
     role: string;
     content: string;
+    timestamp?: string;
   }>;
   firstQuestion?: string;
 }
 
 interface MigrateRequest {
   guestSessionId: string;
+  migrationId?: string;
   chatHistory?: GuestData['chatHistory'];
   childProfile?: {
     birthYear?: number;
@@ -58,6 +60,9 @@ export default async function handler(
     const rawBody = req.body;
     let chatHistory: MigrateRequest['chatHistory'];
     let childProfile: MigrateRequest['childProfile'];
+    const migrationId = typeof rawBody.migrationId === 'string'
+      ? rawBody.migrationId.slice(0, 255)
+      : undefined;
 
     if (rawBody.guestData) {
       // Client sends guestData format
@@ -138,13 +143,103 @@ export default async function handler(
 
     // Migrate chat history to conversations if there's any
     if (chatHistory && chatHistory.length > 0) {
+      const firstUserMessage = chatHistory.find(msg => msg.role === 'user')?.content;
+
+      if (!firstUserMessage) {
+        console.log('[migrate-guest-data] Skipping migration without user messages');
+        return res.status(200).json({ success: true, skipped: true, reason: 'no_user_messages' });
+      }
+
+      const title = (rawBody.guestData?.firstQuestion || rawBody.firstQuestion || firstUserMessage).slice(0, 50);
+      let canUseMigrationId = Boolean(migrationId);
+
+      if (migrationId) {
+        const { data: existingByMigrationId, error: migrationIdLookupError } = await supabase
+          .from('conversations')
+          .select('id')
+          .eq('user_id', userId)
+          .eq('guest_migration_id', migrationId)
+          .maybeSingle();
+
+        if (!migrationIdLookupError && existingByMigrationId) {
+          console.log('[migrate-guest-data] Skipping duplicate migration id:', existingByMigrationId.id);
+          return res.status(200).json({
+            success: true,
+            conversationId: existingByMigrationId.id,
+            skipped: true,
+          });
+        }
+
+        if (migrationIdLookupError && (
+          migrationIdLookupError.code === '42703' ||
+          migrationIdLookupError.message?.includes('guest_migration_id')
+        )) {
+          canUseMigrationId = false;
+        } else if (migrationIdLookupError) {
+          console.error('[migrate-guest-data] Failed to check migration id:', migrationIdLookupError);
+          return res.status(500).json({ error: 'Failed to check migration id' });
+        }
+      }
+
+      const { data: possibleDuplicates, error: duplicateLookupError } = await supabase
+        .from('conversations')
+        .select('id, created_at')
+        .eq('user_id', userId)
+        .eq('title', title)
+        .order('created_at', { ascending: false })
+        .limit(20);
+
+      if (duplicateLookupError) {
+        console.error('[migrate-guest-data] Failed to check duplicates:', duplicateLookupError);
+        return res.status(500).json({ error: 'Failed to check existing migrations' });
+      }
+
+      if (possibleDuplicates && possibleDuplicates.length > 0) {
+        const duplicateIds = possibleDuplicates.map(conversation => conversation.id);
+        const { data: existingMessages, error: messageLookupError } = await supabase
+          .from('messages')
+          .select('conversation_id, role, content, created_at')
+          .in('conversation_id', duplicateIds)
+          .order('created_at', { ascending: true });
+
+        if (messageLookupError) {
+          console.error('[migrate-guest-data] Failed to check duplicate messages:', messageLookupError);
+          return res.status(500).json({ error: 'Failed to check existing messages' });
+        }
+
+        const targetSignature = chatHistory
+          .map(msg => `${msg.role}:${msg.content}`)
+          .join('\n---\n');
+        for (const conversation of possibleDuplicates) {
+          const conversationMessages = (existingMessages || [])
+            .filter(msg => msg.conversation_id === conversation.id)
+          const existingSignature = conversationMessages
+            .map(msg => `${msg.role}:${msg.content}`)
+            .join('\n---\n');
+          const existingFirstUserMessage = conversationMessages.find(msg => msg.role === 'user')?.content;
+
+          if (
+            existingSignature === targetSignature ||
+            (firstUserMessage && existingFirstUserMessage === firstUserMessage)
+          ) {
+            console.log('[migrate-guest-data] Skipping duplicate migration:', conversation.id);
+            return res.status(200).json({
+              success: true,
+              conversationId: conversation.id,
+              skipped: true,
+            });
+          }
+        }
+      }
+
       // Create a new conversation for the migrated chat
       const { data: conversation, error: convError } = await supabase
         .from('conversations')
         .insert({
           user_id: userId,
-          title: (rawBody.guestData?.firstQuestion || rawBody.firstQuestion || 'Migrated Chat').slice(0, 50),
+          title,
           folder_key: null,
+          ...(canUseMigrationId && migrationId ? { guest_migration_id: migrationId } : {}),
         })
         .select()
         .single()
@@ -158,7 +253,16 @@ export default async function handler(
           created_at: new Date(Date.now() + index).toISOString(),
         }));
 
-        await supabase.from('messages').insert(messagesToInsert);
+        const { error: insertMessagesError } = await supabase.from('messages').insert(messagesToInsert);
+        if (insertMessagesError) {
+          console.error('[migrate-guest-data] Failed to insert messages:', insertMessagesError);
+          return res.status(500).json({ error: 'Failed to migrate messages' });
+        }
+
+        console.log('[migrate-guest-data] Migrated guest chat:', conversation.id);
+      } else if (convError) {
+        console.error('[migrate-guest-data] Failed to create conversation:', convError);
+        return res.status(500).json({ error: 'Failed to create conversation' });
       }
     }
 
