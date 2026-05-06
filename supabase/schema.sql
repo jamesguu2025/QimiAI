@@ -10,6 +10,7 @@ CREATE TABLE IF NOT EXISTS users (
   name TEXT,
   avatar_url TEXT,
   provider TEXT NOT NULL DEFAULT 'google',
+  password_hash TEXT,
   created_at TIMESTAMPTZ DEFAULT NOW(),
   updated_at TIMESTAMPTZ DEFAULT NOW()
 );
@@ -25,6 +26,7 @@ CREATE TABLE IF NOT EXISTS conversations (
   user_id UUID NOT NULL REFERENCES users(id) ON DELETE CASCADE,
   title TEXT NOT NULL DEFAULT 'New Conversation',
   folder_key TEXT,
+  guest_migration_id TEXT,
   message_count INTEGER DEFAULT 0,
   last_message TEXT,
   created_at TIMESTAMPTZ DEFAULT NOW(),
@@ -34,6 +36,9 @@ CREATE TABLE IF NOT EXISTS conversations (
 -- Indexes for user lookup and sorting
 CREATE INDEX IF NOT EXISTS idx_conversations_user_id ON conversations(user_id);
 CREATE INDEX IF NOT EXISTS idx_conversations_updated_at ON conversations(updated_at DESC);
+CREATE UNIQUE INDEX IF NOT EXISTS idx_conversations_guest_migration
+  ON conversations(user_id, guest_migration_id)
+  WHERE guest_migration_id IS NOT NULL;
 
 -- ===========================================
 -- 3. Messages Table
