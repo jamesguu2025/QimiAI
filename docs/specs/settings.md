@@ -1,6 +1,6 @@
 # Module Spec: Settings
 
-> Status: APPROVED — 2026-03-17 | Implementation status: Implemented, not yet human-accepted | Self-reviewed: 2026-03-17 | Second-pass reviewed: 2026-03-17
+> Status: APPROVED — 2026-03-17 | Implementation status: Implemented, human-accepted 2026-05-07 | Self-reviewed: 2026-03-17 | Second-pass reviewed: 2026-03-17
 > Module: settings
 > Route: `/settings`
 > API routes: `pages/api/settings/index.ts`, `pages/api/user/delete-account.ts`

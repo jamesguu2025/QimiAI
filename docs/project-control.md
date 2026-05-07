@@ -122,7 +122,7 @@ Current baseline:
 - Dashboard (feature hub): `Implemented, not yet human-accepted` (spec: `docs/specs/dashboard.md`, status DONE)
 - Family Profile (was User Profile): `Implemented, not yet human-accepted` (page/API/components exist; spec still needs SOP v2.4 refresh before next expansion)
 - **Compliance (MVP launch gate)**: `Partially implemented` (delete-account/settings pieces exist; privacy/terms/consent pages and high-risk EBG record still pending)
-- Settings (account): `Implemented, not yet human-accepted` (settings page and API exist; spec needs current-code evidence refresh)
+- Settings (account): `Implemented` and human-accepted in current working branch
 - Growth Plan: `Planned`
 - Report Analysis: `Planned`
 - Crisis Calm: `Planned`
@@ -145,7 +145,7 @@ The project must move forward in this order unless the user explicitly overrides
 3. **SOP v2.4 planning refresh for the active slice** (P0 planning hygiene before further implementation)
 4. **Compliance MVP launch gate closure** — complete before public launch; high-risk items need EBG / Search Ledger
 5. **Family Profile technical + human acceptance**
-6. **Settings technical + human acceptance**
+6. ~~Settings technical + human acceptance~~ — completed 2026-05-07
 7. **Dashboard human acceptance**
 8. `growth-plan`
 9. `report-analysis`
