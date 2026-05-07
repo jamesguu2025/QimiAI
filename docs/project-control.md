@@ -139,20 +139,22 @@ The project must move forward in this order unless the user explicitly overrides
 > Amended 2026-03-16: Added SmartDrawer unification and Dashboard as prerequisites. User Profile split into Family Profile + Settings.
 > Amended 2026-03-17: Added compliance module as launch gate. Can execute in parallel with feature modules.
 > Amended 2026-05-06: Before new feature implementation, refresh the active spec to SOP v2.4 if it contains current-code facts, external claims, or high-risk compliance/security decisions.
+> Amended 2026-05-07: Added SmartDrawer topic folder behavior closure before Family/Profile acceptance after manual QA found topic-started conversations were not persisted under the selected topic.
 
 1. Stabilize and freeze shared chat infrastructure
 2. Finish only the minimum follow-up reminder closure needed to keep the current branch coherent
 3. **SOP v2.4 planning refresh for the active slice** (P0 planning hygiene before further implementation)
 4. **Compliance MVP launch gate closure** — complete before public launch; high-risk items need EBG / Search Ledger
-5. **Family Profile technical + human acceptance**
-6. ~~Settings technical + human acceptance~~ — completed 2026-05-07
-7. **Dashboard human acceptance**
-8. `growth-plan`
-9. `report-analysis`
-10. `crisis-calm`
-11. `memory-profile-summary` prompt integration + acceptance
-12. `membership-billing` (post-MVP monetization; Stripe checkout, billing portal, entitlement sync)
-13. Return to deeper follow-up reminder iteration only after the higher-frequency product paths above are stable
+5. **SmartDrawer topic folder behavior closure** — shared chat/navigation infrastructure; complete before Family/Profile acceptance continues
+6. **Family Profile technical + human acceptance**
+7. ~~Settings technical + human acceptance~~ — completed 2026-05-07
+8. **Dashboard human acceptance**
+9. `growth-plan`
+10. `report-analysis`
+11. `crisis-calm`
+12. `memory-profile-summary` prompt integration + acceptance
+13. `membership-billing` (post-MVP monetization; Stripe checkout, billing portal, entitlement sync)
+14. Return to deeper follow-up reminder iteration only after the higher-frequency product paths above are stable
 
 Rationale:
 

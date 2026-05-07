@@ -76,11 +76,14 @@ The app uses **one** sidebar for all logged-in pages:
 SmartDrawer (all logged-in pages)
 ├── Top: Dashboard button (switches to /dashboard)
 ├── Topic cards (8 categories — existing)
-├── Conversation list (existing — search, pin, rename, delete)
+│   └── Topic-scoped conversation children (planned closure; see smartdrawer-unification T006)
+├── Recent conversation list (existing — search, pin, rename, delete)
 └── Bottom: Guest sign-in CTA (guest only)
 ```
 
 The **Dashboard button** at the top of SmartDrawer already exists. When the user is on `/dashboard`, clicking a conversation in the list navigates back to `/chat` with that conversation loaded. No additional navigation items are needed inside SmartDrawer.
+
+Topic cards are not feature-module navigation entries. They are chat organization affordances. Selecting a topic should start a chat scoped to that topic, persist the resulting `conversations.folder_key`, and show topic-scoped conversation children under that topic while preserving a global Recent list. This is a current shared-infrastructure closure item, not a downstream Growth Plan or Reports feature.
 
 ### Top-right UserMenu
 
