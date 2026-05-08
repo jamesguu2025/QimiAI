@@ -6,7 +6,9 @@ import { Message, Attachment, TopicFolder, normalizeTopicFolder } from '../types
 
 /** User profile for context injection */
 export interface UserProfile {
+  childName?: string;
   childBirthday?: { year: number; month: number };
+  gender?: 'boy' | 'girl' | 'other';
   challenges?: Array<{ id: string; name: string; categoryId?: string; categoryName?: string }>;
 }
 

@@ -6,12 +6,12 @@ import { Moon, BookOpen, Heart, MessageSquare, Pin, Edit3, Trash2 } from 'lucide
 import { StreamingMessage } from '../components/Chat/StreamingMessage';
 import { ChatInput, FileAttachment } from '../components/Chat/ChatInput';
 import GuestOnboarding from '../components/Chat/GuestOnboarding';
-import LoginWall from '../components/Chat/LoginWall';
 import { ChatPageSkeleton } from '../components/UI/Skeleton';
 import AppLayout from '../components/Layout/AppLayout';
 import { guestStorage } from '../utils/guest-storage';
 import { useChat } from '../hooks/useChat';
 import { useChatStore, WELCOME_MESSAGE } from '../stores/chatStore';
+import { useAuthUIStore } from '../stores/authUIStore';
 import MemoryToast from '../components/Chat/MemoryToast';
 import { isTopicFolder, Message, normalizeTopicFolder, TopicFolder } from '../types/chat';
 
@@ -31,11 +31,11 @@ export default function ChatPage() {
     const router = useRouter();
     const { mode } = router.query;
     const { data: session, status } = useSession();
+    const { openLoginModal } = useAuthUIStore();
 
     // 访客模式状态
     const [isGuest, setIsGuest] = useState(true);
     const [showOnboarding, setShowOnboarding] = useState(false);
-    const [showLoginWall, setShowLoginWall] = useState(false);
     const [guestMessageCount, setGuestMessageCount] = useState(0);
 
     // RAG 强化模式状态 (Force RAG)
@@ -221,7 +221,7 @@ export default function ChatPage() {
     // 发送消息
     const handleSend = async (content: string, attachments?: FileAttachment[]) => {
         if (isGuest && guestStorage.hasReachedLimit()) {
-            setShowLoginWall(true);
+            openLoginModal('signup');
             return;
         }
 
@@ -242,7 +242,9 @@ export default function ChatPage() {
             const guestData = guestStorage.get();
             if (guestData?.childBirthday || guestData?.challenges) {
                 userProfile = {
+                    childName: guestData.childName,
                     childBirthday: guestData.childBirthday,
+                    gender: guestData.gender,
                     challenges: guestData.challenges,
                 };
             }
@@ -254,11 +256,13 @@ export default function ChatPage() {
 
     // 访客引导完成
     const handleOnboardingComplete = (data: {
+        childName: string;
         childBirthday: { year: number; month: number };
+        gender: 'boy' | 'girl' | 'other';
         challenges: { id: string; name: string; categoryId: string; categoryName: string }[];
         firstQuestion: string;
     }) => {
-        guestStorage.initSession(data.childBirthday, data.challenges, data.firstQuestion);
+        guestStorage.initSession(data.childName, data.childBirthday, data.gender, data.challenges, data.firstQuestion);
         setShowOnboarding(false);
         if (data.firstQuestion) {
             setTimeout(() => handleSend(data.firstQuestion), 500);
@@ -334,7 +338,10 @@ export default function ChatPage() {
         return (
             <div className="h-screen bg-white">
                 <Head><title>Welcome - Qimi AI</title></Head>
-                <GuestOnboarding onComplete={handleOnboardingComplete} />
+                <GuestOnboarding
+                    onComplete={handleOnboardingComplete}
+                    onLogin={() => openLoginModal('login')}
+                />
             </div>
         );
     }
@@ -355,23 +362,13 @@ export default function ChatPage() {
                         <div className="max-w-3xl mx-auto flex items-center justify-center gap-2 text-sm text-amber-700">
                             <span>
                                 {guestStorage.getRemainingMessages()} free messages remaining.{' '}
-                                <button onClick={() => setShowLoginWall(true)} className="font-semibold underline hover:text-amber-800">
+                                <button onClick={() => openLoginModal('signup')} className="font-semibold underline hover:text-amber-800">
                                     Sign in for more
                                 </button>
                             </span>
                         </div>
                     </div>
                 )}
-
-                {/* 登录墙 */}
-                {showLoginWall && (
-                    <LoginWall
-                        onClose={() => setShowLoginWall(false)}
-                        messageCount={guestMessageCount}
-                        maxMessages={guestStorage.getMaxMessages()}
-                    />
-                )}
-
                 {/* Chat 内容 */}
                 <div className="flex-1 overflow-y-auto">
                     <div className="max-w-3xl mx-auto px-4 py-8 flex flex-col min-h-full">

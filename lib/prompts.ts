@@ -166,7 +166,9 @@ When your response contains **specific, actionable intervention plans**, output 
  * User profile interface
  */
 export interface UserProfile {
+  childName?: string;
   childBirthday?: { year: number; month: number } | string;
+  gender?: 'boy' | 'girl' | 'other';
   challenges?: Array<{ id: string; name: string; categoryId?: string; categoryName?: string }>;
   familyNotes?: string;
   extractedFacts?: string[];
@@ -227,12 +229,22 @@ export function buildUserContextSection(userProfile: UserProfile | null): string
 
   const sections: string[] = [];
 
+  // Child name
+  if (userProfile.childName?.trim()) {
+    sections.push(`**Child's Name/Nickname**: ${userProfile.childName.trim()}`);
+  }
+
   // Child age
   if (userProfile.childBirthday) {
     const ageText = calculateAgeText(userProfile.childBirthday);
     if (ageText) {
       sections.push(`**Child's Age**: ${ageText}`);
     }
+  }
+
+  // Gender
+  if (userProfile.gender) {
+    sections.push(`**Child's Gender**: ${userProfile.gender}`);
   }
 
   // Challenges

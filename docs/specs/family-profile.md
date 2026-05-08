@@ -48,7 +48,9 @@ This spec was written against:
 ### Guest Data Migration Rule
 
 Per `docs/system-architecture.md` Section 7, when a guest registers:
+- `childName` → `child_profiles.name`
 - `childBirthday` → `child_profiles.birth_year` + `child_profiles.birth_month`
+- `gender` → `child_profiles.gender`
 - `challenges` (SelectedChallenge[]) → `child_profiles.challenges` (JSONB)
 - The migration endpoint (`pages/api/user/migrate-guest-data.ts`) must write to `child_profiles`, NOT to legacy `users` table columns
 
@@ -125,7 +127,9 @@ AppLayout (SmartDrawer + Content)
 ### 1.6 Pre-population from Guest Onboarding
 
 If the user completed guest onboarding before registering:
+- `childName` → pre-populate child name
 - `childBirthday` → pre-populate birth year and month
+- `gender` → pre-populate gender
 - `challenges` → pre-populate the read-only challenge tags
 - The family page must show this data on first visit, not empty fields
 

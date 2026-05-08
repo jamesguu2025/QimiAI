@@ -90,7 +90,7 @@ interface ChatState {
 /** Chat actions */
 interface ChatActions {
   // Message actions
-  sendMessage: (content: string, attachments?: Attachment[], forceRAG?: boolean, userProfile?: { childBirthday?: { year: number; month: number }; challenges?: Array<{ id: string; name: string; categoryId?: string; categoryName?: string }> }) => Promise<void>;
+  sendMessage: (content: string, attachments?: Attachment[], forceRAG?: boolean, userProfile?: { childName?: string; childBirthday?: { year: number; month: number }; gender?: 'boy' | 'girl' | 'other'; challenges?: Array<{ id: string; name: string; categoryId?: string; categoryName?: string }> }) => Promise<void>;
   stopStream: () => void;
   clearMessages: () => void;
   setMessages: (messages: Message[]) => void;
@@ -133,7 +133,7 @@ export const useChatStore = create<ChatState & ChatActions>((set, get) => ({
   error: null,
 
   // Send message with streaming response
-  sendMessage: async (content: string, attachments?: Attachment[], forceRAG?: boolean, userProfile?: { childBirthday?: { year: number; month: number }; challenges?: Array<{ id: string; name: string; categoryId?: string; categoryName?: string }> }) => {
+  sendMessage: async (content: string, attachments?: Attachment[], forceRAG?: boolean, userProfile?: { childName?: string; childBirthday?: { year: number; month: number }; gender?: 'boy' | 'girl' | 'other'; challenges?: Array<{ id: string; name: string; categoryId?: string; categoryName?: string }> }) => {
     const { currentConversation, activeFolderKey, abortController: existingController } = get();
     const messageFolderKey = normalizeTopicFolder(currentConversation?.folderKey || activeFolderKey);
 

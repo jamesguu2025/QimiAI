@@ -20,7 +20,9 @@ export interface SelectedChallenge {
 }
 
 export interface GuestData {
+  childName?: string;
   childBirthday?: { year: number; month: number };
+  gender?: 'boy' | 'girl' | 'other';
   childAge?: number; // 计算得出
   challenges?: SelectedChallenge[];
   firstQuestion?: string;
@@ -181,7 +183,9 @@ export const guestStorage = {
    * 初始化访客会话（新版：支持生日、挑战、首个问题）
    */
   initSession: (
+    childName: string,
     childBirthday: { year: number; month: number },
+    gender: 'boy' | 'girl' | 'other',
     challenges: SelectedChallenge[],
     firstQuestion: string
   ) => {
@@ -193,7 +197,9 @@ export const guestStorage = {
     if (monthDiff < 0) childAge--;
 
     guestStorage.save({
+      childName,
       childBirthday,
+      gender,
       childAge,
       challenges,
       firstQuestion,

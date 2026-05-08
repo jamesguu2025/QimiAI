@@ -226,16 +226,21 @@ interface SelectedChallenge {
 
 interface GuestOnboardingProps {
   onComplete: (data: {
+    childName: string;
     childBirthday: { year: number; month: number };
+    gender: 'boy' | 'girl' | 'other';
     challenges: SelectedChallenge[];
     firstQuestion: string;
   }) => void;
+  onLogin?: () => void;
 }
 
-export default function GuestOnboarding({ onComplete }: GuestOnboardingProps) {
+export default function GuestOnboarding({ onComplete, onLogin }: GuestOnboardingProps) {
   const [currentStep, setCurrentStep] = useState(1);
 
-  // 步骤1：出生日期
+  // 步骤1：孩子基本信息
+  const [childName, setChildName] = useState('');
+  const [selectedGender, setSelectedGender] = useState<'boy' | 'girl' | 'other' | null>(null);
   const [selectedYear, setSelectedYear] = useState<number | null>(null);
   const [selectedMonth, setSelectedMonth] = useState<number | null>(null);
   const [showYearPicker, setShowYearPicker] = useState(false);
@@ -274,7 +279,7 @@ export default function GuestOnboarding({ onComplete }: GuestOnboardingProps) {
   }, [selectedYear, selectedMonth]);
 
   // 步骤1验证
-  const canContinueStep1 = selectedYear !== null && selectedMonth !== null;
+  const canContinueStep1 = childName.trim().length > 0 && selectedGender !== null && selectedYear !== null && selectedMonth !== null;
 
   // 步骤2验证
   const canContinueStep2 = selectedChallenges.length > 0;
@@ -346,7 +351,9 @@ export default function GuestOnboarding({ onComplete }: GuestOnboardingProps) {
   const handleFinish = () => {
     if (canFinish && selectedYear && selectedMonth) {
       onComplete({
+        childName: childName.trim(),
         childBirthday: { year: selectedYear, month: selectedMonth },
+        gender: selectedGender!,
         challenges: selectedChallenges,
         firstQuestion: selectedQuestion
       });
@@ -366,22 +373,60 @@ export default function GuestOnboarding({ onComplete }: GuestOnboardingProps) {
         />
       </div>
 
-      {/* 步骤1：出生日期选择 */}
+      {/* 步骤1：孩子基本信息 */}
       {currentStep === 1 && (
         <div className="flex-1 flex flex-col items-center justify-center px-4 py-8">
           <div className="w-full max-w-md">
             {/* 头部 - 移除中间logo */}
             <div className="text-center mb-8">
               <h1 className="text-2xl font-bold text-slate-900 mb-2">
-                When was your child born?
+                Tell us about your child
               </h1>
               <p className="text-slate-500">
-                We&apos;ll personalize advice based on their age
+                A nickname is enough. We&apos;ll use this to personalize support.
               </p>
             </div>
 
-            {/* 日期选择 */}
+            {/* 基本信息 */}
             <div className="bg-white rounded-2xl shadow-sm border border-slate-100 p-6 mb-6">
+              <div className="mb-5">
+                <label htmlFor="guestChildName" className="block text-sm font-medium text-slate-700 mb-2">
+                  Child&apos;s name or nickname
+                </label>
+                <input
+                  id="guestChildName"
+                  type="text"
+                  value={childName}
+                  onChange={(event) => setChildName(event.target.value.slice(0, 50))}
+                  placeholder="Alex"
+                  className="w-full h-12 rounded-xl border-2 border-slate-200 px-4 text-slate-900 outline-none transition-all placeholder:text-slate-400 focus:border-primary-purple focus:bg-primary-purple/5"
+                />
+              </div>
+
+              <div className="mb-5">
+                <label className="block text-sm font-medium text-slate-700 mb-2">Gender</label>
+                <div className="grid grid-cols-3 gap-2">
+                  {[
+                    { value: 'boy', label: 'Boy' },
+                    { value: 'girl', label: 'Girl' },
+                    { value: 'other', label: 'Other' },
+                  ].map(option => (
+                    <button
+                      key={option.value}
+                      type="button"
+                      onClick={() => setSelectedGender(option.value as 'boy' | 'girl' | 'other')}
+                      className={`h-11 rounded-xl border-2 text-sm font-semibold transition-all ${
+                        selectedGender === option.value
+                          ? 'border-primary-purple bg-primary-purple/5 text-primary-purple'
+                          : 'border-slate-200 text-slate-500 hover:border-slate-300'
+                      }`}
+                    >
+                      {option.label}
+                    </button>
+                  ))}
+                </div>
+              </div>
+
               <div className="flex gap-4">
                 {/* 年份选择 */}
                 <div className="flex-1 relative">
@@ -456,6 +501,10 @@ export default function GuestOnboarding({ onComplete }: GuestOnboardingProps) {
               )}
             </div>
 
+            <p className="text-center text-xs text-slate-400 mb-4">
+              Step 1 of 3
+            </p>
+
             {/* 继续按钮 - 渐变边框+渐变文字样式 */}
             <button
               onClick={goToStep2}
@@ -482,9 +531,14 @@ export default function GuestOnboarding({ onComplete }: GuestOnboardingProps) {
               <ChevronRight size={18} className={canContinueStep1 ? 'text-primary-purple' : 'text-slate-400'} />
             </button>
 
-            <p className="text-center text-xs text-slate-400 mt-4">
-              Step 1 of 3
-            </p>
+            {onLogin && (
+              <button
+                onClick={onLogin}
+                className="mt-4 w-full text-center text-sm font-semibold text-slate-500 transition-colors hover:text-primary-purple"
+              >
+                Already have an account? <span className="text-primary-purple">Log in</span>
+              </button>
+            )}
           </div>
         </div>
       )}

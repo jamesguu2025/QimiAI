@@ -17,7 +17,9 @@ interface SelectedChallenge {
 }
 
 interface GuestData {
+  childName?: string;
   childBirthday?: { year: number; month: number };
+  gender?: 'boy' | 'girl' | 'other';
   challenges?: SelectedChallenge[];
   chatHistory?: Array<{
     id: string;
@@ -33,8 +35,10 @@ interface MigrateRequest {
   migrationId?: string;
   chatHistory?: GuestData['chatHistory'];
   childProfile?: {
+    name?: string;
     birthYear?: number;
     birthMonth?: number;
+    gender?: 'boy' | 'girl' | 'other';
     challenges?: SelectedChallenge[];
   };
 }
@@ -69,8 +73,10 @@ export default async function handler(
       const gd = rawBody.guestData;
       chatHistory = gd.chatHistory;
       childProfile = {
+        name: typeof gd.childName === 'string' ? gd.childName : undefined,
         birthYear: gd.childBirthday?.year,
         birthMonth: gd.childBirthday?.month,
+        gender: gd.gender,
         challenges: gd.challenges,
       };
     } else {
@@ -117,15 +123,17 @@ export default async function handler(
 
     // Upsert child profile (birth date and challenges)
     if (childProfile) {
-      const { birthYear, birthMonth, challenges } = childProfile;
+      const { name, birthYear, birthMonth, gender, challenges } = childProfile;
 
       const upsertData: Record<string, unknown> = {
         user_id: userId,
         updated_at: new Date().toISOString(),
       };
 
+      if (name !== undefined) upsertData.name = name.trim().slice(0, 50) || null;
       if (birthYear !== undefined) upsertData.birth_year = birthYear;
       if (birthMonth !== undefined) upsertData.birth_month = birthMonth;
+      if (gender !== undefined && ['boy', 'girl', 'other'].includes(gender)) upsertData.gender = gender;
       // Supabase handles JSONB serialization automatically - pass array directly
       if (challenges !== undefined) upsertData.challenges = challenges;
 

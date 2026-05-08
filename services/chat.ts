@@ -5,7 +5,9 @@ import { Attachment, TopicFolder, Message } from '../types/chat';
 
 /** User profile for context injection */
 export interface UserProfile {
+  childName?: string;
   childBirthday?: { year: number; month: number } | string;
+  gender?: 'boy' | 'girl' | 'other';
   challenges?: Array<{ id: string; name: string; categoryId?: string; categoryName?: string }>;
   familyNotes?: string;
   extractedFacts?: string[];
