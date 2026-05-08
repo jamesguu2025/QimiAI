@@ -2,7 +2,7 @@ import { useState, useRef, useEffect } from 'react';
 import Head from 'next/head';
 import { useRouter } from 'next/router';
 import { useSession } from 'next-auth/react';
-import { Moon, BookOpen, Heart, Sparkles } from 'lucide-react';
+import { Moon, BookOpen, Heart, MessageSquare, Pin, Edit3, Trash2 } from 'lucide-react';
 import { StreamingMessage } from '../components/Chat/StreamingMessage';
 import { ChatInput, FileAttachment } from '../components/Chat/ChatInput';
 import GuestOnboarding from '../components/Chat/GuestOnboarding';
@@ -13,7 +13,19 @@ import { guestStorage } from '../utils/guest-storage';
 import { useChat } from '../hooks/useChat';
 import { useChatStore, WELCOME_MESSAGE } from '../stores/chatStore';
 import MemoryToast from '../components/Chat/MemoryToast';
-import { Message } from '../types/chat';
+import { isTopicFolder, Message, normalizeTopicFolder, TopicFolder } from '../types/chat';
+
+const TOPIC_LABELS: Record<TopicFolder, string> = {
+    emotion: 'Emotions',
+    learning: 'Learning',
+    exercise: 'Exercise',
+    nutrition: 'Nutrition',
+    social: 'Social',
+    sleep: 'Sleep',
+    school: 'School',
+    supplement: 'Supplements',
+    supplements: 'Supplements',
+};
 
 export default function ChatPage() {
     const router = useRouter();
@@ -45,12 +57,27 @@ export default function ChatPage() {
         selectConversation,
         createNewChat,
         currentConversation,
+        activeFolderKey,
+        conversations,
+        isLoadingConversations,
         loadConversations,
+        setActiveFolderKey,
+        deleteConversationById,
+        renameConversation,
+        togglePinConversation,
     } = useChatStore();
 
     const messagesEndRef = useRef<HTMLDivElement>(null);
     const modeHandledRef = useRef<string | null>(null);
     const guestMigrationKeyRef = useRef<string | null>(null);
+    const activeTopicLabel = activeFolderKey ? TOPIC_LABELS[activeFolderKey] : null;
+    const topicConversations = conversations
+        .filter(conversation => normalizeTopicFolder(conversation.folderKey) === activeFolderKey)
+        .sort((a, b) => {
+            if (a.isPinned && !b.isPinned) return -1;
+            if (!a.isPinned && b.isPinned) return 1;
+            return new Date(b.updatedAt).getTime() - new Date(a.updatedAt).getTime();
+        });
 
     // 自动滚动到底部
     const scrollToBottom = () => {
@@ -87,8 +114,11 @@ export default function ChatPage() {
     useEffect(() => {
         const topic = router.query.topic as string;
         if (topic) {
-            createNewChat();
-            // Topic-specific behavior can be added later
+            const folderKey = topic === 'supplement' ? 'supplements' : topic;
+            if (isTopicFolder(folderKey)) {
+                createNewChat(normalizeTopicFolder(folderKey));
+                setMessages([WELCOME_MESSAGE]);
+            }
             router.replace('/chat', undefined, { shallow: true });
         }
     }, [router.query.topic]);
@@ -219,7 +249,7 @@ export default function ChatPage() {
         }
         // TODO: 登录用户从 Supabase 获取 userProfile (Phase 2)
 
-        await sendMessage(content, attachments, forceRAG, userProfile);
+        await sendMessage(content, attachments, forceRAG, userProfile, activeFolderKey);
     };
 
     // 访客引导完成
@@ -237,12 +267,18 @@ export default function ChatPage() {
 
     // 抽屉操作回调（传递给 AppLayout）
     const handleNewChat = () => {
-        createNewChat();
+        createNewChat(null);
         setMessages([WELCOME_MESSAGE]);
     };
 
     const handleSelectTopic = (folderKey: string) => {
-        createNewChat();
+        if (isTopicFolder(folderKey)) {
+            const normalizedFolderKey = normalizeTopicFolder(folderKey);
+            createNewChat(normalizedFolderKey);
+            setActiveFolderKey(normalizedFolderKey);
+        } else {
+            createNewChat(null);
+        }
         setMessages([WELCOME_MESSAGE]);
     };
 
@@ -251,6 +287,35 @@ export default function ChatPage() {
             await selectConversation(conversationId);
         } catch (error) {
             console.error('Failed to load conversation:', error);
+        }
+    };
+
+    const handleRenameConversation = async (conversationId: string, currentTitle: string) => {
+        const newTitle = window.prompt('Rename conversation', currentTitle);
+        if (!newTitle?.trim() || newTitle.trim() === currentTitle) return;
+
+        try {
+            await renameConversation(conversationId, newTitle.trim());
+        } catch (error) {
+            console.error('Failed to rename conversation:', error);
+        }
+    };
+
+    const handleDeleteConversation = async (conversationId: string) => {
+        if (!window.confirm('Delete this conversation?')) return;
+
+        try {
+            await deleteConversationById(conversationId);
+        } catch (error) {
+            console.error('Failed to delete conversation:', error);
+        }
+    };
+
+    const handlePinConversation = async (conversationId: string) => {
+        try {
+            await togglePinConversation(conversationId);
+        } catch (error) {
+            console.error('Failed to pin conversation:', error);
         }
     };
 
@@ -310,7 +375,83 @@ export default function ChatPage() {
                 {/* Chat 内容 */}
                 <div className="flex-1 overflow-y-auto">
                     <div className="max-w-3xl mx-auto px-4 py-8 flex flex-col min-h-full">
-                        {messages.length === 1 ? (
+                        {activeFolderKey && !currentConversation && messages.length === 1 ? (
+                            <div className="flex-1 flex flex-col pb-10">
+                                <div className="mb-6">
+                                    <div className="flex items-center gap-3">
+                                        <div className="flex h-10 w-10 items-center justify-center rounded-lg bg-slate-100">
+                                            <BookOpen size={20} className="text-primary-purple" />
+                                        </div>
+                                        <div>
+                                            <h2 className="text-2xl font-bold text-slate-800">{activeTopicLabel}</h2>
+                                            <p className="text-sm text-slate-500">New chat in {activeTopicLabel}</p>
+                                        </div>
+                                    </div>
+                                </div>
+
+                                <div className="space-y-2">
+                                    {isLoadingConversations ? (
+                                        <div className="rounded-lg border border-slate-100 bg-white px-4 py-3 text-sm text-slate-400">
+                                            Loading...
+                                        </div>
+                                    ) : topicConversations.length > 0 ? (
+                                        topicConversations.map(conversation => (
+                                            <div
+                                                key={conversation.id}
+                                                className="group flex w-full items-center gap-2 rounded-lg border border-slate-100 bg-white px-4 py-3 text-left shadow-sm transition-colors hover:border-slate-200 hover:bg-slate-50"
+                                            >
+                                                <button
+                                                    onClick={() => handleSelectConversation(conversation.id)}
+                                                    className="min-w-0 flex-1 text-left"
+                                                >
+                                                    <div className="flex items-center gap-3">
+                                                    <MessageSquare size={17} className="flex-shrink-0 text-slate-400" />
+                                                    <div className="min-w-0 flex-1">
+                                                        <div className="flex items-center gap-2">
+                                                            <span className="truncate text-sm font-semibold text-slate-800">
+                                                                {conversation.title || 'Untitled'}
+                                                            </span>
+                                                            {conversation.isPinned && <Pin size={14} className="flex-shrink-0 text-slate-400" />}
+                                                        </div>
+                                                        <div className="mt-0.5 text-xs text-slate-400">
+                                                            {new Date(conversation.updatedAt).toLocaleDateString()}
+                                                        </div>
+                                                    </div>
+                                                    </div>
+                                                </button>
+                                                <div className="flex flex-shrink-0 items-center gap-1 opacity-100 md:opacity-0 md:transition-opacity md:group-hover:opacity-100">
+                                                    <button
+                                                        onClick={() => handlePinConversation(conversation.id)}
+                                                        className="rounded-md p-1.5 text-slate-400 hover:bg-slate-100 hover:text-slate-600"
+                                                        title={conversation.isPinned ? 'Unpin' : 'Pin'}
+                                                    >
+                                                        <Pin size={15} />
+                                                    </button>
+                                                    <button
+                                                        onClick={() => handleRenameConversation(conversation.id, conversation.title || 'Untitled')}
+                                                        className="rounded-md p-1.5 text-slate-400 hover:bg-slate-100 hover:text-slate-600"
+                                                        title="Rename"
+                                                    >
+                                                        <Edit3 size={15} />
+                                                    </button>
+                                                    <button
+                                                        onClick={() => handleDeleteConversation(conversation.id)}
+                                                        className="rounded-md p-1.5 text-slate-400 hover:bg-red-50 hover:text-red-500"
+                                                        title="Delete"
+                                                    >
+                                                        <Trash2 size={15} />
+                                                    </button>
+                                                </div>
+                                            </div>
+                                        ))
+                                    ) : (
+                                        <div className="rounded-lg border border-dashed border-slate-200 bg-white px-4 py-8 text-center text-sm text-slate-400">
+                                            No conversations yet
+                                        </div>
+                                    )}
+                                </div>
+                            </div>
+                        ) : messages.length === 1 ? (
                             // 欢迎界面
                             <div className="flex-1 flex flex-col items-center justify-center pb-10">
                                 <h2 className="text-2xl font-bold text-slate-800 mb-2">Hi, I'm Qimi AI</h2>

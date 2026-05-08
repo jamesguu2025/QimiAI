@@ -1,7 +1,7 @@
 // stores/chatStore.ts - Chat State Management with Zustand
 
 import { create } from 'zustand';
-import { Message, Conversation, TopicFolder, Attachment } from '../types/chat';
+import { Message, Conversation, TopicFolder, Attachment, normalizeTopicFolder } from '../types/chat';
 import { RAGSource } from '../types';
 import { sendMessage as sendChatMessage, stopGeneration } from '../services/chat';
 import {
@@ -76,6 +76,7 @@ interface ChatState {
 
   // Current conversation
   currentConversation: Conversation | null;
+  activeFolderKey: TopicFolder | null;
   conversations: Conversation[];
   isLoadingConversations: boolean; // Loading the conversations list
 
@@ -97,10 +98,11 @@ interface ChatActions {
 
   // Conversation actions
   setCurrentConversation: (conversation: Conversation | null) => void;
+  setActiveFolderKey: (folderKey: TopicFolder | null) => void;
   setConversations: (conversations: Conversation[]) => void;
   loadConversations: () => Promise<void>;
   selectConversation: (conversationId: string) => Promise<void>;
-  createNewChat: () => void;
+  createNewChat: (folderKey?: TopicFolder | null) => void;
   createConversation: (title?: string, folderKey?: TopicFolder | null) => Promise<Conversation>;
   updateCurrentConversation: (title?: string, folderKey?: TopicFolder | null) => Promise<void>;
   deleteCurrentConversation: () => Promise<void>;
@@ -124,6 +126,7 @@ export const useChatStore = create<ChatState & ChatActions>((set, get) => ({
   isStreaming: false,
   isLoadingMessages: false,
   currentConversation: null,
+  activeFolderKey: null,
   conversations: [],
   isLoadingConversations: false,
   abortController: null,
@@ -131,7 +134,8 @@ export const useChatStore = create<ChatState & ChatActions>((set, get) => ({
 
   // Send message with streaming response
   sendMessage: async (content: string, attachments?: Attachment[], forceRAG?: boolean, userProfile?: { childBirthday?: { year: number; month: number }; challenges?: Array<{ id: string; name: string; categoryId?: string; categoryName?: string }> }) => {
-    const { currentConversation, abortController: existingController } = get();
+    const { currentConversation, activeFolderKey, abortController: existingController } = get();
+    const messageFolderKey = normalizeTopicFolder(currentConversation?.folderKey || activeFolderKey);
 
     // Cancel any existing stream
     if (existingController) {
@@ -198,6 +202,7 @@ export const useChatStore = create<ChatState & ChatActions>((set, get) => ({
           content,
           attachments,
           conversationId: currentConversation?.id,
+          folderKey: messageFolderKey || undefined,
           signal: controller.signal,
           conversationHistory,
           forceRAG,
@@ -240,21 +245,25 @@ export const useChatStore = create<ChatState & ChatActions>((set, get) => ({
               ),
             }));
           },
-          onConversationCreated: (conversationId) => {
+          onConversationCreated: (conversationId, createdFolderKey) => {
+            const folderKey = normalizeTopicFolder(createdFolderKey || messageFolderKey);
             const newConversation: Conversation = {
               id: conversationId,
               userId: '',
               title: content.slice(0, 50) + (content.length > 50 ? '...' : ''),
-              folderKey: null,
+              folderKey,
               messageCount: 0,
               createdAt: new Date().toISOString(),
               updatedAt: new Date().toISOString(),
             };
+            const existingConversations = get().conversations;
+            const newConversations = [newConversation, ...existingConversations.filter(c => c.id !== conversationId)];
             set({
               currentConversation: newConversation,
-              conversations: [newConversation, ...get().conversations],
+              activeFolderKey: folderKey,
+              conversations: newConversations,
             });
-            saveConversationsToCache([newConversation, ...get().conversations]);
+            saveConversationsToCache(newConversations);
           },
           onDone: () => {
             set(state => ({
@@ -332,7 +341,7 @@ export const useChatStore = create<ChatState & ChatActions>((set, get) => ({
 
   // Clear messages
   clearMessages: () => {
-    set({ messages: [WELCOME_MESSAGE], currentConversation: null });
+    set({ messages: [WELCOME_MESSAGE], currentConversation: null, activeFolderKey: null });
   },
 
   // Set messages
@@ -349,7 +358,11 @@ export const useChatStore = create<ChatState & ChatActions>((set, get) => ({
 
   // Set current conversation
   setCurrentConversation: (conversation) => {
-    set({ currentConversation: conversation });
+    set({ currentConversation: conversation, activeFolderKey: normalizeTopicFolder(conversation?.folderKey) });
+  },
+
+  setActiveFolderKey: (folderKey) => {
+    set({ activeFolderKey: folderKey });
   },
 
   // Set conversations list
@@ -433,6 +446,7 @@ export const useChatStore = create<ChatState & ChatActions>((set, get) => ({
 
       set({
         currentConversation: conversation as Conversation,
+        activeFolderKey: normalizeTopicFolder((conversation as Conversation).folderKey),
         messages: formattedMessages,
         isLoadingMessages: false,
       });
@@ -446,10 +460,11 @@ export const useChatStore = create<ChatState & ChatActions>((set, get) => ({
   },
 
   // Create new chat (local only, no API call)
-  createNewChat: () => {
+  createNewChat: (folderKey = null) => {
     set({
       messages: [WELCOME_MESSAGE],
       currentConversation: null,
+      activeFolderKey: folderKey,
       error: null,
     });
   },
@@ -462,6 +477,7 @@ export const useChatStore = create<ChatState & ChatActions>((set, get) => ({
       set({
         conversations: newConversations,
         currentConversation: conversation,
+        activeFolderKey: normalizeTopicFolder(conversation.folderKey),
         messages: [WELCOME_MESSAGE],
       });
       saveConversationsToCache(newConversations);
@@ -486,6 +502,7 @@ export const useChatStore = create<ChatState & ChatActions>((set, get) => ({
       );
       set({
         currentConversation: updated,
+        activeFolderKey: normalizeTopicFolder(updated.folderKey),
         conversations: newConversations,
       });
       saveConversationsToCache(newConversations);
@@ -508,6 +525,7 @@ export const useChatStore = create<ChatState & ChatActions>((set, get) => ({
       set({
         conversations: newConversations,
         currentConversation: null,
+        activeFolderKey: null,
         messages: [WELCOME_MESSAGE],
       });
       saveConversationsToCache(newConversations);
@@ -530,6 +548,7 @@ export const useChatStore = create<ChatState & ChatActions>((set, get) => ({
       conversations: state.conversations.filter(c => c.id !== conversationId),
       ...(wasCurrentConversation ? {
         currentConversation: null,
+        activeFolderKey: null,
         messages: [WELCOME_MESSAGE],
       } : {}),
     }));
@@ -546,6 +565,7 @@ export const useChatStore = create<ChatState & ChatActions>((set, get) => ({
         conversations: originalConversations,
         ...(wasCurrentConversation ? {
           currentConversation: originalConversations.find(c => c.id === conversationId) || null,
+          activeFolderKey: normalizeTopicFolder(originalConversations.find(c => c.id === conversationId)?.folderKey),
         } : {}),
         error: 'Failed to delete conversation. Please try again.',
       });

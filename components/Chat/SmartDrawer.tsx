@@ -29,6 +29,7 @@ import { useRouter } from 'next/router';
 import { signIn, signOut } from 'next-auth/react';
 import { useChatStore } from '../../stores/chatStore';
 import { useAuthUIStore } from '../../stores/authUIStore';
+import { normalizeTopicFolder, TopicFolder as TopicFolderKey } from '../../types/chat';
 
 // ============================================================================
 // 长按Hook - 用于移动端检测长按手势
@@ -312,8 +313,8 @@ const ContextMenu: React.FC<ContextMenuProps> = ({
 // 数据类型定义
 // ============================================================================
 
-export interface TopicFolder {
-  key: string;
+export interface TopicFolderConfig {
+  key: TopicFolderKey;
   name: string;
   icon: LucideIcon;
   color: string;
@@ -333,7 +334,7 @@ interface ConversationDisplay {
 // 静态数据
 // ============================================================================
 
-export const TOPIC_FOLDERS: TopicFolder[] = [
+export const TOPIC_FOLDERS: TopicFolderConfig[] = [
   { key: 'emotion', name: 'Emotions', icon: Heart, color: '#10B981' },
   { key: 'learning', name: 'Learning', icon: BookOpen, color: '#8B5CF6' },
   { key: 'exercise', name: 'Exercise', icon: Activity, color: '#F59E0B' },
@@ -351,19 +352,22 @@ export const TOPIC_FOLDERS: TopicFolder[] = [
 // ============================================================================
 
 interface TopicCardProps {
-  folder: TopicFolder;
+  folder: TopicFolderConfig;
   onClick: () => void;
   collapsed: boolean;
+  isActive: boolean;
 }
 
-const TopicCard: React.FC<TopicCardProps> = ({ folder, onClick, collapsed }) => {
+const TopicCard: React.FC<TopicCardProps> = ({ folder, onClick, collapsed, isActive }) => {
   const IconComponent = folder.icon;
 
   if (collapsed) {
     return (
       <button
         onClick={onClick}
-        className="w-10 h-10 flex items-center justify-center rounded-lg hover:bg-slate-100 transition-colors group relative"
+        className={`w-10 h-10 flex items-center justify-center rounded-lg transition-colors group relative ${
+          isActive ? 'bg-slate-100 ring-1 ring-slate-200' : 'hover:bg-slate-100'
+        }`}
         title={folder.name}
       >
         <IconComponent size={18} style={{ color: folder.color }} />
@@ -378,13 +382,15 @@ const TopicCard: React.FC<TopicCardProps> = ({ folder, onClick, collapsed }) => 
   return (
     <button
       onClick={onClick}
-      className="w-full flex items-center gap-3 px-3 py-2.5 rounded-lg hover:bg-slate-50 transition-colors group text-left"
+      className={`w-full flex items-center gap-3 px-3 py-2.5 rounded-lg transition-colors group text-left ${
+        isActive ? 'bg-slate-100' : 'hover:bg-slate-50'
+      }`}
     >
       <IconComponent size={18} style={{ color: folder.color }} />
-      <span className="flex-1 text-sm font-medium text-slate-700 group-hover:text-slate-900">
+      <span className={`flex-1 text-sm font-medium ${isActive ? 'text-slate-900' : 'text-slate-700 group-hover:text-slate-900'}`}>
         {folder.name}
       </span>
-      <ChevronRight size={16} className="text-slate-400 group-hover:text-slate-600" />
+      <ChevronRight size={16} className={isActive ? 'text-slate-600' : 'text-slate-400 group-hover:text-slate-600'} />
     </button>
   );
 };
@@ -657,6 +663,7 @@ export const SmartDrawer: React.FC<SmartDrawerProps> = ({
   const {
     conversations,
     currentConversation,
+    activeFolderKey,
     isLoadingConversations,
     loadConversations,
     deleteConversationById,
@@ -689,7 +696,7 @@ export const SmartDrawer: React.FC<SmartDrawerProps> = ({
   const displayConversations: ConversationDisplay[] = conversations.map(c => ({
     id: c.id,
     title: c.title || 'Untitled',
-    folderKey: c.folderKey,
+    folderKey: normalizeTopicFolder(c.folderKey),
     isPinned: c.isPinned || false,
     updatedAt: c.updatedAt,
   }));
@@ -698,12 +705,11 @@ export const SmartDrawer: React.FC<SmartDrawerProps> = ({
   const filteredConversations = displayConversations
     .filter(c => c.title.toLowerCase().includes(searchQuery.toLowerCase()))
     .sort((a, b) => {
-      // 置顶优先
       if (a.isPinned && !b.isPinned) return -1;
       if (!a.isPinned && b.isPinned) return 1;
-      // 同级别按更新时间排序
       return new Date(b.updatedAt).getTime() - new Date(a.updatedAt).getTime();
     });
+  const recentConversations = filteredConversations.filter(conversation => !conversation.folderKey);
 
   // Handle delete conversation
   const handleDeleteConversation = async (conversationId: string): Promise<void> => {
@@ -740,6 +746,27 @@ export const SmartDrawer: React.FC<SmartDrawerProps> = ({
       throw error;
     }
   };
+
+  const handleSelectTopic = (folderKey: TopicFolderKey) => {
+    onSelectTopic(folderKey);
+    if (isMobile) {
+      onClose();
+    }
+  };
+
+  const renderConversationItem = (conversation: ConversationDisplay, keyPrefix = 'conversation') => (
+    <ConversationItem
+      key={`${keyPrefix}-${conversation.id}`}
+      conversation={conversation}
+      onClick={() => onSelectConversation(conversation.id)}
+      onDelete={() => handleDeleteConversation(conversation.id)}
+      onRename={(newTitle) => handleRenameConversation(conversation.id, newTitle)}
+      onPinTop={() => handlePinConversation(conversation.id)}
+      isActive={currentConversation?.id === conversation.id}
+      collapsed={effectiveCollapsed}
+      isPinned={conversation.isPinned}
+    />
+  );
 
   // 触摸手势处理 - 移动端滑动关闭
   const handleTouchStart = useCallback((e: React.TouchEvent) => {
@@ -883,12 +910,14 @@ export const SmartDrawer: React.FC<SmartDrawerProps> = ({
             )}
             <div className={`space-y-1 ${effectiveCollapsed ? 'flex flex-col items-center' : ''}`}>
               {TOPIC_FOLDERS.map(folder => (
-                <TopicCard
-                  key={folder.key}
-                  folder={folder}
-                  onClick={() => onSelectTopic(folder.key)}
-                  collapsed={effectiveCollapsed}
-                />
+                <div key={folder.key}>
+                  <TopicCard
+                    folder={folder}
+                    onClick={() => handleSelectTopic(folder.key)}
+                    collapsed={effectiveCollapsed}
+                    isActive={activeFolderKey === folder.key && !currentConversation}
+                  />
+                </div>
               ))}
             </div>
           </div>
@@ -912,20 +941,10 @@ export const SmartDrawer: React.FC<SmartDrawerProps> = ({
                     <Loader2 size={20} className="text-slate-400 animate-spin" />
                   </div>
                 )
-              ) : filteredConversations.length > 0 ? (
-                filteredConversations.map(conversation => (
-                  <ConversationItem
-                    key={conversation.id}
-                    conversation={conversation}
-                    onClick={() => onSelectConversation(conversation.id)}
-                    onDelete={() => handleDeleteConversation(conversation.id)}
-                    onRename={(newTitle) => handleRenameConversation(conversation.id, newTitle)}
-                    onPinTop={() => handlePinConversation(conversation.id)}
-                    isActive={currentConversation?.id === conversation.id}
-                    collapsed={effectiveCollapsed}
-                    isPinned={conversation.isPinned}
-                  />
-                ))
+              ) : recentConversations.length > 0 ? (
+                recentConversations.map(conversation =>
+                  renderConversationItem(conversation, 'recent')
+                )
               ) : (
                 !effectiveCollapsed && (
                   <p className="px-3 py-2 text-sm text-slate-400">No conversations yet</p>

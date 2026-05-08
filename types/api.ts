@@ -23,6 +23,7 @@ export interface SSEChunk {
   message?: string; // For status updates
   totalTokens?: number;
   conversationId?: string; // For conversation_created event
+  folderKey?: string | null; // For conversation_created event
 }
 
 /** RAG 来源 */

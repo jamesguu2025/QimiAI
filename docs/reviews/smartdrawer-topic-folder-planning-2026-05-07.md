@@ -53,8 +53,8 @@ Read:
 | Decision ID | Decision | Risk | External Evidence | Local Evidence | Supported Claim | Unsupported Gap | Status | Confirmation |
 |---|---|---|---|---|---|---|---|---|
 | ADR-SD-TOPIC-001 | Treat SmartDrawer topics as chat organization folders, not feature-module navigation pages. | Normal | Found(partial): OpenAI Projects, Claude Projects, Material navigation. | Existing `conversations.folder_key`; SmartDrawer topics; manual QA mismatch. | Related chats benefit from being kept in a dedicated space; drawers can support hierarchical navigation. | External sources do not dictate exact Qimi implementation. | Accepted | Build + local Supabase flow: topic click → first message → persisted `folder_key` → visible under topic after refresh. |
-| ADR-SD-TOPIC-002 | Keep Recent as a global recent list while also showing topic-scoped child conversations under topics. | Normal | Found(partial): Material in-context navigation mentions recent items and complete history as related navigation. | Current SmartDrawer already has a Recent list and topic cards. | It is valid to support related data navigation and recent/history movement together. | External source does not mandate duplicated visibility. | Accepted | Manual flow verifies the same conversation can be opened from topic child and Recent without inconsistent state. |
-| ADR-SD-TOPIC-003 | Do not create a separate right-side topic history page in this pass. | Normal | Exempt: MVP scoping / internal product choice. | Current chat page is the primary workspace; right-side topic page would expand route and state scope. | Keeping this pass to drawer grouping is the smallest fix for the observed defect. | No external source says a separate page is wrong. | Accepted | T006 task list explicitly excludes separate topic history pages. |
+| ADR-SD-TOPIC-002 | Keep SmartDrawer Recent for uncategorized/general conversations while showing topic-scoped conversation lists in the main chat pane after selecting a topic. | Normal | Found(partial): Material in-context navigation mentions recent items and complete history as related navigation. | Current SmartDrawer already has a Recent list and topic cards; user acceptance found topic titles duplicated into the sidebar confusing. | It is valid to support related data navigation without duplicating topic-owned titles into the sidebar. | External source does not mandate Qimi's exact placement. | Accepted | Manual flow verifies topic conversations remain available from the topic page and do not appear in SmartDrawer Recent. |
+| ADR-SD-TOPIC-003 | Do not create a separate route for topic history pages in this pass. | Normal | Exempt: MVP scoping / internal product choice. | Current chat page is the primary workspace; in-page topic state avoids route expansion. | Keeping this pass inside `/chat` is the smallest fix for the observed defect. | No external source says a separate route is wrong. | Accepted | T006 task list explicitly keeps topic page behavior inside `/chat`. |
 
 ## Search Ledger
 
@@ -70,8 +70,8 @@ Read:
 ## Evidence Layering
 
 - Topic folder grouping as a concept: `external research supported item` + `stable`, but only at the product-pattern level.
-- Qimi implementation choice to show topic children under the existing SmartDrawer and keep Recent global: `internal method choice` + `stable`.
-- Exact visual density, default expansion state, and whether Recent duplicates topic conversations: `internal method choice` + `Provisional` until human acceptance.
+- Qimi implementation choice to show topic conversations in the main chat pane and reserve SmartDrawer Recent for uncategorized conversations: `internal method choice` + `stable`.
+- Exact visual density and topic page management affordances: `internal method choice` + `Provisional` until human acceptance.
 
 ## AQS Self-Review
 

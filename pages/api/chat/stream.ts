@@ -12,6 +12,7 @@ import {
   RAGToolCallResult
 } from '../../../services/rag-service';
 import { getSupabaseAdmin } from '../../../lib/supabase';
+import { isTopicFolder, normalizeTopicFolder, TopicFolder } from '../../../types/chat';
 
 // DeepSeek API configuration from environment variables
 const DEEPSEEK_API_KEY = process.env.DEEPSEEK_API_KEY;
@@ -27,7 +28,8 @@ async function saveMessagesToDatabase(
   userMessage: string,
   aiResponse: string,
   conversationId?: string,
-  sources?: Array<{ title: string; url: string; snippet?: string }>
+  sources?: Array<{ title: string; url: string; snippet?: string }>,
+  folderKey?: TopicFolder | null
 ): Promise<string | null> {
   try {
     const supabase = getSupabaseAdmin();
@@ -54,6 +56,7 @@ async function saveMessagesToDatabase(
         .insert({
           user_id: user.id,
           title,
+          folder_key: folderKey || null,
         })
         .select('id')
         .single();
@@ -185,6 +188,9 @@ export default async function handler(
     }
 
     const { content, attachments, conversationHistory, userProfile, forceRAG, conversationId } = req.body;
+    const requestedFolderKey = isTopicFolder(req.body.folderKey)
+      ? normalizeTopicFolder(req.body.folderKey)
+      : null;
 
     if (!content && (!attachments || attachments.length === 0)) {
       return res.status(400).json({ error: 'Message content required' });
@@ -299,15 +305,23 @@ export default async function handler(
         const title = userMessage.slice(0, 50) + (userMessage.length > 50 ? '...' : '');
         const { data: newConv } = await supabase
           .from('conversations')
-          .insert({ user_id: user.id, title })
-          .select('id')
+          .insert({
+            user_id: user.id,
+            title,
+            folder_key: requestedFolderKey,
+          })
+          .select('id, folder_key')
           .single();
 
         if (newConv) {
           activeConversationId = newConv.id;
           console.log('[chat/stream] Pre-created conversation:', activeConversationId);
           // Send as first SSE event so frontend gets the ID before any tokens
-          res.write(`data: ${JSON.stringify({ type: 'conversation_created', conversationId: newConv.id })}\n\n`);
+          res.write(`data: ${JSON.stringify({
+            type: 'conversation_created',
+            conversationId: newConv.id,
+            folderKey: newConv.folder_key,
+          })}\n\n`);
         }
       }
     }
@@ -339,7 +353,8 @@ export default async function handler(
         userMessage,
         fullResponse,
         activeConversationId,
-        sources
+        sources,
+        requestedFolderKey
       );
 
       // Fire-and-forget memory extraction after save completes

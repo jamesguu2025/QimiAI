@@ -31,15 +31,32 @@ export interface Message {
 }
 
 /** 主题文件夹类型 */
+export const TOPIC_FOLDER_KEYS = [
+  'emotion',
+  'learning',
+  'exercise',
+  'nutrition',
+  'social',
+  'sleep',
+  'school',
+  'supplements',
+] as const;
+
 export type TopicFolder =
-  | 'emotion'
-  | 'learning'
-  | 'exercise'
-  | 'nutrition'
-  | 'social'
-  | 'sleep'
-  | 'school'
+  | (typeof TOPIC_FOLDER_KEYS)[number]
   | 'supplement';
+
+export function isTopicFolder(value: unknown): value is TopicFolder {
+  return typeof value === 'string' && (
+    (TOPIC_FOLDER_KEYS as readonly string[]).includes(value) ||
+    value === 'supplement'
+  );
+}
+
+export function normalizeTopicFolder(value: TopicFolder | null | undefined): (typeof TOPIC_FOLDER_KEYS)[number] | null {
+  if (!value) return null;
+  return value === 'supplement' ? 'supplements' : value;
+}
 
 /** 会话 */
 export interface Conversation {

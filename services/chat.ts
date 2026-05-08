@@ -30,7 +30,7 @@ export interface ChatStreamCallbacks {
   onStatus: (message: string) => void;
   onDone: (totalTokens?: number) => void;
   onError: (error: string) => void;
-  onConversationCreated?: (conversationId: string) => void;
+  onConversationCreated?: (conversationId: string, folderKey?: TopicFolder | null) => void;
 }
 
 /**
@@ -117,7 +117,7 @@ export async function sendMessage(
                 return;
               case 'conversation_created':
                 if (chunk.conversationId) {
-                  callbacks.onConversationCreated?.(chunk.conversationId);
+                  callbacks.onConversationCreated?.(chunk.conversationId, chunk.folderKey as TopicFolder | null | undefined);
                 }
                 break;
               case 'error':

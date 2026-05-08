@@ -36,7 +36,7 @@ AppLayout (new)
 - `pages/chat.tsx` uses `<AppLayout fullScreen>` instead of managing SmartDrawer directly
 - `pages/dashboard.tsx`, `pages/family.tsx`, etc. all use `<AppLayout>`
 - `Sidebar.tsx` is no longer imported anywhere (kept as dead code for now, not deleted)
-- Topic folders persist conversation membership and render topic-scoped conversation children in SmartDrawer, while Recent remains a global recent-history affordance
+- Topic folders persist conversation membership and render topic-scoped conversation lists in the main chat pane, while SmartDrawer keeps topic entry points and a Recent affordance for uncategorized/general conversations
 
 ## 2. Key Design Decisions
 
@@ -80,14 +80,14 @@ AppLayout already has a `fullScreen` prop. Chat page will use `fullScreen={true}
 
 ### 2.7 Topic folder behavior
 
-Current code has the data shape for topic membership but does not complete the behavior. `pages/chat.tsx:86-94` handles `topic` query params by creating a new chat and explicitly leaves topic-specific behavior for later. `pages/chat.tsx:244-247` handles SmartDrawer topic clicks by creating a new chat without saving the selected folder. `stores/chatStore.ts:243-258` creates the optimistic conversation with `folderKey: null`, and `pages/api/chat/stream.ts:287-310` pre-creates logged-in conversations without writing `folder_key`. `components/Chat/SmartDrawer.tsx:688-704` maps `folderKey` into display data, but `components/Chat/SmartDrawer.tsx:877-932` renders flat Topics and flat Recent sections rather than topic child conversations.
+Current code has the data shape for topic membership but does not complete the behavior. `pages/chat.tsx:86-94` handles `topic` query params by creating a new chat and explicitly leaves topic-specific behavior for later. `pages/chat.tsx:244-247` handles SmartDrawer topic clicks by creating a new chat without saving the selected folder. `stores/chatStore.ts:243-258` creates the optimistic conversation with `folderKey: null`, and `pages/api/chat/stream.ts:287-310` pre-creates logged-in conversations without writing `folder_key`. `components/Chat/SmartDrawer.tsx:688-704` maps `folderKey` into display data, but topic selection is not yet reflected in a topic-scoped main-pane conversation list.
 
 Decision:
 
 - Clicking a topic starts a new chat scoped to that topic.
 - The first persisted conversation created from that chat writes `conversations.folder_key`.
-- The selected topic shows its scoped conversation children under the topic row.
-- Recent remains a global recent list across all conversations, including topic-scoped conversations.
+- The selected topic shows its scoped conversation list in the main chat pane.
+- SmartDrawer Recent shows uncategorized/general conversations only.
 - A normal New Chat with no selected topic creates an uncategorized conversation.
 
 Evidence basis:
@@ -111,9 +111,9 @@ Evidence basis:
 - [x] UserMenu (avatar + dropdown) is visible in top-right on all logged-in pages
 - [x] SmartDrawer bottom "Logged in / Sign out" footer is removed
 - [x] `Sidebar.tsx` is no longer imported by any file
-- [ ] Topic folder behavior: clicking a topic scopes the next chat and the resulting conversation appears under that topic
+- [ ] Topic folder behavior: clicking a topic opens that topic page state, scopes the next chat, and the resulting conversation appears in that topic page
 - [ ] Topic folder persistence: refreshing or reloading conversations preserves topic membership from `conversations.folder_key`
-- [ ] Recent behavior: Recent remains a global recent list and still opens topic-scoped conversations
+- [ ] Recent behavior: SmartDrawer Recent shows uncategorized/general conversations only
 - [ ] `npx eslint` passes (ESLint config incompatible with v10, skipped)
 - [x] `npx tsc --noEmit` passes
 - [x] `npm run build` passes
@@ -313,7 +313,7 @@ Evidence basis:
   - local Supabase smoke check for topic-scoped persistence
 - **Human gate allowed after**:
   - machine gate passes
-  - local flow verifies topic-created conversations survive refresh and appear in the expected drawer section
+  - local flow verifies topic-created conversations survive refresh and appear in the expected topic page section
 
 Files expected:
 
@@ -331,19 +331,19 @@ Do:
 3. Pass the pending folder key through `sendMessage()` into `services/chat.ts` and `/api/chat/stream`.
 4. In `/api/chat/stream`, when pre-creating a logged-in conversation, insert `folder_key` from the request if it is one of the supported topic folder keys.
 5. When the `conversation_created` SSE event is handled, set the optimistic conversation's `folderKey` to the same pending folder key instead of `null`.
-6. Group `conversations` in SmartDrawer by `folderKey`.
-7. Render topic-scoped child conversations under the matching topic row. Use the same `ConversationItem` actions where practical: open, rename, pin, delete.
-8. Keep Recent as a global recent list. Search should continue to search all visible conversation titles.
-9. Do not create a separate right-side topic history page in this pass. That is a larger information-architecture change and is not needed for MVP.
+6. Group `conversations` by `folderKey` for the active topic page state.
+7. Render topic-scoped conversations in the main chat pane after selecting the matching topic. Do not render topic child conversations under the SmartDrawer topic rows.
+8. Keep SmartDrawer Recent for uncategorized/general conversations only. Topic-scoped conversation titles should not appear in the sidebar Recent list.
+9. Do not add a new route for topic pages in this pass; keep the interaction inside `/chat`.
 
 Acceptance criteria:
 
 - [ ] Click `Learning`, send a first message, and confirm the created conversation is stored with `folder_key = learning`.
-- [ ] The new conversation appears under `Learning` in SmartDrawer.
-- [ ] The same conversation also appears in Recent, ordered by `updated_at`.
-- [ ] Refresh the browser; the conversation still appears under `Learning`.
-- [ ] Click the topic child conversation; `/chat` opens the correct conversation and can continue replying.
+- [ ] The new conversation appears on the `Learning` topic page in the main chat pane.
+- [ ] The same conversation does not appear in SmartDrawer Recent.
+- [ ] Refresh the browser; selecting `Learning` still shows the conversation on the topic page.
+- [ ] Click the topic page conversation; `/chat` opens the correct conversation and can continue replying.
 - [ ] Click New Chat without selecting a topic; the created conversation has `folder_key = null` and does not appear under a topic.
-- [ ] Rename, pin, and delete actions continue to work for topic child conversations.
-- [ ] Collapsed SmartDrawer remains usable; topic icons still display, and no text overlaps.
+- [ ] Topic conversation management is handled from the topic page or opened conversation, not by duplicating topic titles into SmartDrawer Recent.
+- [ ] SmartDrawer remains usable; topic icons still display, topic rows do not show child conversation titles, and no text overlaps.
 - [ ] `npm run build` passes.

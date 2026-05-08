@@ -2,7 +2,7 @@
 
 import { useCallback } from 'react';
 import { useChatStore, WELCOME_MESSAGE } from '../stores/chatStore';
-import { Message, Attachment } from '../types/chat';
+import { Message, Attachment, TopicFolder, normalizeTopicFolder } from '../types/chat';
 
 /** User profile for context injection */
 export interface UserProfile {
@@ -18,7 +18,7 @@ export interface UseChatReturn {
   isStreaming: boolean;
   canStop: boolean;
   error: string | null;
-  sendMessage: (content: string, attachments?: Attachment[], forceRAG?: boolean, userProfile?: UserProfile) => Promise<void>;
+  sendMessage: (content: string, attachments?: Attachment[], forceRAG?: boolean, userProfile?: UserProfile, folderKey?: TopicFolder | null) => Promise<void>;
   stopGeneration: () => void;
   clearHistory: () => void;
   setMessages: (messages: Message[]) => void;
@@ -42,7 +42,10 @@ export function useChat(initialMessages?: typeof WELCOME_MESSAGE[]): UseChatRetu
   // Note: The store is already initialized with WELCOME_MESSAGE
 
   const sendMessage = useCallback(
-    async (content: string, attachments?: Attachment[], forceRAG?: boolean, userProfile?: UserProfile) => {
+    async (content: string, attachments?: Attachment[], forceRAG?: boolean, userProfile?: UserProfile, folderKey?: TopicFolder | null) => {
+      if (folderKey !== undefined) {
+        useChatStore.getState().setActiveFolderKey(normalizeTopicFolder(folderKey));
+      }
       await storeSendMessage(content, attachments, forceRAG, userProfile);
     },
     [storeSendMessage]
