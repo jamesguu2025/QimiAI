@@ -1,6 +1,6 @@
 # Module Spec: Family Profile
 
-> Status: REDESIGNED — 2026-03-17 | Implementation status: Implemented, not yet human-accepted | Previous versions had incorrect ChallengeSelector on profile page. This version aligns with blueprint § 2.9.
+> Status: ACCEPTED — 2026-05-08 | Implementation status: Implemented and human-accepted | Previous versions had incorrect ChallengeSelector on profile page. This version aligns with blueprint § 2.9.
 > Module: family-profile
 > Routes: `/family`
 > API routes: `pages/api/family/*`
@@ -8,6 +8,8 @@
 > Branch: `feature/family-profile`
 > Scope: Child basic info editing + read-only onboarding challenge tags + AI-extracted facts display. Accessed from Dashboard card.
 > SOP v2.4 status: Requires refresh before further implementation; current-code facts must use line evidence.
+
+> Acceptance record — 2026-05-08: Technical acceptance passed on `sprint0-complete` with local Supabase, `npx tsc --noEmit`, `git diff --check`, and `npm run build`. Human acceptance passed for `/family` page load, child info persistence, read-only onboarding concerns, conversation-derived facts, summary/notes display, medical disclaimer, and SmartDrawer layout.
 
 ---
 
@@ -85,10 +87,10 @@ AppLayout (SmartDrawer + Content)
 │   ├── If no memory_items: "As you chat with Qimi, insights about your family will appear here."
 │   └── Future: each card has confirm/archive actions (NOT in MVP)
 │
-├── Section 4: Family Summary
-│   ├── Section heading: "Family Summary"
-│   ├── If profile_summary exists: display as editable text area (max 800 chars)
-│   ├── If no summary: "A summary of your family's situation will be generated as you chat."
+├── Section 4: Your Notes / Family Summary
+│   ├── Rendered inside the What Qimi Knows card in the current implementation
+│   ├── If profile_summary exists: display as editable text area (max 200 chars)
+│   ├── If no summary: empty note text with edit affordance
 │   └── Save button for summary edits
 │
 └── Medical disclaimer banner (bottom)
@@ -119,7 +121,7 @@ AppLayout (SmartDrawer + Content)
 ### 1.5 Family Summary Display
 
 - Read from `profile_summaries` table via `GET /api/memory/summary`
-- Display as an editable text area (max 800 chars)
+- Display as an editable text area (max 200 chars)
 - Save via `PUT /api/memory/summary`
 - If `profile_summaries` table doesn't exist yet, show friendly empty state
 - **This section depends on memory-profile-summary module being implemented**
@@ -295,7 +297,7 @@ Display/edit section for family summary.
 Props: `summary: string | null`, `loading: boolean`, `onSave(text): void`
 
 - If memory layer is not built yet (API returns 404), show: "A summary of your family's situation will be generated as you chat."
-- If summary exists, show as editable `<textarea>` with max 800 chars
+- If summary exists, show as editable `<textarea>` with max 200 chars
 - Save button calls `PUT /api/memory/summary`
 
 ### 4.5 `FamilyCompletionBar.tsx` (KEEP)
