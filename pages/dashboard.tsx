@@ -131,15 +131,17 @@ export default function DashboardPage() {
             title="Growth Plan"
             summary={null}
             emptyText="Suggestions from your conversations will appear here"
-            href="/plan"
             icon={<BookOpen size={20} className="text-slate-600" />}
+            disabled
+            badge="Coming soon"
           />
           <DashboardCard
             title="Reports"
             summary={null}
             emptyText="Upload assessment reports for AI analysis"
-            href="/reports"
             icon={<FileText size={20} className="text-slate-600" />}
+            disabled
+            badge="Coming soon"
           />
         </div>
 

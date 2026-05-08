@@ -3,9 +3,11 @@
 // Updated: 2026-03-17 - Redesigned with read-only challenges
 
 import Head from 'next/head';
+import Link from 'next/link';
 import { useSession } from 'next-auth/react';
 import { useAuthUIStore } from '@/stores/authUIStore';
 import { useState, useEffect } from 'react';
+import { ArrowLeft } from 'lucide-react';
 import AppLayout from '../components/Layout/AppLayout';
 import { FamilyCompletionBar } from '../components/Family/FamilyCompletionBar';
 import ChildInfoCard from '../components/Family/ChildInfoCard';
@@ -103,6 +105,13 @@ export default function FamilyPage() {
       <div className="py-8 max-w-2xl mx-auto space-y-6">
         {/* Page header */}
         <div>
+          <Link
+            href="/dashboard"
+            className="mb-4 inline-flex items-center gap-2 text-sm font-medium text-slate-500 transition-colors hover:text-slate-800"
+          >
+            <ArrowLeft size={16} />
+            Back to Dashboard
+          </Link>
           <h1 className="text-2xl font-bold text-slate-800">Family Profile</h1>
           <p className="text-slate-600 mt-1">
             Keep your child's details current so Qimi can stay helpful and personalized.

@@ -6,10 +6,12 @@ interface DashboardCardProps {
   title: string;
   summary: string | null;
   emptyText: string;
-  href: string;
+  href?: string;
   icon: React.ReactNode;
   loading?: boolean;
   error?: boolean;
+  disabled?: boolean;
+  badge?: string;
 }
 
 export const DashboardCard: React.FC<DashboardCardProps> = ({
@@ -20,6 +22,8 @@ export const DashboardCard: React.FC<DashboardCardProps> = ({
   icon,
   loading = false,
   error = false,
+  disabled = false,
+  badge,
 }) => {
   if (loading) {
     return (
@@ -53,19 +57,40 @@ export const DashboardCard: React.FC<DashboardCardProps> = ({
     );
   }
 
+  const content = (
+    <>
+      <div className="w-10 h-10 rounded-lg bg-slate-100 flex items-center justify-center">
+        {icon}
+      </div>
+      <div className="flex-1 ml-1">
+        <div className="flex items-center gap-2">
+          <h3 className="font-semibold text-slate-800">{title}</h3>
+          {badge && (
+            <span className="rounded-full bg-slate-100 px-2 py-0.5 text-xs font-medium text-slate-500">
+              {badge}
+            </span>
+          )}
+        </div>
+        <p className="text-sm text-slate-600">{summary || emptyText}</p>
+      </div>
+      {!disabled && <ChevronRight className="text-slate-400 flex-shrink-0" size={20} />}
+    </>
+  );
+
+  if (disabled || !href) {
+    return (
+      <div className="bg-white rounded-2xl border border-slate-200 p-6 flex items-center gap-3 opacity-75">
+        {content}
+      </div>
+    );
+  }
+
   return (
     <Link
       href={href}
       className="bg-white rounded-2xl border border-slate-200 p-6 hover:shadow-md transition-shadow flex items-center gap-3"
     >
-      <div className="w-10 h-10 rounded-lg bg-slate-100 flex items-center justify-center">
-        {icon}
-      </div>
-      <div className="flex-1 ml-1">
-        <h3 className="font-semibold text-slate-800">{title}</h3>
-        <p className="text-sm text-slate-600">{summary || emptyText}</p>
-      </div>
-      <ChevronRight className="text-slate-400 flex-shrink-0" size={20} />
+      {content}
     </Link>
   );
 };
