@@ -42,7 +42,8 @@
 - `lib/prompts.ts` accepts `familyNotes?: string` and `extractedFacts?: string[]`
 - `profile_summaries` and `memory_items` tables exist in `supabase/migrations/20260506000300_memory_profile_summary_tables.sql:L3-L59`
 - Memory API routes exist under `pages/api/memory/`; extraction starts in `pages/api/memory/extract.ts:L1-L18`, and relevant retrieval starts in `pages/api/memory/relevant.ts:L1-L53`
-- Chat stream handler (`pages/api/chat/stream.ts`) has no post-completion hook
+- Chat stream handler triggers server-side extraction after stream completion in `pages/api/chat/stream.ts`.
+- 2026-05-08 quality update: extraction prompt must normalize profile facts instead of storing raw first-person user phrasing.
 
 ### Execution Baseline
 
@@ -273,7 +274,9 @@ Rules:
 - DELETE: Existing fact explicitly contradicted by the user
 - NOOP: Existing fact that is still consistent — do NOT include NOOP items in output
 - Do NOT extract facts already covered by existing facts with same meaning
-- summary_update: Merge new information into existing summary using Mem0 pattern (preserve existing + blend new)
+- `value` must be normalized profile wording, not copied chat wording. Avoid first-person framing such as "my son", "my daughter", "I am worried", "we want", "我的孩子", or "我担心".
+- Good value examples: "Child enjoys painting and drawing", "Parent is worried the child does not finish homework", "喜欢打网球", "担心孩子最近不爱写作业".
+- `summary_update` is ignored by the server in the quality-updated implementation; after A.U.D.N. writes complete, the server rewrites the system summary from all active facts.
 ```
 
 ### 3.4 A.U.D.N. Execution
@@ -288,8 +291,9 @@ After LLM returns extracted facts:
 | `NOOP` | Skip (not included in LLM output) |
 
 - Cap: max 10 fact operations per extraction run
-- If `summary_update` is non-null, upsert `profile_summaries` with `source = 'system'`
-- If user has manually edited summary (`source = 'user'`): check if `char_length(existing) + 2 + char_length(summary_update) <= 200`. If yes, concatenate with `'; '` separator and keep `source = 'user'`. If no, skip the summary update entirely. Do NOT truncate or overwrite user text.
+- If any fact is added, updated, or archived, rebuild the system-generated `profile_summaries.summary` from all active facts.
+- If user has manually edited summary (`source = 'user'`), do not overwrite it from background extraction.
+- The rebuilt system summary must remain ≤200 characters and use neutral profile wording.
 
 ### 3.5 Deduplication
 
@@ -410,10 +414,11 @@ Processing:
 2. Load user's existing active `memory_items`
 3. Call DeepSeek with extraction prompt (§ 3.3)
 4. Parse LLM response, execute A.U.D.N. operations (§ 3.4)
-5. Update `profile_summaries` if `summary_update` is non-null (§ 3.4)
+5. If facts changed, rebuild system `profile_summaries` from all active facts unless the summary was manually edited by the user
 
 Rules:
 - Auth required via `getServerSession` (browser calls this route with session cookie after stream completes)
+- Extraction can run with a single user message; skip only when the conversation has no user-authored content
 - Cap: max 10 fact operations per run
 - On LLM failure or parse error: log and silently skip (do not break user flow)
 - Returns `{ success: true, added: N, updated: N, deleted: N }`
@@ -536,7 +541,8 @@ Rules:
   - Load existing active `memory_items` for the user.
   - Build extraction prompt per § 3.3, call DeepSeek.
   - Parse response, execute A.U.D.N. (INSERT/UPDATE/archive).
-  - Upsert `profile_summaries` if `summary_update` is non-null.
+  - Normalize `fact_value` to profile wording, not raw user wording.
+  - Rebuild system `profile_summaries` from active facts after any change, unless the user has manually edited the summary.
   - Cap at 10 operations. Silently skip on LLM/parse errors.
 - **Auth pattern**: `getServerSession` + `getSupabaseAdmin()`.
 - **Verify**: `npx eslint`, `npx tsc --noEmit`, `npm run build` pass.

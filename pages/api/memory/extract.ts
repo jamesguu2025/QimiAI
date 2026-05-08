@@ -9,7 +9,8 @@ import { getSupabaseAdmin } from '../../../lib/supabase';
 
 const DEEPSEEK_API_KEY = process.env.DEEPSEEK_API_KEY;
 const DEEPSEEK_API_BASE = process.env.DEEPSEEK_API_BASE || 'https://api.deepseek.com';
-const DEEPSEEK_MODEL = process.env.DEEPSEEK_MODEL || 'deepseek-chat';
+const DEEPSEEK_MODEL = process.env.DEEPSEEK_MODEL || 'deepseek-v4-flash';
+const DEEPSEEK_THINKING = { type: 'disabled' };
 
 const VALID_CATEGORIES = [
   'child_info', 'school', 'family', 'behavior',
@@ -41,6 +42,112 @@ interface ExtractionResult {
   summary_update: string | null;
 }
 
+interface ActiveFact {
+  category: string;
+  fact_key: string;
+  fact_value: string;
+  confidence?: number;
+  updated_at?: string;
+}
+
+const CATEGORY_GUIDE: Record<FactCategory, { label: string; description: string }> = {
+  child_info: { label: 'Child Info', description: 'name, age, gender, school, grade' },
+  school: { label: 'School & Learning', description: 'grades, homework, subjects, teacher feedback' },
+  family: { label: 'Family', description: 'parents, siblings, living situation, care arrangements' },
+  behavior: { label: 'Behavior', description: 'habits, emotional patterns, routines, social behavior outside sports' },
+  preference: { label: 'Interests & Preferences', description: 'likes, dislikes, hobbies, personal preferences' },
+  medical: { label: 'Medical', description: 'diagnosis, medication, supplements, doctor advice' },
+  concern: { label: 'Parent Concerns', description: 'parent worries, pain points, pressure points' },
+  goal: { label: 'Parent Goals', description: 'parent goals, wishes, target outcomes' },
+  progress: { label: 'Progress', description: 'positive changes, milestones, improved abilities' },
+  sports: { label: 'Sports & Activities', description: 'exercise habits, sports, physical activities and related struggles' },
+};
+
+const EXTRACTION_SYSTEM_PROMPT = `You are a family profile memory extractor.
+
+Your job is to extract durable, useful facts about the child and family from parent messages.
+
+Core rules:
+- Use only user-provided information. Ignore assistant replies.
+- Extract generously when a message contains a child/family fact. Use lower confidence when uncertain.
+- Do not extract generic advice requests with no personal facts.
+- Write fact values as normalized profile facts, not copied chat wording.
+- Never preserve first-person framing such as "my son", "my daughter", "I am worried", "we want", "我的孩子", or "我担心".
+- Prefer neutral, third-person wording:
+  - "my son really likes painting and drawing" -> "Child enjoys painting and drawing"
+  - "I am worried he never finishes homework" -> "Parent is worried the child does not finish homework"
+  - "我很担心他最近不爱写作业" -> "担心孩子最近不爱写作业"
+  - "他说他喜欢打网球" -> "喜欢打网球"
+- Keep each value short and factual. No advice, encouragement, interpretation, or assistant-style language.
+- One fact should represent one idea. Do not combine unrelated facts into one value.
+- Use stable snake_case keys so later messages can update the same fact.
+- If the user explicitly corrects or negates an existing fact, return DELETE or UPDATE.
+
+Valid categories:
+${VALID_CATEGORIES.map((category) => `- ${category}: ${CATEGORY_GUIDE[category].description}`).join('\n')}
+
+Output only valid JSON matching the user prompt schema.`;
+
+function cleanJsonResponse(responseText: string): string {
+  return responseText
+    .replace(/^```json\s*/i, '')
+    .replace(/^```\s*/i, '')
+    .replace(/```\s*$/, '')
+    .trim();
+}
+
+function normalizeFactKey(key: string): string {
+  const normalized = key
+    .trim()
+    .toLowerCase()
+    .replace(/[^a-z0-9]+/g, '_')
+    .replace(/^_+|_+$/g, '')
+    .slice(0, 64);
+
+  return normalized || 'profile_fact';
+}
+
+function normalizeFactValue(value: string): string {
+  return value
+    .trim()
+    .replace(/\s+/g, ' ')
+    .replace(/^[-*•]\s*/, '')
+    .replace(/^my son\b/i, 'Child')
+    .replace(/^my daughter\b/i, 'Child')
+    .replace(/^my child\b/i, 'Child')
+    .replace(/^our son\b/i, 'Child')
+    .replace(/^our daughter\b/i, 'Child')
+    .replace(/^our child\b/i, 'Child')
+    .replace(/^i am worried\b/i, 'Parent is worried')
+    .replace(/^i'm worried\b/i, 'Parent is worried')
+    .replace(/^we are worried\b/i, 'Parents are worried')
+    .replace(/^we want\b/i, 'Parents want')
+    .replace(/^我儿子/, '孩子')
+    .replace(/^我女儿/, '孩子')
+    .replace(/^我的孩子/, '孩子')
+    .replace(/^我家孩子/, '孩子')
+    .replace(/^我很担心/, '家长担心')
+    .replace(/^我担心/, '家长担心')
+    .slice(0, 180);
+}
+
+function normalizeExtractedFact(fact: ExtractedFact): ExtractedFact | null {
+  if (!VALID_CATEGORIES.includes(fact.category)) return null;
+  if (!['ADD', 'UPDATE', 'DELETE'].includes(fact.action)) return null;
+
+  const key = normalizeFactKey(fact.key || '');
+  const value = normalizeFactValue(fact.value || '');
+  if (!value || value.length < 2) return null;
+
+  return {
+    ...fact,
+    key,
+    value,
+    confidence: Math.min(1, Math.max(0, fact.confidence || 0.7)),
+    existing_id: fact.existing_id || null,
+  };
+}
+
 function buildExtractionPrompt(
   existingFacts: ExistingFact[],
   recentMessages: string[]
@@ -60,21 +167,9 @@ function buildExtractionPrompt(
     .map((m, i) => `[${i + 1}] ${m}`)
     .join('\n');
 
-  return `You are a family information extraction assistant. Analyze the following conversation messages from a parent discussing their ADHD child.
+  return `Analyze these parent messages and extract only NEW, CHANGED, or explicitly contradicted facts.
 
-Extract structured facts into these 10 categories:
-- child_info: Basic info (name, age, gender, school)
-- school: Learning (grades, subjects, teacher feedback)
-- family: Family situation (parents, siblings, living)
-- behavior: Behavior patterns (habits, problem behaviors)
-- preference: Interests and preferences
-- medical: Medical info (diagnosis, medication, doctor advice)
-- concern: Parent worries and pain points
-- goal: Parent goals and wishes
-- progress: Positive changes and milestones
-- sports: Exercise and physical activities
-
-EXISTING FACTS (for comparison):
+EXISTING FACTS:
 ${existingJson}
 
 NEW CONVERSATION MESSAGES:
@@ -87,22 +182,142 @@ For each NEW or CHANGED fact, output JSON:
       "action": "ADD" | "UPDATE" | "DELETE",
       "category": "<one of 10 categories>",
       "key": "<short label in English, snake_case>",
-      "value": "<fact content>",
+      "value": "<normalized profile fact, not copied raw wording>",
       "confidence": <0.0 to 1.0>,
       "existing_id": "<uuid if UPDATE/DELETE, null if ADD>"
     }
   ],
-  "summary_update": "<updated family summary in ≤200 chars combining old and new info, or null if no meaningful change>"
+  "summary_update": null
 }
 
 Rules:
-- Extract generously — when uncertain, still extract with lower confidence
+- Extract generously when the user provides child/family facts
 - ADD: New fact not in existing facts
 - UPDATE: Existing fact whose value has changed
 - DELETE: Existing fact explicitly contradicted by the user
 - Do NOT include unchanged facts
 - Do NOT extract facts that duplicate existing ones with same meaning
+- Write fact.value as a concise profile bullet, not as the user's raw sentence
+- Avoid "my son", "my daughter", "I", "we", "我的", "我担心" framing in fact.value
+- Keep summary_update null; the server rewrites the summary from active facts after applying changes
 - Output ONLY valid JSON, no markdown fences, no extra text`;
+}
+
+function buildProfileSummaryPrompt(activeFacts: ActiveFact[]): string {
+  const factLines = activeFacts
+    .map((fact) => {
+      const label = CATEGORY_GUIDE[fact.category as FactCategory]?.label || fact.category;
+      return `- [${label}] ${fact.fact_key}: ${fact.fact_value}`;
+    })
+    .join('\n');
+
+  return `Rewrite these active profile facts into one concise family profile summary.
+
+Rules:
+- Maximum 200 characters.
+- Neutral third-person wording.
+- No advice, encouragement, disclaimers, or assistant voice.
+- Do not copy raw chat phrasing.
+- Include the most useful stable facts only.
+- Output JSON only: {"summary":"..."}
+
+ACTIVE FACTS:
+${factLines || 'None'}`;
+}
+
+async function callDeepSeek(messages: Array<{ role: 'system' | 'user'; content: string }>, maxTokens: number) {
+  const llmResponse = await fetch(`${DEEPSEEK_API_BASE}/chat/completions`, {
+    method: 'POST',
+    headers: {
+      'Content-Type': 'application/json',
+      Authorization: `Bearer ${DEEPSEEK_API_KEY}`,
+    },
+    body: JSON.stringify({
+      model: DEEPSEEK_MODEL,
+      messages,
+      temperature: 0.2,
+      max_tokens: maxTokens,
+      thinking: DEEPSEEK_THINKING,
+    }),
+  });
+
+  if (!llmResponse.ok) {
+    throw new Error(`DeepSeek API error: ${llmResponse.status}`);
+  }
+
+  const llmData = await llmResponse.json();
+  const responseText = llmData.choices?.[0]?.message?.content?.trim();
+  if (!responseText) {
+    throw new Error('Empty LLM response');
+  }
+
+  return responseText;
+}
+
+async function rewriteSystemSummary(
+  supabase: ReturnType<typeof getSupabaseAdmin>,
+  userId: string
+): Promise<void> {
+  const { data: existingSummary, error: summaryLoadError } = await supabase
+    .from('profile_summaries')
+    .select('summary, source')
+    .eq('user_id', userId)
+    .single();
+
+  if (summaryLoadError && summaryLoadError.code !== 'PGRST116') {
+    console.error('[memory/extract] Failed to load profile summary:', summaryLoadError);
+    return;
+  }
+
+  if (existingSummary?.source === 'user') {
+    // User-edited notes must not be overwritten by background extraction.
+    return;
+  }
+
+  const { data: activeFacts, error: factsError } = await supabase
+    .from('memory_items')
+    .select('category, fact_key, fact_value, confidence, updated_at')
+    .eq('user_id', userId)
+    .eq('status', 'active')
+    .order('updated_at', { ascending: false });
+
+  if (factsError) {
+    console.error('[memory/extract] Failed to load active facts for summary:', factsError);
+    return;
+  }
+
+  const facts: ActiveFact[] = activeFacts || [];
+  if (facts.length === 0) return;
+
+  try {
+    const responseText = await callDeepSeek(
+      [
+        { role: 'system', content: 'You rewrite structured family facts into a concise profile summary.' },
+        { role: 'user', content: buildProfileSummaryPrompt(facts) },
+      ],
+      500
+    );
+    const parsed = JSON.parse(cleanJsonResponse(responseText)) as { summary?: string };
+    const summaryText = typeof parsed.summary === 'string'
+      ? parsed.summary.trim().slice(0, 200)
+      : '';
+
+    if (!summaryText) return;
+
+    await supabase
+      .from('profile_summaries')
+      .upsert(
+        {
+          user_id: userId,
+          summary: summaryText,
+          source: 'system',
+          updated_at: new Date().toISOString(),
+        },
+        { onConflict: 'user_id' }
+      );
+  } catch (summaryError) {
+    console.error('[memory/extract] Failed to rewrite profile summary:', summaryError);
+  }
 }
 
 export default async function handler(
@@ -151,8 +366,8 @@ export default async function handler(
       return res.status(200).json({ success: true, added: 0, updated: 0, deleted: 0 });
     }
 
-    if (!messages || messages.length < 2) {
-      // Skip extraction for conversations with fewer than 2 user messages
+    if (!messages || messages.length === 0) {
+      // Skip extraction only when there is no user-authored content.
       return res.status(200).json({ success: true, added: 0, updated: 0, deleted: 0 });
     }
 
@@ -170,61 +385,39 @@ export default async function handler(
     // Call DeepSeek for extraction
     const prompt = buildExtractionPrompt(existing, recentMessages);
 
-    const llmResponse = await fetch(`${DEEPSEEK_API_BASE}/v1/chat/completions`, {
-      method: 'POST',
-      headers: {
-        'Content-Type': 'application/json',
-        Authorization: `Bearer ${DEEPSEEK_API_KEY}`,
-      },
-      body: JSON.stringify({
-        model: DEEPSEEK_MODEL,
-        messages: [{ role: 'user', content: prompt }],
-        temperature: 0.3,
-        max_tokens: 2000,
-      }),
-    });
-
-    if (!llmResponse.ok) {
-      console.error('[memory/extract] DeepSeek API error:', llmResponse.status);
-      return res.status(200).json({ success: true, added: 0, updated: 0, deleted: 0 });
-    }
-
-    const llmData = await llmResponse.json();
-    const responseText = llmData.choices?.[0]?.message?.content?.trim();
-
-    if (!responseText) {
-      console.error('[memory/extract] Empty LLM response');
+    let responseText: string;
+    try {
+      responseText = await callDeepSeek(
+        [
+          { role: 'system', content: EXTRACTION_SYSTEM_PROMPT },
+          { role: 'user', content: prompt },
+        ],
+        2000
+      );
+    } catch (llmError) {
+      console.error('[memory/extract] DeepSeek extraction error:', llmError);
       return res.status(200).json({ success: true, added: 0, updated: 0, deleted: 0 });
     }
 
     // Parse LLM response — strip markdown fences if present
     let parsed: ExtractionResult;
     try {
-      const cleaned = responseText
-        .replace(/^```json\s*/i, '')
-        .replace(/```\s*$/, '')
-        .trim();
-      parsed = JSON.parse(cleaned);
+      parsed = JSON.parse(cleanJsonResponse(responseText));
     } catch (parseErr) {
       console.error('[memory/extract] Failed to parse LLM response:', parseErr, responseText.slice(0, 500));
       return res.status(200).json({ success: true, added: 0, updated: 0, deleted: 0 });
     }
 
     // Execute A.U.D.N. operations (cap at 10)
-    const facts = (parsed.facts || []).slice(0, 10);
+    const facts = (Array.isArray(parsed.facts) ? parsed.facts : [])
+      .map(normalizeExtractedFact)
+      .filter((fact): fact is ExtractedFact => fact !== null)
+      .slice(0, 10);
     let added = 0;
     let updated = 0;
     let deleted = 0;
 
     for (const fact of facts) {
-      // Validate category
-      if (!VALID_CATEGORIES.includes(fact.category as FactCategory)) {
-        console.warn('[memory/extract] Invalid category:', fact.category);
-        continue;
-      }
-
-      const confidence = Math.min(1, Math.max(0, fact.confidence || 0.7));
-
       if (fact.action === 'ADD') {
         // Check if fact already exists (dedup)
         const existingMatch = existing.find(
@@ -237,7 +430,7 @@ export default async function handler(
             .from('memory_items')
             .update({
               fact_value: fact.value,
-              confidence,
+              confidence: fact.confidence,
               updated_at: new Date().toISOString(),
             })
             .eq('id', existingMatch.id);
@@ -251,7 +444,7 @@ export default async function handler(
               category: fact.category,
               fact_key: fact.key,
               fact_value: fact.value,
-              confidence,
+              confidence: fact.confidence,
               source: 'conversation',
               source_ref: conversationId,
             });
@@ -263,7 +456,7 @@ export default async function handler(
           .from('memory_items')
           .update({
             fact_value: fact.value,
-            confidence,
+            confidence: fact.confidence,
             updated_at: new Date().toISOString(),
           })
           .eq('id', fact.existing_id)
@@ -284,46 +477,8 @@ export default async function handler(
       }
     }
 
-    // Update profile summary if provided
-    if (parsed.summary_update && typeof parsed.summary_update === 'string') {
-      const summaryText = parsed.summary_update.trim().slice(0, 200);
-
-      if (summaryText) {
-        // Check existing summary
-        const { data: existingSummary } = await supabase
-          .from('profile_summaries')
-          .select('summary, source')
-          .eq('user_id', user.id)
-          .single();
-
-        if (existingSummary && existingSummary.source === 'user') {
-          // User has manually edited — only append if under 200 chars
-          const combined = existingSummary.summary + '; ' + summaryText;
-          if (combined.length <= 200) {
-            await supabase
-              .from('profile_summaries')
-              .update({
-                summary: combined,
-                updated_at: new Date().toISOString(),
-              })
-              .eq('user_id', user.id);
-          }
-          // else skip — don't overwrite user text
-        } else {
-          // System-generated or no existing — upsert
-          await supabase
-            .from('profile_summaries')
-            .upsert(
-              {
-                user_id: user.id,
-                summary: summaryText,
-                source: 'system',
-                updated_at: new Date().toISOString(),
-              },
-              { onConflict: 'user_id' }
-            );
-        }
-      }
+    if (added + updated + deleted > 0) {
+      await rewriteSystemSummary(supabase, user.id);
     }
 
     console.log(`[memory/extract] Done: added=${added}, updated=${updated}, deleted=${deleted}`);
