@@ -119,7 +119,7 @@ Current baseline:
 - Chat infrastructure: `Implemented` and human-accepted in current working branch
 - Follow-up reminder module: `Partially implemented`
 - AppLayout → SmartDrawer unification: `Implemented` (code reality: `components/Layout/AppLayout.tsx:5-54` imports and renders SmartDrawer)
-- Dashboard (feature hub): `Implemented, not yet human-accepted` (spec: `docs/specs/dashboard.md`, status DONE)
+- Dashboard (feature hub): `Implemented` and human-accepted in current working branch
 - Family Profile (was User Profile): `Implemented` and human-accepted in current working branch
 - **Compliance (MVP launch gate)**: `Partially implemented` (delete-account/settings pieces exist; privacy/terms/consent pages and high-risk EBG record still pending)
 - Settings (account): `Implemented` and human-accepted in current working branch

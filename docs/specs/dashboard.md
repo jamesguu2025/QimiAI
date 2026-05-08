@@ -1,6 +1,6 @@
 # Module Spec: Dashboard
 
-> Status: DONE — 2026-03-17 | Self-reviewed: 2026-03-16 | Second-pass reviewed: 2026-03-16 (P0: 0, P1: 0 after fixes) | Implementation status: Implemented, not yet human-accepted
+> Status: ACCEPTED — 2026-05-08 | Self-reviewed: 2026-03-16 | Second-pass reviewed: 2026-03-16 (P0: 0, P1: 0 after fixes) | Implementation status: Implemented and human-accepted
 > Module: dashboard
 > Routes: `/dashboard`
 > API routes: `pages/api/dashboard/*`
@@ -8,6 +8,8 @@
 > Branch: TBD (may share branch with infrastructure unification)
 > Scope: Feature hub page with summary cards linking to Family Profile, Growth Plan, and Reports.
 > SOP v2.4 status: Historical implementation spec. Do not use for new execution until refreshed with Search Ledger and current-code line evidence.
+
+> Acceptance record — 2026-05-08: Technical acceptance passed on `sprint0-complete` with local Supabase, `npx tsc --noEmit`, `git diff --check`, and `npm run build`. Human acceptance passed for Dashboard page load, SmartDrawer layout, Family Profile navigation, mobile layout, and Coming Soon handling for unimplemented modules. Dashboard no longer links users into `/plan` or `/reports` until those modules exist.
 
 ---
 
@@ -30,7 +32,7 @@ Dashboard is **not** an analytics page. It is a feature hub — a place to quick
 
 - Dashboard shows summary cards for existing modules only
 - No analytics, charts, or usage statistics in MVP
-- Cards link to module detail pages; Dashboard does not replicate module functionality
+- Implemented module cards link to module detail pages; planned modules show disabled "Coming soon" cards until their pages exist
 - Each card fetches its own summary data independently
 
 ### Execution Baseline
@@ -70,7 +72,7 @@ SmartDrawer + Content area
 - **Summary content** (fetched from `GET /api/plan/summary` — defined in growth-plan spec):
   - If items exist: "{itemCount} saved suggestions · {topCategory}"
   - If no items: "Suggestions from your conversations will appear here"
-- **Action**: Click card → navigate to `/plan`
+- **Action**: Disabled "Coming soon" card until `/plan` exists
 - **Visual**: Same card style as Family Profile
 
 ### 1.4 Reports Card
@@ -79,7 +81,7 @@ SmartDrawer + Content area
 - **Summary content** (fetched from `GET /api/reports/summary` — defined in report-analysis spec):
   - If reports exist: "{reportCount} reports uploaded"
   - If no reports: "Upload assessment reports for AI analysis"
-- **Action**: Click card → navigate to `/reports`
+- **Action**: Disabled "Coming soon" card until `/reports` exists
 - **Visual**: Same card style
 
 ### 1.5 Card Loading and Error States
@@ -123,10 +125,12 @@ Props:
 - `title: string` — Card heading
 - `summary: string | null` — Summary text (null = loading)
 - `emptyText: string` — Text to show when module has no data
-- `href: string` — Link target
+- `href?: string` — Link target for implemented modules
 - `icon: React.ReactNode` — Icon for the card
 - `loading: boolean` — Show skeleton
 - `error: boolean` — Show error state
+- `disabled?: boolean` — Render as non-clickable for planned modules
+- `badge?: string` — Optional small status label, e.g. "Coming soon"
 
 Styling:
 - Rounded corners (`rounded-2xl`), subtle border (`border-slate-200`), white background
@@ -165,7 +169,8 @@ Data flow:
 - [x] Authenticated user sees Dashboard with Family Profile, Growth Plan, and Reports cards
 - [x] Family Profile card shows correct summary when child profile exists
 - [x] Cards show appropriate empty state text when no data exists
-- [x] Clicking a card navigates to the correct module page
+- [x] Clicking the Family Profile card navigates to `/family`
+- [x] Planned module cards show Coming soon and do not navigate to nonexistent pages
 - [x] Unauthenticated users are blocked from the page and prompted via the shared login modal
 - [x] Medical disclaimer is visible at the bottom
 - [x] SmartDrawer is visible and functional on Dashboard
