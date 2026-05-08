@@ -585,9 +585,9 @@ Follow the existing DeepSeek call pattern from `pages/api/chat/stream.ts`:
 ```ts
 const DEEPSEEK_API_KEY = process.env.DEEPSEEK_API_KEY;
 const DEEPSEEK_API_BASE = process.env.DEEPSEEK_API_BASE || 'https://api.deepseek.com';
-const DEEPSEEK_MODEL = process.env.DEEPSEEK_MODEL || 'deepseek-chat';
+const DEEPSEEK_MODEL = process.env.DEEPSEEK_MODEL || 'deepseek-v4-flash';
 
-const response = await fetch(`${DEEPSEEK_API_BASE}/v1/chat/completions`, {
+const response = await fetch(`${DEEPSEEK_API_BASE}/chat/completions`, {
   method: 'POST',
   headers: {
     'Authorization': `Bearer ${DEEPSEEK_API_KEY}`,

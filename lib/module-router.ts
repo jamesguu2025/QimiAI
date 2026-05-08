@@ -20,6 +20,8 @@ const MODULE_LIST = [
 // DeepSeek API configuration
 const DEEPSEEK_API_KEY = process.env.DEEPSEEK_API_KEY;
 const DEEPSEEK_API_BASE = process.env.DEEPSEEK_API_BASE || 'https://api.deepseek.com';
+const DEEPSEEK_MODEL = process.env.DEEPSEEK_MODEL || 'deepseek-v4-flash';
+const DEEPSEEK_THINKING = { type: 'disabled' };
 
 /**
  * Call DeepSeek API for module identification
@@ -29,17 +31,18 @@ async function callModuleRouter(prompt: string): Promise<string> {
     throw new Error('DEEPSEEK_API_KEY not configured');
   }
 
-  const response = await fetch(`${DEEPSEEK_API_BASE}/v1/chat/completions`, {
+  const response = await fetch(`${DEEPSEEK_API_BASE}/chat/completions`, {
     method: 'POST',
     headers: {
       'Content-Type': 'application/json',
       'Authorization': `Bearer ${DEEPSEEK_API_KEY}`,
     },
     body: JSON.stringify({
-      model: process.env.DEEPSEEK_MODEL || 'deepseek-chat',
+      model: DEEPSEEK_MODEL,
       messages: [{ role: 'user', content: prompt }],
       temperature: 0.1,
       max_tokens: 500,
+      thinking: DEEPSEEK_THINKING,
     }),
   });
 

@@ -17,7 +17,8 @@ import { isTopicFolder, normalizeTopicFolder, TopicFolder } from '../../../types
 // DeepSeek API configuration from environment variables
 const DEEPSEEK_API_KEY = process.env.DEEPSEEK_API_KEY;
 const DEEPSEEK_API_BASE = process.env.DEEPSEEK_API_BASE || 'https://api.deepseek.com';
-const DEEPSEEK_MODEL = process.env.DEEPSEEK_MODEL || 'deepseek-chat';
+const DEEPSEEK_MODEL = process.env.DEEPSEEK_MODEL || 'deepseek-v4-flash';
+const DEEPSEEK_THINKING = { type: 'disabled' };
 const ENABLE_RAG = process.env.ENABLE_RAG === 'true';
 
 /**
@@ -469,6 +470,7 @@ async function streamChatWithRAG(
       stream: true,
       temperature: 0.7,
       max_tokens: 2048,
+      thinking: DEEPSEEK_THINKING,
     };
 
     // Add RAG tools if enabled and NOT in forceRAG mode
@@ -483,7 +485,7 @@ async function streamChatWithRAG(
     }
 
     // First API call
-    const response = await fetch(`${DEEPSEEK_API_BASE}/v1/chat/completions`, {
+    const response = await fetch(`${DEEPSEEK_API_BASE}/chat/completions`, {
       method: 'POST',
       headers: {
         'Content-Type': 'application/json',
@@ -585,7 +587,7 @@ async function streamChatWithRAG(
 
       // Second API call with tool results
       console.log('[chat/stream] Making second API call with RAG results...');
-      const secondResponse = await fetch(`${DEEPSEEK_API_BASE}/v1/chat/completions`, {
+      const secondResponse = await fetch(`${DEEPSEEK_API_BASE}/chat/completions`, {
         method: 'POST',
         headers: {
           'Content-Type': 'application/json',
@@ -597,6 +599,7 @@ async function streamChatWithRAG(
           stream: true,
           temperature: 0.7,
           max_tokens: 2048,
+          thinking: DEEPSEEK_THINKING,
         }),
         signal: abortSignal,
       });

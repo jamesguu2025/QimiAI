@@ -20,6 +20,8 @@ const ENABLE_SMART_SUMMARY = process.env.ENABLE_SMART_SUMMARY === 'true';
 // DeepSeek API configuration (for summarization LLM)
 const DEEPSEEK_API_KEY = process.env.DEEPSEEK_API_KEY;
 const DEEPSEEK_API_BASE = process.env.DEEPSEEK_API_BASE || 'https://api.deepseek.com';
+const DEEPSEEK_MODEL = process.env.DEEPSEEK_MODEL || 'deepseek-v4-flash';
+const DEEPSEEK_THINKING = { type: 'disabled' };
 
 /**
  * Paper result from RAG API
@@ -303,18 +305,19 @@ ${papersText}
 请直接输出综合摘要，不需要标题或前言。`;
 
     // 调用 DeepSeek API 生成摘要
-    const response = await fetch(`${DEEPSEEK_API_BASE}/v1/chat/completions`, {
+    const response = await fetch(`${DEEPSEEK_API_BASE}/chat/completions`, {
       method: 'POST',
       headers: {
         'Content-Type': 'application/json',
         'Authorization': `Bearer ${DEEPSEEK_API_KEY}`,
       },
       body: JSON.stringify({
-        model: 'deepseek-chat',
+        model: DEEPSEEK_MODEL,
         messages: [{ role: 'user', content: prompt }],
         max_tokens: 2000,  // 综合摘要 800 字 + buffer
         temperature: 0.3,  // 低温度，更稳定
         stream: false,
+        thinking: DEEPSEEK_THINKING,
       }),
       signal: AbortSignal.timeout(60000), // 60 seconds
     });

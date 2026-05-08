@@ -62,7 +62,7 @@
 │  Runtime:       Vercel Serverless Functions (Node.js 18)    │
 │  API Style:     Next.js API Routes (/pages/api/*)           │
 │  Auth:          NextAuth.js (JWT Sessions)                  │
-│  LLM:           DeepSeek API (deepseek-chat)                │
+│  LLM:           DeepSeek API (deepseek-v4-flash)            │
 │  RAG:           Custom implementation (可选)                 │
 └─────────────────────────────────────────────────────────────┘
                               │
@@ -356,7 +356,7 @@ The following is information about this user and their child. Please consider th
 # .env.local
 DEEPSEEK_API_KEY=sk-xxx          # 主对话 LLM
 DEEPSEEK_API_BASE=https://api.deepseek.com
-DEEPSEEK_MODEL=deepseek-chat
+DEEPSEEK_MODEL=deepseek-v4-flash
 
 # 模块路由也用 DeepSeek（在 module-router.ts 中配置）
 ```
