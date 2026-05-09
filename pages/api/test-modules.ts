@@ -33,9 +33,9 @@ const TEST_CASES = [
   },
   {
     id: 5,
-    name: 'TCM Permission Check',
+    name: 'Functional Medicine Signs',
     message: 'My child sweats a lot at night and has cold hands and feet. His tongue looks pale.',
-    expected: ['functional_medicine', 'intervention_tcm'],
+    expected: ['functional_medicine'],
   },
 ];
 

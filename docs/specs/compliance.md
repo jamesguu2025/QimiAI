@@ -1,6 +1,6 @@
 # Module Spec: Compliance — MVP Launch Gate
 
-> Status: PARTIALLY IMPLEMENTED — 2026-05-06 SOP refresh. Original approval was 2026-03-17, but public-launch acceptance is blocked until the COPPA consent method, legal copy, and RLS migration pass the SOP v2.4 evidence gate.
+> Status: PARTIALLY IMPLEMENTED — 2026-05-08 gate refresh. Original approval was 2026-03-17. MVP launch posture is adult-directed and conditional on keeping children from independently creating accounts or using Qimi as the intended user.
 > Module: compliance (cross-cutting)
 > Routes: `/privacy`, `/terms`, `/settings`, `/consent`
 > API routes: `pages/api/user/delete-account.ts`, `pages/api/compliance/consent.ts`, `pages/api/compliance/consent-status.ts`
@@ -19,43 +19,55 @@ This spec was written against:
 - `docs/project-control.md` for execution order
 - Real code audit of: `lib/system-prompt-lite.ts`, `supabase/schema.sql`, `public/privacy.html`, `public/terms.html`, `public/data-deletion.html`, auth flow, data collection patterns
 
-### SOP v2.4 Refresh Status (2026-05-06)
+### SOP v2.4 Refresh Status (2026-05-08)
 
 This is a high-risk compliance spec. Before any public launch decision, create or update an ADR-lite/Search Ledger using official sources and counsel-reviewed product copy.
 
-- FTC COPPA FAQ states operators generally must obtain verifiable parental consent before collecting personal information online from children under 13, unless an exception applies: https://www.ftc.gov/business-guidance/resources/complying-coppa-frequently-asked-questions
+- FTC COPPA FAQ states operators generally must obtain verifiable parental consent before collecting personal information online from children under 13 when the rule applies, unless an exception applies: https://www.ftc.gov/business-guidance/resources/complying-coppa-frequently-asked-questions
 - FTC verifiable parental consent guidance says the selected method must be reasonably designed, in light of available technology, to ensure the person giving consent is the child's parent: https://www.ftc.gov/business-guidance/privacy-security/verifiable-parental-consent-childrens-online-privacy-rule
-- Current code evidence: shared modal signup exists in `components/Auth/LoginModal.tsx:284-291`; global auth modal is mounted in `pages/_app.tsx:1-24`; account deletion API exists in `pages/api/user/delete-account.ts:19-56`; current initial RLS policies still include `USING (true)` in `supabase/migrations/20260506000100_initial_schema.sql:51-61`.
-- Current missing implementation: no `pages/privacy.tsx`, `pages/terms.tsx`, `pages/consent.tsx`, or `pages/api/compliance/*` routes were found in the current working tree on 2026-05-06.
+- FTC 2026 COPPA age-verification policy statement supports limited age-verification collection for the sole purpose of determining age when stated conditions are met; it does not decide Qimi's adult-directed MVP scope: https://www.ftc.gov/news-events/news/press-releases/2026/02/ftc-issues-coppa-policy-statement-incentivize-use-age-verification-technologies-protect-children
+- CPPA's CCPA FAQ defines current applicability by business status plus statutory thresholds, including 100,000 California residents/households and revenue/selling-or-sharing tests; a simple "first 5,000 users" threshold is not the legal test: https://cppa.ca.gov/faq
+- HHS states HIPAA applies to covered entities and business associates; health-adjacent consumer apps are not automatically covered unless they meet those definitions: https://www.hhs.gov/hipaa/for-professionals/covered-entities/index.html
+- FTC Health Breach Notification Rule can apply to health apps and similar technologies outside HIPAA and needs a Qimi-specific scope decision: https://www.ftc.gov/legal-library/browse/rules/health-breach-notification-rule
+- FDA device/software status turns on intended use and software function; Qimi's non-device posture depends on avoiding diagnosis, treatment, prevention, cure, or substitute-clinician claims: https://www.fda.gov/medical-devices/classify-your-medical-device/how-determine-if-your-product-medical-device
+- EDPB GDPR territorial-scope guidance requires revisit if Qimi offers goods/services to people in the EU or monitors their behavior there: https://www.edpb.europa.eu/our-work-tools/our-documents/guidelines/guidelines-32018-territorial-scope-gdpr-article-3-version_en
+- Standardized launch gate and Search Ledger are recorded in `docs/reviews/compliance-mvp-launch-gate-2026-05-08.md`.
+- Current code evidence after the 2026-05-08 implementation pass: shared modal signup includes adult account-holder confirmation; global `AppLayout` checks consent status for logged-in app pages; account deletion API exists in `pages/api/user/delete-account.ts`; `/privacy`, `/terms`, `/consent`, `pages/api/compliance/consent.ts`, and `pages/api/compliance/consent-status.ts` exist; `supabase/migrations/20260508000100_compliance_consent_and_rls.sql` adds `parental_consents` and replaces active broad RLS policies with `auth.uid()` ownership checks.
+- Current remaining launch requirements: preserve adult-directed scope, complete human acceptance, add final business contact details if needed, and revisit COPPA/FTC Health Breach if child accounts, child-directed AI, health-record imports, device imports, or provider integrations are added.
 
 ### Regulatory Scope (MVP only)
 
 | Regulation | Applicability | MVP Action Required |
 |-----------|--------------|-------------------|
-| **COPPA** | YES — app collects birth year/month, ADHD challenges, and medical-category memory items for children < 13 | Verifiable parental consent flow; checkbox-only is not accepted as public-launch evidence without ADR-lite/legal review |
+| **COPPA** | MVP-CONDITIONAL — Qimi is scoped as an adult/parent-directed service, not child-directed independent use | Adult user attestation plus no child accounts/child-directed marketing. Revisit before child-accessible AI, school/clinic child-user deployments, or materially broader child data collection |
 | **FTC Act § 5** | YES — deceptive practices if privacy policy doesn't match actual data collection | Accurate privacy policy + medical disclaimer in AI responses |
-| **CCPA/CPRA** | NO — revenue/user thresholds not met for first 5,000 users | No action needed at MVP |
-| **GDPR** | NO — not targeting EU users | No action needed at MVP |
-| **FDA/SaMD** | NO — product is positioned as support tool, not medical device | Medical disclaimer is sufficient |
+| **FTC Health Breach Notification Rule** | MVP-CONDITIONAL — Qimi stores health-adjacent child/family information but does not import health records, connected-device data, provider data, or operate as a PHR aggregator | Keep breach notification reserve language. Revisit before health-record/device/provider integrations or any security incident |
+| **CCPA/CPRA** | DEFER WITH ADR — not a blocker while Qimi remains below statutory thresholds and does not sell/share personal information | Record threshold watch and revisit triggers; do not rely on a generic 5,000-user statement |
+| **HIPAA** | DEFER WITH ADR — not automatically applicable unless Qimi is or serves a covered entity/business associate | Record non-covered-entity assumption and partnership triggers |
+| **GDPR** | DEFER WITH ADR — not targeting EU users | Record no-EU-targeting policy and revisit before EU launch or monitoring |
+| **FDA/SaMD** | DEFER WITH ADR — support/education positioning can stay outside device posture only if product copy and features avoid diagnosis/treatment/prevention claims | Medical disclaimer plus product-copy and prompt audit required |
 
-Internal design choice: We defer CCPA, GDPR, and cookie consent to post-launch, because the statutory thresholds are not met at MVP scale. This decision must be revisited when approaching 50,000 users or EU market entry.
+Internal design choice: CCPA/CPRA, HIPAA, GDPR, and FDA/SaMD are not implemented as full compliance programs for MVP. They are tracked as ADR-scoped launch decisions with explicit revisit triggers. Cookie consent remains deferred while no non-essential tracking-cookie program is introduced.
 
 ### MVP Boundary
 
 - Six items only — no cookie banners, no data export API, no GDPR machinery
 - Privacy Policy and Terms of Service are static Next.js pages (not dynamic)
 - Account deletion uses existing CASCADE infrastructure — no soft-delete, no retention period
-- Parental consent checkbox + timestamp is only an internal/private-test placeholder until the verifiable-consent gate is closed
+- Adult account-holder confirmation + timestamp is the MVP control while Qimi remains adult-directed and does not allow independent child use
 - RLS fix is a SQL migration — no application-level changes needed
 
 ### Evidence Layering
 
 | Claim | Basis |
 |-------|-------|
-| COPPA requires verifiable parental consent for < 13 data | Official FTC evidence; see SOP v2.4 refresh status above |
-| Checkbox-only consent is limited to private/internal MVP testing | Internal design choice, not a public-launch compliance conclusion. Public launch needs a documented method reasonably designed to verify parent status, or counsel-approved scope reduction that avoids covered child data collection |
-| CCPA thresholds not met at 5K users | External research supported (Cal. Civ. Code § 1798.140(d)) |
+| COPPA requires verifiable parental consent when the rule applies | Official FTC evidence; see SOP v2.4 refresh status above |
+| Adult-directed MVP uses attestation rather than heavy verification | Internal MVP design choice tied to product scope: adult users only, no child accounts, no child-directed AI, no child-directed marketing |
+| CCPA/CPRA is not a blocker while statutory thresholds are not met and personal information is not sold/shared | External research supported by CPPA/OAG official guidance; must be tracked by threshold/revisit triggers, not a generic 5,000-user rule |
 | RLS `USING(true)` is a security gap | Internal design choice — current API routes use service_role key which bypasses RLS, so the gap is not currently exploitable. Fix anyway as defense-in-depth |
+| HIPAA is not assumed for the current consumer-app posture | External research supported by HHS covered-entity/business-associate guidance; revisit if Qimi partners with covered entities |
+| FDA/SaMD is not assumed for the current support/education posture | External research supported by FDA intended-use guidance; revisit if product claims or functions become diagnostic/treatment-oriented |
+| FTC Health Breach Notification Rule needs scope guardrails | External research supported by FTC rule summary; current MVP avoids PHR-style imports/integrations and keeps breach-notification reserve language |
 
 ---
 
@@ -71,12 +83,12 @@ Internal design choice: We defer CCPA, GDPR, and cookie consent to post-launch, 
 
 **File**: `lib/system-prompt-lite.ts` (not in NEVER-modify list)
 
-### Item 2: Parental Consent Checkbox
+### Item 2: Adult Authorization Checkbox
 
-**Problem**: COPPA requires verifiable parental consent before collecting children's health/behavior data when the rule applies. Current registration flow has terms/privacy acknowledgement text only, and no implemented parental consent record or verification mechanism.
+**Problem**: Qimi stores child/family support context in an adult-directed account. The registration flow needs an auditable adult confirmation record and clear user responsibility boundaries.
 
-**Fix**: Add a required consent gate to the registration flow. The simple checkbox below is a minimum UI placeholder for internal testing; it is not sufficient by itself for public launch unless the ADR-lite/legal review explicitly determines that the final collection scope and consent method satisfy COPPA:
-- Text: "I confirm I am 18 or older and the parent or legal guardian of the child whose information I am providing. I agree to the Privacy Policy and Terms of Service."
+**Fix**: Add a required confirmation gate to the registration flow. This is the MVP control while Qimi remains adult-directed:
+- Text: "By continuing, I confirm that I am 18 or older, that I will only provide child or family information I am authorized to share, and that I agree to the Privacy Policy and Terms of Service."
 - Links to `/privacy` and `/terms`
 - Store `consent_at` (ISO timestamp) and `consent_text` (the exact text agreed to) in a new `parental_consents` table
 - Block registration if checkbox is not checked
@@ -145,7 +157,7 @@ Do not rely on unsourced competitor claims as SOP evidence. Use official FTC sou
 - Data sharing (no selling; third-party AI API processing)
 - **Third-party data retention disclosure**: "Chat messages are processed by third-party AI services to generate responses. While we delete all data from our servers upon account deletion, we cannot guarantee deletion of data already processed by third-party AI providers. These providers have their own data retention policies."
 - User rights (access via settings, deletion via settings)
-- Children's privacy (COPPA compliance, parental consent)
+- Children's privacy (adult-directed service, no independent child accounts, adult authorization)
 - Contact information
 - Effective date
 
@@ -160,12 +172,12 @@ Remove or redirect `public/privacy.html` → `/privacy`.
 **Fix**: Create `/pages/terms.tsx` as a Next.js page using LandingLayout. Content must include:
 - Service description (AI-powered ADHD family support)
 - AI limitations and medical disclaimer (detailed)
-- Account registration and parental consent requirement
+- Account registration and adult authorization requirement
 - Acceptable use policy
 - Intellectual property
 - Limitation of liability
 - Termination and account deletion
-- Governing law (State of [TBD])
+- General governing-law and forum wording suitable for a global MVP, without overriding non-waivable consumer protections
 - Contact information
 
 Remove or redirect `public/terms.html` → `/terms`.
@@ -217,7 +229,7 @@ No file storage exists (no Supabase Storage buckets, no uploaded images). `messa
 
 ### Item 6: RLS Policy Fix
 
-**Problem**: Current versioned migrations still include broad `USING (true)` policies for user-owned data (`supabase/migrations/20260506000100_initial_schema.sql:51-61`, plus similar module-table patterns in family and memory migrations). Current API routes use `getSupabaseAdmin()` (service_role key, bypasses RLS), so this is not the current server-route authorization layer. But if any future code uses the anon client for user-owned queries or mutations, this becomes a data leak.
+**Problem**: Current versioned migrations still include broad `USING (true)` / `WITH CHECK (true)` policies for user-owned data in the initial, family, and memory migrations. Current API routes use `getSupabaseAdmin()` (service_role key, bypasses RLS), so this is not the current server-route authorization layer. But if any future code uses the anon client for user-owned queries or mutations, this becomes a data leak.
 
 **Fix**: Update RLS policies to enforce `auth.uid() = user_id` (or `auth.uid() = id` for the users table). This is a defense-in-depth measure.
 
@@ -255,7 +267,9 @@ CREATE POLICY "messages_insert" ON messages FOR INSERT
 
 **File**: `supabase/migrations/{timestamp}_fix_rls_policies.sql` (new)
 
-**Important note**: Since all current API routes use `getSupabaseAdmin()` (service_role key), these RLS changes have zero impact on existing functionality. The admin client bypasses RLS entirely. This fix only matters if/when client-side Supabase queries are introduced.
+**Important note**: Since all current API routes use `getSupabaseAdmin()` (service_role key), these RLS changes should have zero impact on existing server-route functionality. The admin client bypasses RLS entirely. This fix matters for defense-in-depth and for any future client-side Supabase queries.
+
+**Scope note**: The concrete SQL block above covers users, conversations, and messages. The implementation pass must also add ownership-scoped policies for `child_profiles`, `profile_summaries`, and `memory_items`, because the current family and memory migrations contain the same broad-policy pattern.
 
 ---
 
@@ -306,7 +320,7 @@ CREATE POLICY "messages_insert" ON messages FOR INSERT
 ### T003: Fix RLS policies on existing tables
 
 - **File**: `supabase/migrations/{timestamp}_fix_rls_policies.sql`
-- **Do**: Replace all `USING (true)` policies on users, conversations, messages tables with proper `auth.uid()` checks as specified in Item 6.
+- **Do**: Replace all broad user-owned `USING (true)` / `WITH CHECK (true)` policies on users, conversations, messages, child_profiles, profile_summaries, and memory_items with proper `auth.uid()` ownership checks as specified in Item 6.
 - **Verify**: SQL syntax is valid
 - **Commit**: `[T003] fix: replace USING(true) RLS policies with auth.uid() checks`
 
@@ -350,16 +364,16 @@ CREATE POLICY "messages_insert" ON messages FOR INSERT
 - **Verify**: `npx tsc --noEmit`, `npm run build` pass
 - **Commit**: `[T006] feat: create minimal /settings page with account deletion`
 
-### T007a: Add parental consent control to signup modal
+### T007a: Add adult authorization control to signup modal
 
 - **File**: `components/Auth/LoginModal.tsx` (signup tab)
 - **Do**:
-  1. Add consent control below password field in signup form: "I confirm I am 18 or older and the parent or legal guardian of the child whose information I am providing. I agree to the [Privacy Policy](/privacy) and [Terms of Service](/terms)."
+  1. Add consent control below password field in signup form: "By continuing, I confirm that I am 18 or older, that I will only provide child or family information I am authorized to share, and that I agree to the [Privacy Policy](/privacy) and [Terms of Service](/terms)."
   2. Disable "Sign Up" button unless checkbox is checked
   3. After successful signup + auto-login, call `POST /api/compliance/consent` with `{ consentText }` (the exact checkbox text)
   4. Do NOT modify `pages/api/auth/signup.ts` — consent is stored via a separate API route
 - **Verify**: `npx tsc --noEmit`, `npm run build` pass
-- **Commit**: `[T007a] feat: add parental consent control to signup modal`
+- **Commit**: `[T007a] feat: add adult authorization control to signup modal`
 
 ### T007b: Create consent API route
 
@@ -391,7 +405,7 @@ CREATE POLICY "messages_insert" ON messages FOR INSERT
 - **Do**:
   1. Auth check: `useSession()` → open the shared login modal if not authenticated; there is no current standalone `pages/login.tsx`
   2. On mount: call `GET /api/compliance/consent-status` — if already consented, redirect to `/dashboard`
-  3. Show consent checkbox (same text as T007a): "I confirm I am 18 or older and the parent or legal guardian..."
+  3. Show consent checkbox (same text as T007a): "By continuing, I confirm that I am 18 or older..."
   4. On submit: call `POST /api/compliance/consent` → redirect to `/dashboard`
   5. Layout: centered page, no SmartDrawer
 - **Verify**: `npx tsc --noEmit`, `npm run build` pass

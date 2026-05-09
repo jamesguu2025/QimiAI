@@ -88,14 +88,11 @@ parent-child relationship, family dynamics, communication, co-parenting, family 
 **7️⃣ Functional Medicine** (supplementary):
 nutrition, iron, magnesium, zinc, omega-3, gut, microbiome, sleep quality, circadian rhythm
 
-**8️⃣ TCM/Traditional Medicine** (supplementary):
-traditional Chinese medicine, TCM, acupuncture, herbal medicine, qi deficiency, yin yang, meridian, pediatric massage, constitution, spleen deficiency, kidney deficiency
-
 ---
 
 ### Keyword Count Guidelines
 
-- Complex questions: 15-25 keywords, cover 5-8 dimensions, top_k: 20-25 papers
+- Complex questions: 15-25 keywords, cover 5-7 dimensions, top_k: 20-25 papers
 - Simple questions: 8-12 keywords, cover 2-3 dimensions, top_k: 8-12 papers
 
 💡 **Strategy**: Precise search, control return count to save tokens`

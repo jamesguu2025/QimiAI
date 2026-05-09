@@ -1,4 +1,4 @@
-import React, { useState, useRef } from 'react';
+import React, { useEffect, useRef, useState } from 'react';
 import { useRouter } from 'next/router';
 import { useSession } from 'next-auth/react';
 import { Menu } from 'lucide-react';
@@ -27,6 +27,32 @@ const AppLayout: React.FC<AppLayoutProps> = ({
     const touchStartX = useRef<number>(0);
 
     const isGuest = !session;
+
+    useEffect(() => {
+        if (!session || router.pathname === '/consent') return;
+
+        let cancelled = false;
+
+        async function checkConsent() {
+            try {
+                const response = await fetch('/api/compliance/consent-status');
+                if (!response.ok) return;
+
+                const data = await response.json();
+                if (!cancelled && data.hasConsent === false) {
+                    router.push(`/consent?returnTo=${encodeURIComponent(router.asPath)}`);
+                }
+            } catch (error) {
+                console.error('[AppLayout] Consent check failed:', error);
+            }
+        }
+
+        checkConsent();
+
+        return () => {
+            cancelled = true;
+        };
+    }, [session, router.pathname, router.asPath]);
 
     // Touch gesture handlers for swipe-to-open (mobile)
     const handleTouchStart = (e: React.TouchEvent) => {

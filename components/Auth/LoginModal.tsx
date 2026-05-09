@@ -2,6 +2,7 @@ import { signIn } from 'next-auth/react';
 import { useRouter } from 'next/router';
 import { useState, useEffect } from 'react';
 import { Mail, Lock, User, Eye, EyeOff, X } from 'lucide-react';
+import { PARENTAL_CONSENT_TEXT } from '@/lib/compliance/consent';
 
 interface LoginModalProps {
   isOpen: boolean;
@@ -16,6 +17,7 @@ export default function LoginModal({ isOpen, onClose, defaultTab = 'login' }: Lo
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState('');
   const [success, setSuccess] = useState('');
+  const [hasConsent, setHasConsent] = useState(false);
 
   const [formData, setFormData] = useState({
     email: '',
@@ -30,6 +32,7 @@ export default function LoginModal({ isOpen, onClose, defaultTab = 'login' }: Lo
       setError('');
       setSuccess('');
       setFormData({ email: '', password: '', name: '' });
+      setHasConsent(false);
     }
   }, [isOpen, defaultTab]);
 
@@ -74,6 +77,12 @@ export default function LoginModal({ isOpen, onClose, defaultTab = 'login' }: Lo
           router.push('/chat');
         }
       } else {
+        if (!hasConsent) {
+          setError('Please confirm you are 18 or older and authorized to share this information before signing up.');
+          setLoading(false);
+          return;
+        }
+
         const res = await fetch('/api/auth/signup', {
           method: 'POST',
           headers: { 'Content-Type': 'application/json' },
@@ -92,6 +101,18 @@ export default function LoginModal({ isOpen, onClose, defaultTab = 'login' }: Lo
             redirect: false,
           });
           if (loginResult?.ok) {
+            const consentRes = await fetch('/api/compliance/consent', {
+              method: 'POST',
+              headers: { 'Content-Type': 'application/json' },
+              body: JSON.stringify({ consentText: PARENTAL_CONSENT_TEXT }),
+            });
+
+            if (!consentRes.ok) {
+              onClose();
+              router.push('/consent?returnTo=%2Fchat');
+              return;
+            }
+
             onClose();
             router.push('/chat');
           }
@@ -111,7 +132,7 @@ export default function LoginModal({ isOpen, onClose, defaultTab = 'login' }: Lo
   if (!isOpen) return null;
 
   return (
-    <div className="fixed inset-0 z-50 flex items-center justify-center">
+    <div className="fixed inset-0 z-50 overflow-y-auto">
       {/* Backdrop */}
       <div
         className="absolute inset-0 bg-black/50 backdrop-blur-sm"
@@ -119,26 +140,27 @@ export default function LoginModal({ isOpen, onClose, defaultTab = 'login' }: Lo
       />
 
       {/* Modal */}
-      <div className="relative w-full max-w-md mx-4 bg-white rounded-2xl shadow-2xl animate-fade-in-up">
-        {/* Close Button */}
-        <button
-          onClick={onClose}
-          className="absolute top-4 right-4 p-2 text-slate-400 hover:text-slate-600 hover:bg-slate-100 rounded-lg transition-colors z-10"
-        >
-          <X className="w-5 h-5" />
-        </button>
+      <div className="relative mx-auto flex min-h-full w-full max-w-md items-center px-4 py-4 sm:py-6">
+        <div className="relative max-h-[calc(100vh-2rem)] w-full overflow-y-auto bg-white rounded-2xl shadow-2xl animate-fade-in-up">
+          {/* Close Button */}
+          <button
+            onClick={onClose}
+            className="absolute top-4 right-4 p-2 text-slate-400 hover:text-slate-600 hover:bg-slate-100 rounded-lg transition-colors z-10"
+          >
+            <X className="w-5 h-5" />
+          </button>
 
-        <div className="p-8">
+        <div className="p-5 sm:p-8">
           {/* Header */}
-          <div className="text-center mb-6">
-            <img src="/logo.svg" alt="Qimi" className="h-10 mx-auto mb-3" />
+          <div className="text-center mb-4 sm:mb-6">
+            <img src="/logo.svg" alt="Qimi" className="h-9 sm:h-10 mx-auto mb-2 sm:mb-3" />
             <p className="text-slate-500 text-sm">
               {isLogin ? 'Welcome back!' : 'Create your account'}
             </p>
           </div>
 
           {/* Tab Switcher */}
-          <div className="flex mb-6 bg-slate-100 rounded-xl p-1">
+          <div className="flex mb-4 sm:mb-6 bg-slate-100 rounded-xl p-1">
             <button
               onClick={() => { setIsLogin(true); setError(''); }}
               className={`flex-1 py-2.5 px-4 rounded-lg text-sm font-semibold transition-all ${
@@ -174,7 +196,7 @@ export default function LoginModal({ isOpen, onClose, defaultTab = 'login' }: Lo
           )}
 
           {/* Email/Password Form */}
-          <form onSubmit={handleEmailAuth} className="space-y-4">
+          <form onSubmit={handleEmailAuth} className="space-y-3 sm:space-y-4">
             {!isLogin && (
               <div>
                 <label className="block text-sm font-medium text-slate-700 mb-1.5">Name (optional)</label>
@@ -232,9 +254,43 @@ export default function LoginModal({ isOpen, onClose, defaultTab = 'login' }: Lo
               </div>
             </div>
 
+            {!isLogin && (
+              <label className="flex items-start gap-3 rounded-xl border border-slate-200 bg-slate-50 p-3 text-left text-xs leading-relaxed text-slate-600">
+                <input
+                  type="checkbox"
+                  checked={hasConsent}
+                  onChange={(event) => {
+                    setHasConsent(event.target.checked);
+                    setError('');
+                  }}
+                  className="mt-0.5 h-4 w-4 rounded border-slate-300 text-primary-teal focus:ring-primary-teal"
+                />
+                <span>
+                  By continuing, I confirm that I am 18 or older, that I will only provide child or family information I am authorized to share, and that I agree to the{' '}
+                  <a
+                    href="/privacy"
+                    target="_blank"
+                    rel="noopener noreferrer"
+                    className="font-medium text-primary-teal hover:underline"
+                  >
+                    Privacy Policy
+                  </a>
+                  {' '}and{' '}
+                  <a
+                    href="/terms"
+                    target="_blank"
+                    rel="noopener noreferrer"
+                    className="font-medium text-primary-teal hover:underline"
+                  >
+                    Terms of Service
+                  </a>.
+                </span>
+              </label>
+            )}
+
             <button
               type="submit"
-              disabled={loading}
+              disabled={loading || (!isLogin && !hasConsent)}
               className="w-full py-3 bg-slate-900 hover:bg-slate-800 disabled:bg-slate-400 text-white font-semibold rounded-xl transition-colors flex items-center justify-center"
             >
               {loading ? (
@@ -246,7 +302,7 @@ export default function LoginModal({ isOpen, onClose, defaultTab = 'login' }: Lo
           </form>
 
           {/* Divider */}
-          <div className="relative my-6">
+          <div className="relative my-4 sm:my-6">
             <div className="absolute inset-0 flex items-center">
               <div className="w-full border-t border-slate-200"></div>
             </div>
@@ -270,26 +326,32 @@ export default function LoginModal({ isOpen, onClose, defaultTab = 'login' }: Lo
               Continue with Google
             </button>
 
-            <button
-              onClick={() => handleOAuthLogin('facebook')}
-              className="w-full py-3 bg-[#1877F2] hover:bg-[#166FE5] text-white font-medium rounded-xl transition-colors flex items-center justify-center gap-3"
-            >
-              <svg className="w-5 h-5" fill="currentColor" viewBox="0 0 24 24">
-                <path d="M24 12.073c0-6.627-5.373-12-12-12s-12 5.373-12 12c0 5.99 4.388 10.954 10.125 11.854v-8.385H7.078v-3.47h3.047V9.43c0-3.007 1.792-4.669 4.533-4.669 1.312 0 2.686.235 2.686.235v2.953H15.83c-1.491 0-1.956.925-1.956 1.874v2.25h3.328l-.532 3.47h-2.796v8.385C19.612 23.027 24 18.062 24 12.073z" />
-              </svg>
-              Continue with Facebook
-            </button>
           </div>
 
           {/* Terms */}
           {!isLogin && (
             <p className="mt-6 text-center text-xs text-slate-500">
               By signing up, you agree to our{' '}
-              <a href="/terms" className="text-primary-teal hover:underline">Terms of Service</a>
+              <a
+                href="/terms"
+                target="_blank"
+                rel="noopener noreferrer"
+                className="text-primary-teal hover:underline"
+              >
+                Terms of Service
+              </a>
               {' '}and{' '}
-              <a href="/privacy" className="text-primary-teal hover:underline">Privacy Policy</a>
+              <a
+                href="/privacy"
+                target="_blank"
+                rel="noopener noreferrer"
+                className="text-primary-teal hover:underline"
+              >
+                Privacy Policy
+              </a>
             </p>
           )}
+        </div>
         </div>
       </div>
     </div>

@@ -30,7 +30,7 @@ export default async function handler(
       .single();
 
     if (userError || !user) {
-      return res.status(404).json({ error: 'User not found' });
+      return res.status(200).json({ facts: [] });
     }
 
     // Load all active memory items, ordered by category then updated_at

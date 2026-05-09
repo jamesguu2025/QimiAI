@@ -1,5 +1,6 @@
 import Head from 'next/head';
-import { signIn, useSession } from 'next-auth/react';
+import { useSession } from 'next-auth/react';
+import { useRouter } from 'next/router';
 import { useEffect, useState, useRef } from 'react';
 import Hero from '../components/Landing/Hero';
 import { PricingCard } from '../components/Landing/PricingCard';
@@ -85,6 +86,7 @@ const NavDropdown = ({ label, items, isOpen, onToggle, onClose }: NavDropdownPro
 };
 
 export default function Home() {
+  const router = useRouter();
   const { data: session } = useSession();
   const [waitlistCount, setWaitlistCount] = useState(0);
   const [paperCount, setPaperCount] = useState(0);
@@ -98,6 +100,20 @@ export default function Home() {
     { label: 'Our Story', description: 'Why we built Qimi AI', href: '/about', icon: <Users size={20} /> },
     { label: "Founder's Letter", description: 'A personal message from James', href: '/founder', icon: <User size={20} /> },
   ];
+
+  const openAuthModal = (tab: 'login' | 'signup') => {
+    setLoginModalTab(tab);
+    setLoginModalOpen(true);
+  };
+
+  const handleStart = () => {
+    if (session) {
+      router.push('/dashboard');
+      return;
+    }
+
+    openAuthModal('signup');
+  };
 
   const fetchUserStats = async () => {
     try {
@@ -199,19 +215,25 @@ export default function Home() {
               <UserMenu />
             ) : (
               <>
-                <button onClick={() => { setLoginModalTab('login'); setLoginModalOpen(true); }} className="hidden md:block text-sm font-medium text-slate-600 hover:text-slate-900 transition-colors">
+                <button onClick={() => openAuthModal('login')} className="hidden md:block text-sm font-medium text-slate-600 hover:text-slate-900 transition-colors">
                   Log in
                 </button>
-                <button onClick={() => { setLoginModalTab('signup'); setLoginModalOpen(true); }} className="hidden md:block text-sm font-medium text-slate-600 hover:text-slate-900 transition-colors">
+                <button onClick={() => openAuthModal('signup')} className="hidden md:block text-sm font-medium text-slate-600 hover:text-slate-900 transition-colors">
                   Sign up
                 </button>
               </>
             )}
             <button
               onClick={() => setContactModalOpen(true)}
-              className="px-5 py-2.5 text-sm font-semibold text-white bg-slate-900 rounded-full transition-all duration-200 hover:bg-slate-800 hover:-translate-y-px hover:shadow-[0_4px_12px_rgba(0,0,0,0.15)]"
+              className="hidden md:inline-flex px-5 py-2.5 text-sm font-semibold text-white bg-slate-900 rounded-full transition-all duration-200 hover:bg-slate-800 hover:-translate-y-px hover:shadow-[0_4px_12px_rgba(0,0,0,0.15)]"
             >
               Contact Us
+            </button>
+            <button
+              onClick={handleStart}
+              className="md:hidden px-5 py-2.5 text-sm font-semibold text-white bg-slate-900 rounded-full transition-all duration-200 hover:bg-slate-800"
+            >
+              Start
             </button>
           </div>
         </div>
@@ -246,20 +268,20 @@ export default function Home() {
                 {session ? (
                   <a href="/chat" className="block px-4 py-3 text-base font-medium text-slate-700 hover:bg-slate-50 rounded-lg" onClick={() => setMobileMenuOpen(false)}>
                     Go to Chat
-                  </a>
+                    </a>
                 ) : (
                   <>
                     <button
-                      onClick={() => { setMobileMenuOpen(false); setLoginModalTab('login'); setLoginModalOpen(true); }}
+                      onClick={() => { setMobileMenuOpen(false); openAuthModal('login'); }}
                       className="w-full px-4 py-3 text-base font-medium text-slate-700 hover:bg-slate-50 rounded-lg text-left"
                     >
                       Log in
                     </button>
                     <button
-                      onClick={() => { setMobileMenuOpen(false); setLoginModalTab('signup'); setLoginModalOpen(true); }}
+                      onClick={() => { setMobileMenuOpen(false); openAuthModal('signup'); }}
                       className="w-full px-4 py-3 rounded-lg bg-slate-900 text-white text-base font-bold hover:bg-slate-800 transition-colors"
                     >
-                      Sign up
+                      Start
                     </button>
                   </>
                 )}
@@ -343,7 +365,7 @@ export default function Home() {
                   "Weekly Newsletter"
                 ]}
                 ctaText="Get Started Free"
-                onCtaClick={() => signIn('google', { callbackUrl: '/dashboard' })}
+                onCtaClick={handleStart}
               />
               <PricingCard
                 title="Family Pro"
@@ -358,7 +380,7 @@ export default function Home() {
                   "Parent Coaching Modules"
                 ]}
                 ctaText="Start 14-Day Trial"
-                onCtaClick={() => signIn('google', { callbackUrl: '/dashboard' })}
+                onCtaClick={handleStart}
               />
             </div>
           </div>

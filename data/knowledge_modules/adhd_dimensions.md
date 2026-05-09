@@ -37,6 +37,6 @@
    - Core: Noise, lighting, spatial clutter, visual distractions.
    - Mechanism: Weaker ability to filter irrelevant stimuli, easily disturbed by environment.
 
-10. **Traditional Chinese Medicine Dimension**:
-    - Core: Constitution identification, yin-yang balance, organ function, qi-blood circulation.
-    - Mechanism: Understanding mind-body state from a holistic energy and balance perspective.
+10. **Daily Rhythm & Recovery Dimension**:
+    - Core: predictable routines, recovery time, transitions, energy pacing, and rest quality.
+    - Mechanism: Stable daily rhythms reduce executive-function load and help the child recover between demanding tasks.

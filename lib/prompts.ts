@@ -17,7 +17,6 @@ const MODULE_FILE_MAP: Record<string, string> = {
   'adhd_dimensions': 'adhd_dimensions.md',
   'intervention_exercise': 'intervention_exercise.md',
   'intervention_sensory': 'intervention_sensory.md',
-  'intervention_tcm': 'intervention_tcm.md',
   'intervention_behavior': 'intervention_behavior.md'
 };
 

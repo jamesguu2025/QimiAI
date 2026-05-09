@@ -53,7 +53,7 @@ export default function About() {
               </div>
               <h3 className="text-xl font-bold text-slate-900 mb-3">Our Approach</h3>
               <p className="text-slate-600 leading-relaxed">
-                Our approach blends evidence-based psychology with insights from traditional Chinese wellness, translated into actionable, trackable routines. Qimi AI learns your family&apos;s rhythm and adapts recommendations over time to help you build sustainable habits that actually work.
+                Our approach blends evidence-informed psychology, practical family routines, and parent-friendly coaching into actionable, trackable steps. Qimi AI learns your family&apos;s rhythm and adapts recommendations over time to help you build sustainable habits that actually work.
               </p>
             </div>
 

@@ -13,7 +13,6 @@ const MODULE_LIST = [
   'adhd_dimensions',          // 10 dimensions framework
   'intervention_exercise',    // Exercise intervention
   'intervention_sensory',     // Sensory integration training
-  'intervention_tcm',         // Traditional Chinese Medicine
   'intervention_behavior'     // Behavior training
 ];
 
@@ -93,18 +92,7 @@ You are an ADHD knowledge module identification expert. Your task is to identify
 4. **intervention_sensory** (Sensory Integration Training):
    - Trigger: User asks about sensory integration, vestibular, tactile, proprioceptive, sensory seeking/avoiding
 
-5. **intervention_tcm** (Traditional Chinese Medicine):
-   - Trigger: User describes symptoms matching TCM patterns (using everyday language)
-   - Examples:
-     * Physical signs: dry legs/feet/skin, flaky skin, cracked lips, brittle nails/white spots, hangnails, pale/dull complexion, dry/yellow hair
-     * Sleep: night sweats, teeth grinding, night terrors, restless sleep, sleeping on stomach
-     * Body: hands always hot, hot palms/soles, cold intolerance/cold hands and feet, tongue with map-like patterns, thick tongue coating
-     * Emotions/behavior: restless, hyperactive, bad temper, impulsive, yelling, timid
-     * Digestion: poor appetite, picky eating, constipation (hard pellets), diarrhea, bloating
-     * Other: scattered attention (daydreaming), fatigue, dark circles under eyes
-   - Note: Users won't use professional terms like "night sweats" or "map tongue" - they say everyday things like "sweats a lot while sleeping" or "tongue has patterns"
-
-6. **intervention_behavior** (Behavior Training):
+5. **intervention_behavior** (Behavior Training):
    - Trigger: User asks about behavior, habits, procrastination, dawdling, rewards, discipline, managing behavior
 
 ## Identification Rules
@@ -112,7 +100,7 @@ You are an ADHD knowledge module identification expert. Your task is to identify
 - Judge based on the **semantic meaning** of the user's message, not keyword matching
 - Consider conversation context (if previous messages mentioned a dimension, continue if related)
 - Users may describe symptoms in everyday language
-- One message may trigger multiple modules (e.g., "sleep problems" may trigger both functional_medicine and TCM)
+- One message may trigger multiple modules (e.g., "sleep problems" may trigger both functional_medicine and behavior support)
 
 ## Conversation to Analyze
 
@@ -126,7 +114,7 @@ ${recentHistory || 'No previous history'}
 **IMPORTANT**: You must output ONLY a valid JSON array, no other text, explanation, or markdown formatting.
 
 **Output format** (must be valid JSON):
-- If modules identified: ["functional_medicine", "intervention_tcm"]
+- If modules identified: ["functional_medicine", "intervention_behavior"]
 - If no modules: []
 
 **Forbidden**:
@@ -136,7 +124,7 @@ ${recentHistory || 'No previous history'}
 
 **Examples**:
 User message: "My child sweats a lot while sleeping"
-Correct output: ["functional_medicine", "intervention_tcm"]
+Correct output: ["functional_medicine"]
 
 User message: "Hello"
 Correct output: []

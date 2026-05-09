@@ -44,7 +44,7 @@ export default async function handler(
         return res.status(400).json({ error: '该邮箱已注册，请直接登录' });
       } else {
         return res.status(400).json({
-          error: '该邮箱已通过 Google/Facebook 注册，请使用第三方登录'
+          error: '该邮箱已通过 Google 注册，请使用 Google 登录'
         });
       }
     }

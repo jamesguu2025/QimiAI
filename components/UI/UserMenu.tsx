@@ -6,8 +6,8 @@ import {
   Settings,
   LogOut,
   ChevronDown,
-  User
 } from 'lucide-react';
+import UserAvatar from './UserAvatar';
 
 export default function UserMenu() {
   const { data: session } = useSession();
@@ -44,17 +44,12 @@ export default function UserMenu() {
       >
         {/* Avatar */}
         <div className="relative">
-          {userImage ? (
-            <img
-              src={userImage}
-              alt={userName}
-              className="w-9 h-9 rounded-full ring-2 ring-slate-200 group-hover:ring-primary-purple transition-all"
-            />
-          ) : (
-            <div className="w-9 h-9 rounded-full ring-2 ring-slate-200 group-hover:ring-primary-purple transition-all bg-gradient-to-br from-primary-teal to-primary-purple flex items-center justify-center">
-              <User size={18} className="text-white" />
-            </div>
-          )}
+          <UserAvatar
+            src={userImage}
+            name={userName}
+            email={userEmail}
+            className="ring-2 ring-slate-200 transition-all group-hover:ring-primary-purple"
+          />
         </div>
 
         {/* Desktop: Name + Chevron */}

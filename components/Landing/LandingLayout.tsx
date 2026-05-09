@@ -1,5 +1,6 @@
 import { useEffect, useState, useRef, ReactNode } from 'react';
-import { signIn, signOut, useSession } from 'next-auth/react';
+import { signOut, useSession } from 'next-auth/react';
+import { useRouter } from 'next/router';
 import Link from 'next/link';
 import {
   ChevronDown,
@@ -10,6 +11,7 @@ import {
 } from 'lucide-react';
 import UserMenu from '@/components/UI/UserMenu';
 import ContactModal from '@/components/Landing/ContactModal';
+import { useAuthUIStore } from '@/stores/authUIStore';
 
 interface DropdownItem {
   label: string;
@@ -80,7 +82,9 @@ interface LandingLayoutProps {
 }
 
 export default function LandingLayout({ children }: LandingLayoutProps) {
+  const router = useRouter();
   const { data: session } = useSession();
+  const { openLoginModal } = useAuthUIStore();
   const [openDropdown, setOpenDropdown] = useState<string | null>(null);
   const [mobileMenuOpen, setMobileMenuOpen] = useState(false);
   const [contactModalOpen, setContactModalOpen] = useState(false);
@@ -89,6 +93,15 @@ export default function LandingLayout({ children }: LandingLayoutProps) {
     { label: 'Our Story', description: 'Why we built Qimi AI', href: '/about', icon: <Users size={20} /> },
     { label: "Founder's Letter", description: 'A personal message from James', href: '/founder', icon: <User size={20} /> },
   ];
+
+  const handleStart = () => {
+    if (session) {
+      router.push('/dashboard');
+      return;
+    }
+
+    openLoginModal('signup');
+  };
 
   return (
     <div className="min-h-screen bg-slate-50 font-sans selection:bg-primary-teal/20">
@@ -136,11 +149,11 @@ export default function LandingLayout({ children }: LandingLayoutProps) {
               <UserMenu />
             ) : (
               <>
-                <button onClick={() => signIn()} className="hidden md:block text-sm font-medium text-slate-600 hover:text-slate-900 transition-colors">
+                <button onClick={() => openLoginModal('login')} className="hidden md:block text-sm font-medium text-slate-600 hover:text-slate-900 transition-colors">
                   Log in
                 </button>
                 <button
-                  onClick={() => signIn('google', { callbackUrl: '/dashboard' })}
+                  onClick={() => openLoginModal('signup')}
                   className="hidden md:block text-sm font-medium text-slate-600 hover:text-slate-900 transition-colors"
                 >
                   Sign up
@@ -149,9 +162,15 @@ export default function LandingLayout({ children }: LandingLayoutProps) {
             )}
             <button
               onClick={() => setContactModalOpen(true)}
-              className="px-5 py-2.5 text-sm font-semibold text-white bg-slate-900 rounded-full transition-all duration-200 hover:bg-slate-800 hover:-translate-y-px hover:shadow-[0_4px_12px_rgba(0,0,0,0.15)]"
+              className="hidden md:inline-flex px-5 py-2.5 text-sm font-semibold text-white bg-slate-900 rounded-full transition-all duration-200 hover:bg-slate-800 hover:-translate-y-px hover:shadow-[0_4px_12px_rgba(0,0,0,0.15)]"
             >
               Contact Us
+            </button>
+            <button
+              onClick={handleStart}
+              className="md:hidden px-5 py-2.5 text-sm font-semibold text-white bg-slate-900 rounded-full transition-all duration-200 hover:bg-slate-800"
+            >
+              Start
             </button>
           </div>
         </div>
@@ -203,16 +222,16 @@ export default function LandingLayout({ children }: LandingLayoutProps) {
                 ) : (
                   <>
                     <button
-                      onClick={() => { setMobileMenuOpen(false); signIn(); }}
+                      onClick={() => { setMobileMenuOpen(false); openLoginModal('login'); }}
                       className="w-full px-4 py-3 text-base font-medium text-slate-700 hover:bg-slate-50 rounded-lg text-left"
                     >
                       Log in
                     </button>
                     <button
-                      onClick={() => { setMobileMenuOpen(false); signIn('google', { callbackUrl: '/dashboard' }); }}
+                      onClick={() => { setMobileMenuOpen(false); openLoginModal('signup'); }}
                       className="w-full px-4 py-3 rounded-lg bg-slate-900 text-white text-base font-bold hover:bg-slate-800 transition-colors"
                     >
-                      Sign up
+                      Start
                     </button>
                   </>
                 )}

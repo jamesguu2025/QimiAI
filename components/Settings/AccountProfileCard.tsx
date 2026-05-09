@@ -3,6 +3,7 @@
 // Created: 2026-03-17 - Settings module MVP
 
 import { useState } from 'react';
+import UserAvatar from '../UI/UserAvatar';
 
 interface UserProfile {
   id: string;
@@ -25,19 +26,6 @@ export function AccountProfileCard({ profile, onProfileSaved }: AccountProfileCa
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [success, setSuccess] = useState(false);
-
-  // Generate initials from name or email
-  const getInitials = () => {
-    if (profile.name) {
-      return profile.name
-        .split(' ')
-        .map(n => n[0])
-        .join('')
-        .toUpperCase()
-        .slice(0, 2);
-    }
-    return profile.email[0].toUpperCase();
-  };
 
   // Format provider for display
   const getProviderDisplay = () => {
@@ -92,19 +80,12 @@ export function AccountProfileCard({ profile, onProfileSaved }: AccountProfileCa
 
       <div className="flex items-start gap-4 mb-6">
         {/* Avatar */}
-        {profile.avatar ? (
-          <img
-            src={profile.avatar}
-            alt="Avatar"
-            className="w-16 h-16 rounded-full object-cover"
-          />
-        ) : (
-          <div className="w-16 h-16 rounded-full bg-slate-200 flex items-center justify-center">
-            <span className="text-xl font-semibold text-slate-600">
-              {getInitials()}
-            </span>
-          </div>
-        )}
+        <UserAvatar
+          src={profile.avatar}
+          name={profile.name}
+          email={profile.email}
+          size="lg"
+        />
 
         <div className="flex-1">
           {/* Name (editable) */}

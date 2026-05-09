@@ -148,7 +148,7 @@ export default function DashboardPage() {
         {/* Medical disclaimer */}
         <div className="mt-8 p-4 bg-slate-50 rounded-lg border border-slate-200">
           <p className="text-xs text-slate-500 text-center">
-            <strong>Disclaimer:</strong> Qimi AI provides general information only, not medical advice, diagnosis, or or treatment. Always consult a qualified healthcare provider for medical decisions.
+            <strong>Disclaimer:</strong> Qimi AI provides general information only, not medical advice, diagnosis, or treatment. Always consult a qualified healthcare provider for medical decisions.
           </p>
         </div>
       </div>
