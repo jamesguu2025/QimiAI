@@ -20,6 +20,23 @@
 
 ## Items
 
+### OPT-000 Local database reset must be explicit
+
+- Status: `Done`
+- Priority: `P1`
+- Area: `local-test / Supabase / acceptance`
+- Date added: `2026-05-13`
+- Source: manual QA during Growth Plan testing
+
+Problem:
+- `npm run supabase:reset` clears local test data, including consent records, chat history, and Growth Plan items.
+- This is useful for validating a full migration chain from an empty local database, but it disrupts human acceptance once testing has started.
+
+Rule:
+- Do not run `npm run supabase:reset` during human/manual testing unless the user explicitly approves after being told it will clear local Supabase data.
+- Prefer `npm run supabase:start` and `npm run dev` for ordinary restarts.
+- Production/staging schema changes must apply migrations incrementally; production Supabase must never be reset as a deployment step.
+
 ### OPT-001 Guest chat retention policy is undefined
 
 - Status: `Open`
@@ -46,4 +63,3 @@ Suggested follow-up:
 1. Decide the intended product rule for guest chat persistence.
 2. Implement TTL or explicit clearing logic if required.
 3. Add acceptance coverage for guest refresh behavior.
-

@@ -1,6 +1,6 @@
 # Module Spec: Growth Plan
 
-> Status: APPROVED — 2026-02-22 | Self-reviewed: 2026-03-14 | Second-pass reviewed: 2026-03-14 | Implementation status: Planned
+> Status: APPROVED — 2026-02-22 | Self-reviewed: 2026-03-14 | Second-pass reviewed: 2026-03-14 | Implementation status: Planned | Amended: 2026-05-11 (Chat Save addendum)
 > Module: growth-plan
 > Routes: `/plan`
 > Branch: `feature/growth-plan`
@@ -642,3 +642,492 @@ Each task is one file (or two tightly coupled files). Execute in order. Run `npx
 - **Do**: Test input validation logic: category must be one of the 7 valid values (reject invalid), painPoint and strategy must be non-empty strings (reject empty/missing). Test first-implementation Free quota enforcement: a user with 5 existing items gets 403 because membership-billing has not created Pro entitlement yet. Test CRUD flows: POST creates item (201), GET lists items (sorted: starred first, then by created_at DESC), PUT partial update only changes provided fields, DELETE returns 204. Test checkin endpoint: updates `last_check_in` and keeps `check_in_days` aligned. Test ownership: user cannot read/update/delete another user's items (404). Test auth: request without session returns 401.
 - **Verify**: add the test file together with the chosen test runner setup for this repo, then ensure `npx eslint`, `npx tsc --noEmit`, and `npm run build` still pass.
 - **Commit**: `[T009] test: add growth plan unit tests`
+
+---
+
+## 9. Addendum: Chat Save To Growth Plan
+
+> Added: 2026-05-11
+> Scope: planning spec for "AI suggestion -> user confirms -> save action plan" from chat into existing Growth Plan.
+> Status: Ready for implementation
+
+### 9.0 Current-Code Evidence
+
+Internal facts are line-referenced per SOP v2.4:
+
+- `plan_items` already exists with `category`, `pain_point`, `strategy`, `star`, `check_in_days`, `last_check_in`, `created_at`, and `updated_at`, but no source conversation/message/time columns: `supabase/migrations/20260509000100_growth_plan_tables.sql:3-22`.
+- `plan_items` RLS is scoped by `auth.uid() = user_id`: `supabase/migrations/20260509000100_growth_plan_tables.sql:33-51`.
+- Current `/api/plan` maps DB fields to `ActionPlanItem` and enforces the Free limit as `FREE_PLAN_LIMIT = 5`: `pages/api/plan/index.ts:21-37`, `pages/api/plan/index.ts:131-177`.
+- Current create API accepts only `category`, `painPoint`, and `strategy`; it does not persist source metadata: `pages/api/plan/index.ts:131-168`.
+- Current `ActionPlanItem` and `CreatePlanItemRequest` already contain optional `sourceMessageId`, but no `sourceConversationId` or `sourceTime`: `types/plan.ts:35-64`.
+- Chat pre-creates a conversation and emits `conversation_created` before tokens for logged-in users: `pages/api/chat/stream.ts:294-325`.
+- Chat saves user and assistant messages after streaming, but the stream currently does not return the persisted assistant `messages.id` to the client: `pages/api/chat/stream.ts:73-94`, `pages/api/chat/stream.ts:346-359`.
+- Frontend chat state currently uses local temporary message ids such as `ai-${Date.now()}` and marks completion on `done`: `stores/chatStore.ts:154-162`, `stores/chatStore.ts:268-280`.
+
+### 9.1 Search Evidence And Source Links
+
+Search ledger:
+
+| Decision ID | Query | Result | Source URL |
+|---|---|---|---|
+| ADR-GP-CS-1 | `AI app suggestion confirm save action plan user consent coaching app` | Found(partial) | https://www.maxi.io/en/ |
+| ADR-GP-CS-1 | `health coaching app action plan user confirms AI suggestion save` | Found(partial) | https://leverhealth.com/ |
+| ADR-GP-CS-2 | `Wysa app AI recommends tool user chooses action plan safety privacy consent` | Found(partial) | https://www.wysa.com/faq |
+| ADR-GP-CS-3 | `Headspace AI principles diagnosis clinical advice privacy consent` | Found(partial) | https://www.headspace.com/ai and https://www.headspace.com/consumer-health-data |
+| ADR-GP-CS-4 | `OpenAI structured outputs JSON schema official docs` | Found | https://developers.openai.com/api/docs/guides/structured-outputs |
+
+Evidence interpretation:
+
+- Maxi exposes the mature pattern closest to this feature: chat creates a goal plan, then "AI proposes, you approve" with one-tap acceptance. This supports **explicit user approval before committing plan/habit changes**, but it is a coaching app, not pediatric health care, so applicability is partial.
+- Lever Health frames the loop as small daily actions, check-in, and coach feedback, and shows an insight asking whether the user wants to make a detected behavior the default. This supports **small actionable plan items and user confirmation for ongoing behavior changes**, but does not specify Growth Plan schema.
+- Wysa says its AI recommends evidence-based skills and techniques, states it is self-help/self-monitoring, not a substitute for medical advice or crisis support, and documents privacy boundaries. This supports **keeping AI suggestions bounded, user-directed, and non-diagnostic**.
+- Headspace says its AI does not diagnose, treat, replace licensed care, or provide medical/clinical advice, and its consumer health data policy requires affirmative consent for certain sensitive health-data processing. This supports **confirmation, safety language, and health-data minimization**.
+- OpenAI Structured Outputs documentation supports JSON-schema-constrained extraction and programmatically detectable refusals. This supports **using structured extraction for `category`, `challenge`, and `strategy` rather than parsing assistant prose ad hoc**.
+
+ADR-lite:
+
+| Decision ID | Decision | Risk | External Evidence | Local Evidence | Supported Claim | Unsupported Gap | Status | Confirmation |
+|---|---|---|---|---|---|---|---|---|
+| ADR-GP-CS-1 | Never auto-save; show `Save to Growth Plan`, then require confirm/edit | High | Found(partial): Maxi approval pattern, Lever behavior-change confirmation | Existing Growth Plan create flow is explicit POST only | User approval is the right commitment step | Sources do not define Qimi-specific ADHD copy or schema | Accepted | API tests prove no plan item is created before confirm |
+| ADR-GP-CS-2 | Save structured content as `painPoint`, `explanationMarkdown`, `interventionBlocks[]`, and `strategySummary`; use Markdown only inside content blocks | High | Found(partial): Wysa bounded tools/skills; PostgreSQL JSONB docs; GFM/React Markdown support | Current Web already renders assistant Markdown tables with `react-markdown` + `remark-gfm`; Growth Plan schema can be expanded | Keep saved items concrete, renderable, and reusable for later PDF orchestration | Exact Qimi block schema is an internal product choice | Accepted | Extraction schema validation + `/plan` Markdown table smoke test |
+| ADR-GP-CS-3 | Store source metadata as nullable provenance fields | High | Found(partial): health privacy/consent guidance | Current schema lacks provenance columns; types partially anticipate `sourceMessageId` | Provenance improves auditability and duplicate control | Source metadata retention period is product choice | Provisional | Migration is expand-only; privacy copy visible |
+| ADR-GP-CS-4 | Use structured JSON extraction with validation and retry/fallback | Normal | Found: OpenAI Structured Outputs | Current API already validates plan fields before insert | Schema-constrained output reduces malformed extraction | Does not guarantee semantic correctness | Accepted | Unit tests for malformed JSON/refusal/unsafe content |
+
+### 9.2 Product UX Flow
+
+Trigger rule:
+
+- After an assistant message finishes streaming, scan only the final assistant content.
+- Show `Save to Growth Plan` only when the assistant gives at least one concrete, family-actionable strategy. Examples: a routine, environmental adjustment, school communication script, sleep step, social practice, exercise/movement plan, nutrition support, or emotion-regulation strategy.
+- Do not show the button for generic explanation, medication dosage instructions, crisis/emergency content, legal/IEP rights-only explanation without a strategy, or incomplete streaming messages. Diagnosis/IEP-adjacent content may be saveable when it is reframed as a parent action, such as "track observations for the clinician" or "prepare questions for the school meeting."
+
+Flow:
+
+1. Assistant response appears in chat.
+2. If eligible, a small secondary button appears below that assistant message: `Save to Growth Plan`.
+3. User clicks the button. This click is the explicit user confirmation. If unauthenticated, open the existing login modal and do not extract/save yet.
+4. Frontend calls the chat-save API with `conversationId`, persisted `sourceMessageId` when available, `assistantContent`, and optional nearby user message context.
+5. Backend calls the LLM once to extract `category`, `painPoint`, `explanationMarkdown`, `interventionBlocks[]`, and `strategySummary`; it preserves GFM Markdown tables/lists inside content blocks.
+6. Backend validates safety, ownership, quota, and duplicates, then inserts into `plan_items`.
+7. On success, the chat button becomes `Saved to Growth Plan` for that message; the UI should not offer another save for the same source.
+8. On duplicate near-match, show a small inline warning and allow `Save Anyway`; same-source duplicates remain blocked.
+9. On quota failure, show the existing free-limit upgrade copy inline.
+
+Out of scope for this addendum:
+
+- No automatic saving.
+- No PDF export implementation in this slice. This slice must preserve structured content so a later PDF export can run a second AI pass for cross-item dedupe, merge, ordering, titles, parent tips, and document layout.
+- No automatic reminders.
+- No complex multi-step plan generator.
+- No background extraction for every message unless the user clicks save.
+- No concrete medication dosage/change action, crisis-plan, or emergency instruction saving. Medication-adjacent content may be saved only as non-prescriptive parent actions such as observing effects, tracking side effects, and preparing questions for the prescribing doctor.
+
+### 9.3 API Design
+
+Create two endpoints under `pages/api/plan/`.
+
+#### `POST /api/plan/extract-from-chat`
+
+Purpose: legacy/diagnostic preview draft only. The production click path may skip this endpoint and call `save-from-chat` directly because the user's click is the confirmation. This endpoint must not insert into `plan_items`.
+
+Request:
+
+```json
+{
+  "conversationId": "uuid-or-null",
+  "sourceMessageId": "persisted-assistant-message-uuid-or-null",
+  "clientMessageId": "optional-client-temp-id",
+  "sourceTime": "2026-05-11T10:00:00.000Z",
+  "assistantContent": "assistant message text",
+  "userContext": "optional preceding user message"
+}
+```
+
+Response 200:
+
+```json
+{
+  "draft": {
+    "category": "sleep",
+    "challenge": "The child struggles to settle at bedtime after stimulating evening activities.",
+    "strategy": "Try a 20-minute wind-down routine: dim lights, put screens away, choose one quiet activity, then use the same bedtime cue each night.",
+    "confidence": 0.84,
+    "sourceConversationId": "uuid-or-null",
+    "sourceMessageId": "persisted-assistant-message-uuid-or-null",
+    "sourceTime": "2026-05-11T10:00:00.000Z"
+  },
+  "duplicate": {
+    "isDuplicate": false,
+    "matchedItemId": null,
+    "reason": null
+  }
+}
+```
+
+Error responses:
+
+- `401 { "error": "Unauthorized" }`
+- `400 { "error": "No actionable strategy found" }`
+- `400 { "error": "Unsafe or unsupported plan item" }`
+- `429 { "error": "Too many requests" }` if later rate limiting is added
+- `500 { "error": "Failed to extract plan item" }`
+
+#### `POST /api/plan/save-from-chat`
+
+Purpose: extract and save the user-confirmed assistant suggestion in one low-friction action. The user's button click is the confirmation; this endpoint performs LLM extraction, validation, duplicate checks, quota checks, and insert.
+
+Request:
+
+```json
+{
+  "assistantContent": "assistant message text, including Markdown tables if present",
+  "userContext": "optional preceding user message",
+  "sourceConversationId": "uuid-or-null",
+  "sourceMessageId": "persisted-assistant-message-uuid-or-null",
+  "sourceTime": "2026-05-11T10:00:00.000Z",
+  "duplicateOverride": false
+}
+```
+
+Response 201:
+
+```json
+{
+  "item": {
+    "id": "uuid",
+    "userId": "uuid",
+    "category": "sleep",
+    "painPoint": "The child struggles to settle at bedtime after stimulating evening activities.",
+    "strategy": "Try a 20-minute wind-down routine: dim lights, put screens away, choose one quiet activity, then use the same bedtime cue each night.",
+    "strategySummary": "Use a short, consistent wind-down routine before bed.",
+    "explanationMarkdown": "A predictable routine can reduce stimulation and help the child transition toward sleep.",
+    "interventionBlocks": [
+      {
+        "title": "20-minute routine",
+        "contentMarkdown": "| Time | Step |\\n| --- | --- |\\n| 20 min before bed | Dim lights |\\n| 10 min before bed | Quiet reading |"
+      }
+    ],
+    "star": false,
+    "checkInDays": [],
+    "lastCheckIn": null,
+    "sourceConversationId": "uuid-or-null",
+    "sourceMessageId": "persisted-assistant-message-uuid-or-null",
+    "sourceTime": "2026-05-11T10:00:00.000Z",
+    "createdAt": "2026-05-11T10:00:02.000Z",
+    "updatedAt": "2026-05-11T10:00:02.000Z"
+  }
+}
+```
+
+Duplicate response 409:
+
+```json
+{
+  "error": "This suggestion already looks saved.",
+  "duplicate": {
+    "matchedItemId": "uuid",
+    "reason": "same source message"
+  }
+}
+```
+
+Implementation notes:
+
+- Auth and get-or-create-user must follow existing `/api/plan` pattern.
+- Free quota uses the existing Growth Plan limit: until membership-billing lands, all users are treated as Free and capped at 5 items.
+- The confirm endpoint can share validation and insertion logic with `POST /api/plan`, but the original endpoint should remain valid for manual creation.
+
+### 9.4 DB Schema Extension
+
+Recommendation: extend `plan_items` with nullable provenance columns.
+
+```sql
+ALTER TABLE plan_items
+  ADD COLUMN IF NOT EXISTS source_conversation_id UUID REFERENCES conversations(id) ON DELETE SET NULL,
+  ADD COLUMN IF NOT EXISTS source_message_id UUID REFERENCES messages(id) ON DELETE SET NULL,
+  ADD COLUMN IF NOT EXISTS source_time TIMESTAMPTZ,
+  ADD COLUMN IF NOT EXISTS source_type TEXT NOT NULL DEFAULT 'manual'
+    CHECK (source_type IN ('manual', 'chat'));
+
+CREATE INDEX IF NOT EXISTS idx_plan_items_user_source_message
+  ON plan_items(user_id, source_message_id)
+  WHERE source_message_id IS NOT NULL;
+
+CREATE INDEX IF NOT EXISTS idx_plan_items_user_source_conversation
+  ON plan_items(user_id, source_conversation_id)
+  WHERE source_conversation_id IS NOT NULL;
+```
+
+Structured content extension:
+
+```sql
+ALTER TABLE plan_items
+  ADD COLUMN IF NOT EXISTS strategy_summary TEXT,
+  ADD COLUMN IF NOT EXISTS explanation_markdown TEXT,
+  ADD COLUMN IF NOT EXISTS intervention_blocks JSONB NOT NULL DEFAULT '[]'::jsonb;
+```
+
+Rationale:
+
+- `sourceConversationId` helps the user return to the chat that produced the strategy.
+- `sourceMessageId` enables deterministic duplicate prevention when a persisted assistant message id is available.
+- `sourceTime` preserves useful provenance even if message id is missing, temporary, deleted, or generated in guest state before login.
+- Client temporary ids such as `ai-${Date.now()}` must not be stored in `source_message_id`; if the persisted UUID is unavailable, store `source_message_id = NULL` and rely on `source_time` plus normalized-content duplicate checks.
+- Columns are nullable and expand-only, so the migration is backward compatible with existing plan items and manual creation.
+- `source_type` keeps manual items distinguishable without forcing source fields.
+
+Required type updates:
+
+- Add `sourceConversationId?: string`, `sourceTime?: string`, and `sourceType?: 'manual' | 'chat'` to `ActionPlanItem`.
+- Add `strategySummary?: string`, `explanationMarkdown?: string`, and `interventionBlocks?: { title?: string; contentMarkdown: string }[]` to `ActionPlanItem`.
+- Keep the existing `strategy` field as a compatibility/card-summary field.
+
+Persisted assistant message id issue:
+
+- The best implementation is to make chat persistence return assistant `messages.id` in the final SSE `done` payload.
+- If that is not included in the first implementation, `sourceMessageId` may be omitted and duplicate detection falls back to `sourceConversationId + normalized strategy`.
+
+### 9.5 Prompt / Extraction JSON Schema
+
+Extraction instruction:
+
+```text
+You extract one actionable Growth Plan item from an assistant message for a parent of a child with ADHD.
+Return JSON only.
+Extract only strategies that the parent can choose to save and try.
+Preserve useful GitHub-Flavored Markdown tables, lists, and headings inside interventionBlocks[].contentMarkdown.
+Do not output HTML.
+Do not create diagnosis, medication dosage, emergency, legal, or professional-treatment instructions.
+If content is diagnosis/IEP/legal-adjacent but can be turned into a safe parent action, extract the parent action instead of rejecting it.
+If there is no concrete strategy, return hasActionableStrategy=false.
+Use only these categories for saveable strategies: emotion, learning, exercise, nutrition, social, sleep, school.
+Use category=none when hasActionableStrategy=false.
+Keep challenge and strategy factual, specific, and editable by the user.
+Do not include private identifiers unless the user already wrote them and they are essential; prefer generic wording.
+```
+
+JSON schema:
+
+```json
+{
+  "type": "object",
+  "additionalProperties": false,
+  "required": [
+    "hasActionableStrategy",
+    "category",
+    "painPoint",
+    "explanationMarkdown",
+    "interventionBlocks",
+    "strategySummary",
+    "confidence",
+    "safetyFlags"
+  ],
+  "properties": {
+    "hasActionableStrategy": { "type": "boolean" },
+    "category": {
+      "type": "string",
+      "enum": ["none", "emotion", "learning", "exercise", "nutrition", "social", "sleep", "school"]
+    },
+    "painPoint": {
+      "type": "string",
+      "maxLength": 500
+    },
+    "explanationMarkdown": {
+      "type": "string",
+      "maxLength": 2000
+    },
+    "interventionBlocks": {
+      "type": "array",
+      "maxItems": 8,
+      "items": {
+        "type": "object",
+        "additionalProperties": false,
+        "required": ["contentMarkdown"],
+        "properties": {
+          "title": { "type": "string", "maxLength": 120 },
+          "contentMarkdown": { "type": "string", "maxLength": 3000 }
+        }
+      }
+    },
+    "strategySummary": {
+      "type": "string",
+      "maxLength": 500
+    },
+    "confidence": {
+      "type": "number",
+      "minimum": 0,
+      "maximum": 1
+    },
+    "safetyFlags": {
+      "type": "array",
+      "items": {
+        "type": "string",
+        "enum": ["none", "medical", "diagnosis", "medication", "crisis", "legal", "not_child_related", "too_vague"]
+      }
+    }
+  }
+}
+```
+
+Server validation:
+
+- Reject when `hasActionableStrategy=false`.
+- Reject when `confidence < 0.55`.
+- Reject only hard-blocked content: concrete medication dosage/change instructions, `crisis`, emergency response instructions, or content that cannot be reframed as a parent-controlled action.
+- For `medical`, `diagnosis`, `medication`, or `legal` flags, allow preview when the extracted strategy is a mild parent action rather than a conclusion, prescription, or directive; show confirm-modal caution copy instead of failing closed.
+- Validate category against `PLAN_CATEGORIES`, not only the model output; `category="none"` is valid only when rejecting a non-actionable extraction and must never be saved.
+- Trim text; reject empty or too-long fields after trimming.
+- Do not trust the LLM to decide duplicates; compute duplicate status server-side.
+
+### 9.6 Duplicate Prevention
+
+Duplicate checks run before returning preview and again before insert:
+
+1. Same-source exact match:
+   - If `sourceMessageId` is present and another item exists for the same `user_id + source_message_id`, treat as duplicate.
+2. Same-conversation normalized match:
+   - Normalize `painPoint + strategy`: lowercase, trim, collapse whitespace, remove punctuation.
+   - If a same-user item from the same `sourceConversationId` has normalized similarity above the implementation threshold, return duplicate.
+3. Cross-conversation near match:
+   - For the same user and category, compare normalized `strategy`; if near-identical, warn in the confirm modal.
+   - Do not block if the user chooses `duplicateOverride=true`, except for same-source exact duplicates.
+
+No destructive merge in MVP:
+
+- Do not auto-merge into existing items.
+- Do not overwrite starred items.
+- Do not delete duplicates automatically.
+
+### 9.7 Failure And Degradation Strategy
+
+- No actionable strategy: do not open the modal; show a small inline message: "I could not find a concrete strategy to save from this reply."
+- Extraction provider timeout or malformed JSON: show a retry affordance; do not save anything.
+- Hard-blocked safety content: show "This suggestion cannot be saved as a plan item. Please use professional or emergency support when needed."
+- Gray-zone diagnosis/IEP/legal-adjacent content: allow the confirm modal when it is framed as a parent action, and show a small caution that Qimi is organizing a next step rather than giving medical or legal advice.
+- Duplicate exact match: change button to `Already saved`; offer link/open action to `/plan` if available.
+- Duplicate near match: show warning in modal and allow user to edit before saving.
+- Quota exceeded: return existing 403 free-limit behavior and preserve the draft in the modal.
+- Missing persisted source ids: allow save with `sourceTime` and `source_type='chat'`; do not block user value on implementation metadata.
+- Chat save API down while chat works: chat remains unaffected; show non-blocking error only below the clicked message.
+
+### 9.8 Privacy And Safety Boundaries
+
+- User confirmation is mandatory. The app must not auto-save suggested interventions from AI text.
+- Only save the extracted `category`, `painPoint`, `strategySummary`, `explanationMarkdown`, `interventionBlocks`, and minimal provenance fields; do not copy the full chat transcript into `plan_items`.
+- Do not save crisis, self-harm, abuse, concrete medication dosage/change, emergency, or direct professional-treatment instructions as Growth Plan items.
+- Medication-adjacent content can be saved only when converted into a parent-controlled action, for example tracking dose timing, benefits, side effects, sleep, appetite, mood, and questions to discuss with the prescribing doctor.
+- Diagnosis/IEP/legal-adjacent content can be saved only when converted into a mild parent action, for example tracking observations, preparing questions, requesting a school meeting, or discussing concerns with a qualified professional.
+- Keep the existing medical disclaimer on `/plan`; add confirm-modal microcopy: "Qimi can help organize ideas, but this is not medical advice."
+- Source metadata is user-owned and scoped by existing auth and RLS. API queries must always filter by `user_id`.
+- Do not expose source conversation links unless the current user owns the conversation.
+- Do not send attachments or full conversation history to extraction unless required; first implementation should send the assistant message and one preceding user message at most.
+
+### 9.9 Acceptance Criteria
+
+Technical acceptance:
+
+- [ ] `POST /api/plan/extract-from-chat` never inserts into `plan_items`.
+- [ ] `POST /api/plan/save-from-chat` inserts only after authenticated user clicks `Save to Growth Plan`; no background auto-save exists.
+- [ ] Free-user limit remains 5 total Growth Plan items, shared with manual creation.
+- [ ] Source metadata migration is expand-only and passes local Supabase reset.
+- [ ] Structured content migration is expand-only and preserves old `strategy`-only items.
+- [ ] Same `sourceMessageId` cannot be saved twice for the same user.
+- [ ] User A cannot save, preview, update, or inspect User B's conversation/message/item.
+- [ ] Malformed extraction JSON, hard-blocked unsafe flags, and low confidence fail closed; gray-zone diagnosis/IEP/legal-adjacent content is allowed only as a parent-controlled action with caution copy.
+- [ ] `npx tsc --noEmit` and `npm run build` pass for touched files.
+
+Functional acceptance plan:
+
+- [ ] Ask chat for a concrete bedtime routine; after stream completion, `Save to Growth Plan` appears.
+- [ ] Click save; button shows `Saving...`, then `Saved to Growth Plan` without opening an edit modal.
+- [ ] Saved item appears on `/plan` with category, summary, explanation, and Markdown-rendered intervention blocks.
+- [ ] Ask for a strategy that includes a Markdown table; the table is preserved in `/plan`.
+- [ ] Return to the same chat message; button shows saved/already-saved state.
+- [ ] Click save again from the same message; duplicate is blocked or shown as already saved.
+- [ ] With 5 existing items, saving from chat returns the same free-limit failure as manual create.
+- [ ] Ask for generic ADHD explanation; no save button appears.
+- [ ] Ask for medication dosage or crisis advice; no saveable plan item is produced.
+- [ ] Ask diagnosis/IEP-adjacent questions with a concrete parent action; a cautious editable draft can be saved.
+
+Human acceptance:
+
+- User verifies copy, modal editing, duplicate warning, and `/plan` item appearance in local Supabase.
+
+Merge/carry-forward decision:
+
+- Merge only after technical acceptance passes, functional plan is executed, and human acceptance has zero P0/P1 issues.
+- Carry forward lower-priority polish such as "link back to exact chat message scroll position" if source metadata and save behavior pass.
+
+### 9.10 Task Split
+
+Implementation mode: linear. Chat save touches chat UI, LLM extraction, Growth Plan API, and schema; do not parallelize unless write scopes are separated and current branch is stable.
+
+1. T010: Expand schema for source metadata
+   - File: new migration under `supabase/migrations/`
+   - Add nullable source columns and indexes from Section 9.4.
+   - Verify: `npm run supabase:reset` locally.
+
+2. T011: Update plan types and mapping
+   - Files: `types/plan.ts`, `pages/api/plan/index.ts`, `pages/api/plan/checkin.ts` if needed.
+   - Add source fields to mapped responses without breaking manual create.
+   - Verify: `npx tsc --noEmit`, `npm run build`.
+
+3. T012: Add extraction API
+   - File: `pages/api/plan/extract-from-chat.ts`
+   - Auth, source ownership check when `conversationId` is present, structured extraction, validation, duplicate preview.
+   - Verify malformed JSON, no-actionable, unsafe, and happy path.
+
+4. T013: Add confirmed save API
+   - File: `pages/api/plan/save-from-chat.ts`
+   - Reuse validation, enforce quota, enforce duplicate checks, insert with `source_type='chat'`.
+   - Verify 401, 403 quota, 409 duplicate, 201 success.
+
+5. T014: Return persisted assistant message id from chat stream
+   - Files: `pages/api/chat/stream.ts`, `services/chat.ts`, `stores/chatStore.ts`, `types/api.ts` if needed.
+   - Include persisted assistant `messageId` in final stream metadata when available.
+   - If this proves invasive, defer and rely on fallback metadata.
+
+6. T015: Add chat message save UI
+   - Files: `components/Chat/ChatMessage.tsx`, `stores/chatStore.ts`, possibly a new `components/GrowthPlan/SaveFromChatModal.tsx`.
+   - Show button only on eligible completed assistant messages; implement modal edit/confirm flow.
+   - Verify mobile layout and keyboard/focus behavior.
+
+7. T016: Add tests and local smoke
+   - Files: existing or new tests depending on repo test setup.
+   - Cover extraction validation, duplicate checks, quota, auth, and UI smoke manually.
+
+### 9.11 AQS Self-Review
+
+Security:
+
+- [PASS] Auth required for extraction and saving; guests must sign in before preview/save.
+- [PASS] Authorization must check `user_id` ownership for plan items and source conversations.
+- [PASS] RLS remains scoped by `auth.uid() = user_id`.
+- [PASS] Inputs are validated server-side; LLM output is never trusted without schema and enum checks.
+- [PASS] Errors use `{ error: "..." }` and do not expose provider output or stack traces.
+
+Architecture:
+
+- [PASS] Uses existing `/api/plan/*`, `plan_items`, `PLAN_CATEGORIES`, and chat message UI.
+- [PASS] Preview and save are separate endpoints, preserving mandatory user confirmation.
+- [PASS] No new global route registry or app shell changes.
+- [PASS] Failure of chat-save does not block chat.
+
+Engineering quality:
+
+- [PASS] Task list is linear with machine gate before human gate.
+- [PASS] Duplicate checks are deterministic enough for MVP and do not depend on LLM judgment.
+- [PASS] Structured extraction uses schema validation, fail-closed handling for hard-blocked content, and caution handling for gray-zone parent actions.
+- [PASS] Adds tests around auth, quota, duplicate, malformed extraction, and unsafe content.
+
+Technical stack compliance:
+
+- [PASS] Uses Next.js API routes and Supabase migrations already used by this repo.
+- [PASS] Schema change is expand-only; no destructive DROP/RENAME.
+- [PASS] Local Supabase remains the acceptance environment.
+
+Reverse checks:
+
+- [PASS] No background automatic saving, no PDF implementation in this slice, no reminders, no complex generator.
+- [PASS] No new datastore or subscription source.
+- [PASS] MVD: this is added to the existing Growth Plan spec because it is a sub-slice of the same module and shares route/API/schema contracts.

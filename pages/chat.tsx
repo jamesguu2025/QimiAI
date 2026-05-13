@@ -8,6 +8,7 @@ import { ChatInput, FileAttachment } from '../components/Chat/ChatInput';
 import GuestOnboarding from '../components/Chat/GuestOnboarding';
 import { ChatPageSkeleton } from '../components/UI/Skeleton';
 import AppLayout from '../components/Layout/AppLayout';
+import SaveFromChatButton from '../components/GrowthPlan/SaveFromChatButton';
 import { guestStorage } from '../utils/guest-storage';
 import { useChat } from '../hooks/useChat';
 import { useChatStore, WELCOME_MESSAGE } from '../stores/chatStore';
@@ -485,17 +486,34 @@ export default function ChatPage() {
                         ) : (
                             // 消息列表
                             <>
-                                {messages.map((msg) => (
-                                    <StreamingMessage
-                                        key={msg.id}
-                                        role={msg.role}
-                                        content={msg.content}
-                                        sources={msg.sources}
-                                        statusMessage={msg.statusMessage}
-                                        attachments={msg.attachments}
-                                        isStreaming={msg.isStreaming}
-                                    />
-                                ))}
+                                {messages.map((msg, index) => {
+                                    const previousUserMessage = [...messages.slice(0, index)].reverse().find((candidate) => candidate.role === 'user');
+
+                                    return (
+                                        <div key={msg.id}>
+                                            <StreamingMessage
+                                                role={msg.role}
+                                                content={msg.content}
+                                                sources={msg.sources}
+                                                statusMessage={msg.statusMessage}
+                                                attachments={msg.attachments}
+                                                isStreaming={msg.isStreaming}
+                                            />
+                                            {msg.role === 'assistant' && msg.id !== 'welcome' && !msg.isStreaming && msg.content && (
+                                                <div className="ml-0 md:ml-0">
+                                                    <SaveFromChatButton
+                                                        assistantContent={msg.content}
+                                                        conversationId={currentConversation?.id || null}
+                                                        sourceMessageId={msg.sourceMessageId || null}
+                                                        clientMessageId={msg.id}
+                                                        sourceTime={msg.timestamp}
+                                                        userContext={previousUserMessage?.content}
+                                                    />
+                                                </div>
+                                            )}
+                                        </div>
+                                    );
+                                })}
                                 <div ref={messagesEndRef} className="h-4" />
                             </>
                         )}

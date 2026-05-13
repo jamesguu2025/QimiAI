@@ -440,6 +440,7 @@ export const useChatStore = create<ChatState & ChatActions>((set, get) => ({
             timestamp: msg.timestamp || new Date().toISOString(),
             sources: msg.sources,
             attachments: msg.attachments,
+            sourceMessageId: msg.role === 'assistant' ? msg.id : undefined,
           });
         }
       }

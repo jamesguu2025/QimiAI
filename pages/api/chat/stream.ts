@@ -426,8 +426,7 @@ async function streamChatWithRAG(
       // Get the user's last message
       const userMessage = messages[messages.length - 1];
 
-      // Send status update
-      res.write(`data: ${JSON.stringify({ type: 'status', message: 'Searching research papers...' })}\n\n`);
+      writeStatus(res, 'Searching the ADHD research library...');
 
       try {
         // Execute RAG search with smart summary (双LLM架构)
@@ -456,7 +455,10 @@ async function streamChatWithRAG(
 
         // Send status update with mode info
         const modeInfo = ragResult.summaryMode === 'smart' ? '(智能摘要)' : '(原始模式)';
-        res.write(`data: ${JSON.stringify({ type: 'status', message: `Research papers retrieved ${modeInfo}, generating response...` })}\n\n`);
+        writeStatus(
+          res,
+          `Found ${ragResult.sources.length} research ${ragResult.sources.length === 1 ? 'paper' : 'papers'} ${modeInfo}. Synthesizing answer...`
+        );
       } catch (error) {
         console.error('[chat/stream] Force RAG search failed:', error);
         // Continue without RAG if it fails
@@ -547,6 +549,7 @@ async function streamChatWithRAG(
           const userQuestion = userMessage?.content || query;
 
           // Use smart summary if available
+          writeStatus(res, 'Searching the ADHD research library...');
           const toolResult = await executeRAGWithSmartSummary(
             query,
             userQuestion,
@@ -567,7 +570,10 @@ async function streamChatWithRAG(
 
           // Send a status update to client with mode info
           const modeInfo = toolResult.summaryMode === 'smart' ? '(智能摘要)' : '';
-          res.write(`data: ${JSON.stringify({ type: 'status', message: `Research papers retrieved ${modeInfo}, generating response...` })}\n\n`);
+          writeStatus(
+            res,
+            `Found ${toolResult.sources.length} research ${toolResult.sources.length === 1 ? 'paper' : 'papers'} ${modeInfo}. Synthesizing answer...`
+          );
         } catch (error) {
           console.error(`[chat/stream] Tool execution failed:`, error);
           messages.push({
@@ -587,6 +593,7 @@ async function streamChatWithRAG(
 
       // Second API call with tool results
       console.log('[chat/stream] Making second API call with RAG results...');
+      writeStatus(res, 'Generating research-informed answer...');
       const secondResponse = await fetch(`${DEEPSEEK_API_BASE}/chat/completions`, {
         method: 'POST',
         headers: {
@@ -658,6 +665,12 @@ function isClientConnected(res: NextApiResponse, abortSignal?: AbortSignal): boo
   return true;
 }
 
+function writeStatus(res: NextApiResponse, message: string) {
+  if (!res.writableEnded) {
+    res.write(`data: ${JSON.stringify({ type: 'status', message })}\n\n`);
+  }
+}
+
 /**
  * Process first stream and detect tool calls
  */
@@ -719,6 +732,10 @@ async function processFirstStream(
 
             // Handle tool calls delta
             if (choice.delta?.tool_calls) {
+              if (toolCalls.length === 0) {
+                writeStatus(res, 'Searching the ADHD research library...');
+              }
+
               for (const toolCallDelta of choice.delta.tool_calls) {
                 const index = toolCallDelta.index;
 

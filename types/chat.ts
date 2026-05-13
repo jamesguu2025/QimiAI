@@ -28,6 +28,7 @@ export interface Message {
   sources?: RAGSource[];
   statusMessage?: string; // Status update like "Searching research papers..."
   isStreaming?: boolean;
+  sourceMessageId?: string; // Persisted database message id when available
 }
 
 /** 主题文件夹类型 */

@@ -1,0 +1,492 @@
+import type { NextApiRequest, NextApiResponse } from 'next';
+import { getServerSession } from 'next-auth';
+import { authOptions } from '../auth/[...nextauth]';
+import { getSupabaseAdmin } from '../../../lib/supabase';
+import type { ActionPlanItem, PlanCategory, PlanContentBlock, WeekDay } from '../../../types/plan';
+import { PLAN_CATEGORIES } from '../../../types/plan';
+
+type PlanItemRow = {
+  id: string;
+  user_id: string;
+  category: PlanCategory;
+  pain_point: string;
+  strategy: string;
+  strategy_summary?: string | null;
+  explanation_markdown?: string | null;
+  intervention_blocks?: PlanContentBlock[] | null;
+  star: boolean;
+  check_in_days: WeekDay[] | null;
+  last_check_in: string | null;
+  source_conversation_id?: string | null;
+  source_message_id?: string | null;
+  source_time?: string | null;
+  source_type?: 'manual' | 'chat' | null;
+  created_at: string;
+  updated_at: string;
+};
+
+type ExtractedPlan = {
+  hasActionableStrategy: boolean;
+  category: PlanCategory | 'none';
+  painPoint: string;
+  explanationMarkdown?: string;
+  interventionBlocks: PlanContentBlock[];
+  strategySummary: string;
+  confidence: number;
+  safetyFlags: string[];
+};
+
+const DEEPSEEK_API_KEY = process.env.DEEPSEEK_API_KEY;
+const DEEPSEEK_API_BASE = process.env.DEEPSEEK_API_BASE || 'https://api.deepseek.com';
+const DEEPSEEK_MODEL = process.env.DEEPSEEK_MODEL || 'deepseek-v4-flash';
+const DEEPSEEK_THINKING = { type: 'disabled' };
+const VALID_CATEGORIES = new Set(PLAN_CATEGORIES.map((category) => category.id));
+const UUID_REGEX = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
+const FREE_PLAN_LIMIT = 5;
+const HARD_BLOCK_FLAGS = new Set(['crisis']);
+const MEDICATION_DIRECTIVE_PATTERN = /\b(increase|decrease|raise|lower|reduce|stop|start|switch|change|double|halve|take|give)\b.*\b(\d+\s?mg|dose|dosage|tablet|pill|capsule)\b|(\d+\s?mg).*\b(increase|decrease|raise|lower|reduce|stop|start|switch|change|take|give)\b/i;
+
+function mapPlanItem(row: PlanItemRow): ActionPlanItem {
+  return {
+    id: row.id,
+    userId: row.user_id,
+    category: row.category,
+    painPoint: row.pain_point,
+    strategy: row.strategy,
+    strategySummary: row.strategy_summary || row.strategy,
+    explanationMarkdown: row.explanation_markdown || undefined,
+    interventionBlocks: Array.isArray(row.intervention_blocks) ? row.intervention_blocks : [],
+    star: row.star,
+    checkInDays: row.check_in_days || [],
+    lastCheckIn: row.last_check_in || undefined,
+    sourceConversationId: row.source_conversation_id || undefined,
+    sourceMessageId: row.source_message_id || undefined,
+    sourceTime: row.source_time || undefined,
+    sourceType: row.source_type || 'manual',
+    createdAt: row.created_at,
+    updatedAt: row.updated_at,
+  };
+}
+
+function cleanJsonResponse(responseText: string): string {
+  return responseText
+    .replace(/^```json\s*/i, '')
+    .replace(/^```\s*/i, '')
+    .replace(/```\s*$/i, '')
+    .trim();
+}
+
+function normalizeForDuplicate(value: string): string {
+  return value
+    .toLowerCase()
+    .replace(/[^a-z0-9\u4e00-\u9fa5]+/g, ' ')
+    .replace(/\s+/g, ' ')
+    .trim();
+}
+
+function looksSimilar(a: string, b: string): boolean {
+  if (!a || !b) return false;
+  if (a === b) return true;
+  return a.length > 24 && b.length > 24 && (a.includes(b) || b.includes(a));
+}
+
+function asUuidOrNull(value: unknown): string | null {
+  if (value === null || value === undefined || value === '') return null;
+  return typeof value === 'string' && UUID_REGEX.test(value) ? value : null;
+}
+
+function isPlanCategory(value: unknown): value is PlanCategory {
+  return typeof value === 'string' && VALID_CATEGORIES.has(value as PlanCategory);
+}
+
+function validateSourceTime(value: unknown): string {
+  if (typeof value === 'string' && !Number.isNaN(Date.parse(value))) {
+    return new Date(value).toISOString();
+  }
+  return new Date().toISOString();
+}
+
+async function getUserId(req: NextApiRequest, res: NextApiResponse) {
+  const session = await getServerSession(req, res, authOptions);
+  if (!session?.user?.email) {
+    return { error: 'Unauthorized' as const, status: 401 as const };
+  }
+
+  const supabase = getSupabaseAdmin();
+  let { data: user, error: userError } = await supabase
+    .from('users')
+    .select('id')
+    .eq('email', session.user.email)
+    .single();
+
+  if (userError && userError.code === 'PGRST116') {
+    const { data: newUser, error: createError } = await supabase
+      .from('users')
+      .insert({
+        email: session.user.email,
+        name: session.user.name || null,
+        avatar_url: session.user.image || null,
+        provider: 'google',
+      })
+      .select('id')
+      .single();
+
+    if (createError) {
+      console.error('[plan/save-from-chat] create user error:', createError);
+      return { error: 'Internal server error' as const, status: 500 as const };
+    }
+    user = newUser;
+  } else if (userError) {
+    console.error('[plan/save-from-chat] user lookup error:', userError);
+    return { error: 'Internal server error' as const, status: 500 as const };
+  }
+
+  return { supabase, userId: user!.id };
+}
+
+async function verifySourceOwnership(
+  supabase: ReturnType<typeof getSupabaseAdmin>,
+  userId: string,
+  sourceConversationId: string | null,
+  sourceMessageId: string | null
+) {
+  if (sourceConversationId) {
+    const { data: conversation, error } = await supabase
+      .from('conversations')
+      .select('id')
+      .eq('id', sourceConversationId)
+      .eq('user_id', userId)
+      .single();
+
+    if ((error && error.code === 'PGRST116') || !conversation) return false;
+    if (error) throw error;
+  }
+
+  if (sourceMessageId) {
+    const { data: message, error } = await supabase
+      .from('messages')
+      .select('id, conversation_id')
+      .eq('id', sourceMessageId)
+      .single();
+
+    if ((error && error.code === 'PGRST116') || !message) return false;
+    if (error) throw error;
+
+    if (sourceConversationId && message.conversation_id !== sourceConversationId) return false;
+
+    const { data: conversation, error: convError } = await supabase
+      .from('conversations')
+      .select('id')
+      .eq('id', message.conversation_id)
+      .eq('user_id', userId)
+      .single();
+
+    if ((convError && convError.code === 'PGRST116') || !conversation) return false;
+    if (convError) throw convError;
+  }
+
+  return true;
+}
+
+async function extractPlan(assistantContent: string, userContext?: string): Promise<ExtractedPlan> {
+  if (!DEEPSEEK_API_KEY) {
+    throw new Error('DEEPSEEK_API_KEY not configured');
+  }
+
+  const prompt = `Extract one Growth Plan item from this assistant response.
+
+Rules:
+- Return JSON only.
+- The user already clicked "Save to Growth Plan"; this is the confirmation. Do not ask for another confirmation.
+- Preserve useful Markdown from the assistant response, especially GitHub-Flavored Markdown tables, bullet lists, numbered steps, and bold text.
+- Store semantic structure first: painPoint, explanationMarkdown, interventionBlocks[], strategySummary.
+- interventionBlocks must be an array of focused sections. Each block has optional title and contentMarkdown.
+- contentMarkdown must be GFM-compatible Markdown, not HTML.
+- Extract only strategies a parent can choose to save and try.
+- Do not save diagnosis, concrete medication dosage/change instructions, emergency, legal, or direct professional-treatment instructions.
+- If content is diagnosis/IEP/legal/medication-adjacent but can be turned into a safe parent action, save the parent action instead, such as tracking observations or preparing questions for a qualified professional.
+- If there is no concrete strategy, return hasActionableStrategy=false and category="none".
+- Use only these categories for saveable strategies: emotion, learning, exercise, nutrition, social, sleep, school.
+- strategySummary should be one concise sentence for card display.
+- Safety flags may include: none, medical, diagnosis, medication, crisis, legal, not_child_related, too_vague.
+
+Output JSON shape:
+{
+  "hasActionableStrategy": boolean,
+  "category": "none" | "emotion" | "learning" | "exercise" | "nutrition" | "social" | "sleep" | "school",
+  "painPoint": string,
+  "explanationMarkdown": string,
+  "interventionBlocks": [{ "title": string, "contentMarkdown": string }],
+  "strategySummary": string,
+  "confidence": number,
+  "safetyFlags": string[]
+}
+
+PRECEDING USER CONTEXT:
+${userContext || '(none)'}
+
+ASSISTANT RESPONSE:
+${assistantContent}`;
+
+  const response = await fetch(`${DEEPSEEK_API_BASE}/chat/completions`, {
+    method: 'POST',
+    headers: {
+      'Content-Type': 'application/json',
+      Authorization: `Bearer ${DEEPSEEK_API_KEY}`,
+    },
+    body: JSON.stringify({
+      model: DEEPSEEK_MODEL,
+      messages: [
+        { role: 'system', content: 'You are a careful structured extraction service. Return valid JSON only.' },
+        { role: 'user', content: prompt },
+      ],
+      stream: false,
+      temperature: 0.1,
+      max_tokens: 1600,
+      thinking: DEEPSEEK_THINKING,
+    }),
+    signal: AbortSignal.timeout(30000),
+  });
+
+  if (!response.ok) {
+    throw new Error(`DeepSeek extraction failed: ${response.status}`);
+  }
+
+  const data = await response.json();
+  const text = data.choices?.[0]?.message?.content;
+  if (typeof text !== 'string') {
+    throw new Error('Missing extraction content');
+  }
+
+  return JSON.parse(cleanJsonResponse(text)) as ExtractedPlan;
+}
+
+function validateBlocks(value: unknown): PlanContentBlock[] {
+  if (!Array.isArray(value)) return [];
+
+  const blocks: PlanContentBlock[] = [];
+  for (const block of value) {
+    if (!block || typeof block !== 'object') continue;
+      const maybeBlock = block as Partial<PlanContentBlock>;
+    if (typeof maybeBlock.contentMarkdown !== 'string' || !maybeBlock.contentMarkdown.trim()) continue;
+
+    blocks.push({
+      title: typeof maybeBlock.title === 'string' && maybeBlock.title.trim()
+        ? maybeBlock.title.trim().slice(0, 120)
+        : undefined,
+      contentMarkdown: maybeBlock.contentMarkdown.trim().slice(0, 3000),
+    });
+    if (blocks.length >= 8) break;
+  }
+
+  return blocks;
+}
+
+function validateExtractedPlan(extracted: ExtractedPlan) {
+  if (!extracted.hasActionableStrategy) {
+    return { error: 'No actionable strategy found' as const };
+  }
+
+  if (!isPlanCategory(extracted.category)) {
+    return { error: 'No actionable strategy found' as const };
+  }
+
+  if (typeof extracted.painPoint !== 'string' || extracted.painPoint.trim().length < 3) {
+    return { error: 'No actionable strategy found' as const };
+  }
+
+  if (typeof extracted.strategySummary !== 'string' || extracted.strategySummary.trim().length < 3) {
+    return { error: 'No actionable strategy found' as const };
+  }
+
+  if (typeof extracted.confidence !== 'number' || extracted.confidence < 0.55) {
+    return { error: 'No actionable strategy found' as const };
+  }
+
+  const flags = Array.isArray(extracted.safetyFlags) ? extracted.safetyFlags : [];
+  if (flags.some((flag) => HARD_BLOCK_FLAGS.has(flag))) {
+    return { error: 'Unsafe or unsupported plan item' as const };
+  }
+
+  const interventionBlocks = validateBlocks(extracted.interventionBlocks);
+  const contentForSafety = `${extracted.strategySummary}\n${interventionBlocks.map((block) => block.contentMarkdown).join('\n')}`;
+  if (flags.includes('medication') && MEDICATION_DIRECTIVE_PATTERN.test(contentForSafety)) {
+    return { error: 'Unsafe or unsupported plan item' as const };
+  }
+
+  const fallbackBlock = interventionBlocks.length > 0
+    ? interventionBlocks
+    : [{ contentMarkdown: extracted.strategySummary.trim() }];
+
+  return {
+    plan: {
+      category: extracted.category,
+      painPoint: extracted.painPoint.trim().slice(0, 500),
+      explanationMarkdown: typeof extracted.explanationMarkdown === 'string'
+        ? extracted.explanationMarkdown.trim().slice(0, 2000)
+        : '',
+      interventionBlocks: fallbackBlock,
+      strategySummary: extracted.strategySummary.trim().slice(0, 500),
+      safetyFlags: flags.length > 0 ? flags : ['none'],
+    },
+  };
+}
+
+async function findDuplicate(
+  supabase: ReturnType<typeof getSupabaseAdmin>,
+  userId: string,
+  category: PlanCategory,
+  painPoint: string,
+  strategySummary: string,
+  interventionBlocks: PlanContentBlock[],
+  sourceConversationId: string | null,
+  sourceMessageId: string | null
+) {
+  if (sourceMessageId) {
+    const { data } = await supabase
+      .from('plan_items')
+      .select('id')
+      .eq('user_id', userId)
+      .eq('source_message_id', sourceMessageId)
+      .maybeSingle();
+
+    if (data?.id) {
+      return { matchedItemId: data.id, reason: 'same source message' };
+    }
+  }
+
+  let query = supabase
+    .from('plan_items')
+    .select('id, pain_point, strategy, strategy_summary, intervention_blocks')
+    .eq('user_id', userId)
+    .eq('category', category);
+
+  if (sourceConversationId) {
+    query = query.eq('source_conversation_id', sourceConversationId);
+  }
+
+  const { data: items, error } = await query.limit(20);
+  if (error) throw error;
+
+  const draftContent = normalizeForDuplicate([
+    painPoint,
+    strategySummary,
+    ...interventionBlocks.map((block) => block.contentMarkdown),
+  ].join(' '));
+
+  const match = (items || []).find((item) => {
+    const itemBlocks = Array.isArray(item.intervention_blocks)
+      ? item.intervention_blocks.map((block: PlanContentBlock) => block.contentMarkdown).join(' ')
+      : '';
+    return looksSimilar(
+      draftContent,
+      normalizeForDuplicate(`${item.pain_point} ${item.strategy_summary || item.strategy} ${itemBlocks}`)
+    );
+  });
+
+  return match ? { matchedItemId: match.id, reason: 'similar saved plan' } : null;
+}
+
+export default async function handler(req: NextApiRequest, res: NextApiResponse) {
+  if (req.method !== 'POST') {
+    res.setHeader('Allow', ['POST']);
+    return res.status(405).json({ error: `Method ${req.method} not allowed` });
+  }
+
+  const context = await getUserId(req, res);
+  if ('error' in context) {
+    return res.status(context.status || 500).json({ error: context.error });
+  }
+
+  const { supabase, userId } = context;
+  const { assistantContent, userContext, duplicateOverride } = req.body || {};
+  const sourceConversationId = asUuidOrNull(req.body?.sourceConversationId || req.body?.conversationId);
+  const sourceMessageId = asUuidOrNull(req.body?.sourceMessageId);
+  const sourceTime = validateSourceTime(req.body?.sourceTime);
+
+  if (typeof assistantContent !== 'string' || assistantContent.trim().length < 10) {
+    return res.status(400).json({ error: 'No actionable strategy found' });
+  }
+
+  try {
+    const ownsSource = await verifySourceOwnership(supabase, userId, sourceConversationId, sourceMessageId);
+    if (!ownsSource) {
+      return res.status(404).json({ error: 'Source conversation not found' });
+    }
+
+    const extracted = await extractPlan(
+      assistantContent.trim().slice(0, 8000),
+      typeof userContext === 'string' ? userContext.trim().slice(0, 1000) : undefined
+    );
+    const validation = validateExtractedPlan(extracted);
+    if ('error' in validation) {
+      return res.status(400).json({ error: validation.error });
+    }
+
+    const plan = validation.plan;
+    const duplicate = await findDuplicate(
+      supabase,
+      userId,
+      plan.category,
+      plan.painPoint,
+      plan.strategySummary,
+      plan.interventionBlocks,
+      sourceConversationId,
+      sourceMessageId
+    );
+
+    if (duplicate && (!duplicateOverride || duplicate.reason === 'same source message')) {
+      return res.status(409).json({
+        error: duplicate.reason === 'same source message'
+          ? 'This suggestion is already saved.'
+          : 'This suggestion already looks saved.',
+        duplicate,
+      });
+    }
+
+    const { count, error: countError } = await supabase
+      .from('plan_items')
+      .select('id', { count: 'exact', head: true })
+      .eq('user_id', userId);
+
+    if (countError) {
+      console.error('[plan/save-from-chat] quota count error:', countError);
+      return res.status(500).json({ error: 'Failed to check plan limit' });
+    }
+
+    if ((count || 0) >= FREE_PLAN_LIMIT) {
+      return res.status(403).json({
+        error: 'Free plan limit reached. Upgrade to Pro for unlimited items.',
+      });
+    }
+
+    const { data, error } = await supabase
+      .from('plan_items')
+      .insert({
+        user_id: userId,
+        category: plan.category,
+        pain_point: plan.painPoint,
+        strategy: plan.strategySummary,
+        strategy_summary: plan.strategySummary,
+        explanation_markdown: plan.explanationMarkdown || null,
+        intervention_blocks: plan.interventionBlocks,
+        check_in_days: [],
+        source_conversation_id: sourceConversationId,
+        source_message_id: sourceMessageId,
+        source_time: sourceTime,
+        source_type: 'chat',
+      })
+      .select('*')
+      .single();
+
+    if (error) {
+      console.error('[plan/save-from-chat] create error:', error);
+      return res.status(500).json({ error: 'Failed to save plan item' });
+    }
+
+    return res.status(201).json({ item: mapPlanItem(data as PlanItemRow), safetyFlags: plan.safetyFlags });
+  } catch (error) {
+    console.error('[plan/save-from-chat] unexpected error:', error);
+    return res.status(500).json({ error: 'Failed to save plan item' });
+  }
+}
