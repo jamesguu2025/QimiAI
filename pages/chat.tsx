@@ -72,6 +72,9 @@ export default function ChatPage() {
     const modeHandledRef = useRef<string | null>(null);
     const guestMigrationKeyRef = useRef<string | null>(null);
     const activeTopicLabel = activeFolderKey ? TOPIC_LABELS[activeFolderKey] : null;
+    const pageTitle = currentConversation?.title?.trim()
+        ? `${currentConversation.title.trim()} - Qimi AI`
+        : 'New Chat - Qimi AI';
     const topicConversations = conversations
         .filter(conversation => normalizeTopicFolder(conversation.folderKey) === activeFolderKey)
         .sort((a, b) => {
@@ -354,7 +357,7 @@ export default function ChatPage() {
             onSelectConversation={handleSelectConversation}
             onSelectTopic={handleSelectTopic}
         >
-            <Head><title>Chat - Qimi AI</title></Head>
+            <Head><title>{pageTitle}</title></Head>
 
             <div className="flex-1 flex flex-col min-h-0 overflow-hidden">
                 {/* 访客剩余消息提示 */}
