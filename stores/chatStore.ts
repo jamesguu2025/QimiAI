@@ -10,6 +10,7 @@ import {
   getConversation,
   updateConversation,
   deleteConversation,
+  generateConversationTitle,
 } from '../services/conversation';
 
 /** Welcome message */
@@ -186,6 +187,8 @@ export const useChatStore = create<ChatState & ChatActions>((set, get) => ({
 
     let accumulated = '';
     let sources: RAGSource[] = [];
+    let createdConversationId: string | null = null;
+    let createdConversationFallbackTitle = '';
 
     // Build conversation history for dynamic prompt (exclude welcome message and current user message)
     const { messages } = get();
@@ -247,10 +250,12 @@ export const useChatStore = create<ChatState & ChatActions>((set, get) => ({
           },
           onConversationCreated: (conversationId, createdFolderKey) => {
             const folderKey = normalizeTopicFolder(createdFolderKey || messageFolderKey);
+            createdConversationId = conversationId;
+            createdConversationFallbackTitle = content.slice(0, 50) + (content.length > 50 ? '...' : '');
             const newConversation: Conversation = {
               id: conversationId,
               userId: '',
-              title: content.slice(0, 50) + (content.length > 50 ? '...' : ''),
+              title: createdConversationFallbackTitle,
               folderKey,
               messageCount: 0,
               createdAt: new Date().toISOString(),
@@ -277,6 +282,32 @@ export const useChatStore = create<ChatState & ChatActions>((set, get) => ({
             }));
             // 消息完成后刷新会话列表（登录用户才会有新会话）
             get().loadConversations();
+
+            if (createdConversationId && accumulated.trim()) {
+              generateConversationTitle({
+                conversationId: createdConversationId,
+                userMessage: content,
+                assistantMessage: accumulated,
+                fallbackTitle: createdConversationFallbackTitle,
+              })
+                .then(({ title, skipped }) => {
+                  if (!title || skipped) return;
+                  set(state => ({
+                    conversations: state.conversations.map(conversation =>
+                      conversation.id === createdConversationId
+                        ? { ...conversation, title }
+                        : conversation
+                    ),
+                    currentConversation: state.currentConversation?.id === createdConversationId
+                      ? { ...state.currentConversation, title }
+                      : state.currentConversation,
+                  }));
+                  saveConversationsToCache(get().conversations);
+                })
+                .catch(() => {
+                  // Title generation is a non-blocking enhancement.
+                });
+            }
           },
           onError: (error) => {
             set(state => ({

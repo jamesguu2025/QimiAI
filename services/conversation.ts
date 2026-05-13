@@ -21,6 +21,14 @@ export interface UpdateConversationRequest {
   isPinned?: boolean;
 }
 
+/** Generate conversation title request */
+export interface GenerateConversationTitleRequest {
+  conversationId: string;
+  userMessage: string;
+  assistantMessage: string;
+  fallbackTitle?: string;
+}
+
 /**
  * List all conversations for current user
  */
@@ -107,6 +115,29 @@ export async function updateConversation(
 }
 
 /**
+ * Generate a concise title for a newly-created conversation.
+ * This is a best-effort background enhancement; callers should ignore failures.
+ */
+export async function generateConversationTitle(
+  request: GenerateConversationTitleRequest
+): Promise<{ title: string; skipped?: boolean }> {
+  const response = await fetch('/api/conversations/generate-title', {
+    method: 'POST',
+    headers: {
+      'Content-Type': 'application/json',
+    },
+    body: JSON.stringify(request),
+  });
+
+  if (!response.ok) {
+    const errorData = await response.json().catch(() => ({}));
+    throw new Error(errorData.error || `HTTP ${response.status}`);
+  }
+
+  return response.json();
+}
+
+/**
  * Delete a conversation
  */
 export async function deleteConversation(id: string): Promise<void> {
@@ -131,6 +162,7 @@ export const conversationService = {
   create: createConversation,
   get: getConversation,
   update: updateConversation,
+  generateTitle: generateConversationTitle,
   delete: deleteConversation,
 };
 
