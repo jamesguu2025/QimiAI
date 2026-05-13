@@ -6,21 +6,66 @@ import { getSupabaseAdmin } from '../../../lib/supabase';
 const DEEPSEEK_API_KEY = process.env.DEEPSEEK_API_KEY;
 const DEEPSEEK_API_BASE = process.env.DEEPSEEK_API_BASE || 'https://api.deepseek.com';
 const DEEPSEEK_MODEL = process.env.DEEPSEEK_TITLE_MODEL || process.env.DEEPSEEK_MODEL || 'deepseek-v4-flash';
+const DEEPSEEK_THINKING = { type: 'disabled' };
+const MAX_ENGLISH_TITLE_CHARS = 36;
+const MAX_CJK_TITLE_CHARS = 14;
 
 function fallbackTitleFromMessage(message: string) {
   const trimmed = message.trim();
   return trimmed.slice(0, 50) + (trimmed.length > 50 ? '...' : '');
 }
 
-function cleanTitle(rawTitle: string, userMessage: string) {
+function normalizeTitle(title: string) {
+  return title
+    .toLowerCase()
+    .replace(/[^a-z0-9\u4e00-\u9fff]+/g, ' ')
+    .replace(/\s+/g, ' ')
+    .trim();
+}
+
+function isEchoTitle(title: string, userMessage: string, fallbackTitle: string) {
+  const normalizedTitle = normalizeTitle(title);
+  const normalizedUserMessage = normalizeTitle(userMessage);
+  const normalizedFallback = normalizeTitle(fallbackTitle);
+
+  if (!normalizedTitle) return true;
+  if (normalizedTitle === normalizedFallback) return true;
+  if (normalizedFallback.startsWith(normalizedTitle) || normalizedTitle.startsWith(normalizedFallback)) return true;
+  if (normalizedUserMessage.startsWith(normalizedTitle) && normalizedTitle.length > 24) return true;
+  return false;
+}
+
+function hasCjk(text: string) {
+  return /[\u4e00-\u9fff]/.test(text);
+}
+
+function clampTitleLength(title: string) {
+  if (hasCjk(title)) {
+    return title.length > MAX_CJK_TITLE_CHARS ? title.slice(0, MAX_CJK_TITLE_CHARS) : title;
+  }
+
+  if (title.length <= MAX_ENGLISH_TITLE_CHARS) return title;
+
+  const words = title.split(/\s+/);
+  let nextTitle = '';
+  for (const word of words) {
+    const candidate = nextTitle ? `${nextTitle} ${word}` : word;
+    if (candidate.length > MAX_ENGLISH_TITLE_CHARS) break;
+    nextTitle = candidate;
+  }
+
+  return nextTitle || title.slice(0, MAX_ENGLISH_TITLE_CHARS).trim();
+}
+
+function cleanTitle(rawTitle: string) {
   const title = rawTitle
     .replace(/^["'`“”‘’]+|["'`“”‘’]+$/g, '')
+    .replace(/^title\s*:\s*/i, '')
     .replace(/\s+/g, ' ')
     .trim();
 
-  if (!title) return fallbackTitleFromMessage(userMessage);
-  if (title.length <= 60) return title;
-  return title.slice(0, 57).trimEnd() + '...';
+  if (!title) return '';
+  return clampTitleLength(title);
 }
 
 function canReplaceExistingTitle(existingTitle: string | null | undefined, expectedFallback: string) {
@@ -28,10 +73,27 @@ function canReplaceExistingTitle(existingTitle: string | null | undefined, expec
   return !title || title === 'New Conversation' || title === expectedFallback;
 }
 
-async function generateTitle(userMessage: string, assistantMessage: string) {
+async function generateTitle(userMessage: string, assistantMessage: string, retry = false) {
   if (!DEEPSEEK_API_KEY) {
     throw new Error('DEEPSEEK_API_KEY is not configured');
   }
+
+  const systemPrompt = retry
+    ? [
+        'Create a short topic label for this chat.',
+        'Return ONLY a noun phrase, not the user sentence.',
+        'Do not start with "I", "why", "how", or "what".',
+        'Examples: "Child Sleep Dreams", "Homework Meltdowns", "Medication Questions".',
+        'Use the same language as the user. No emoji. No quotes.',
+      ].join(' ')
+    : [
+        'Generate a concise chat title for an ADHD family support conversation.',
+        'Return the title only, with no quotes and no punctuation wrapper.',
+        'Use the same language as the user.',
+        'English: 2-5 words. Chinese: 4-12 Chinese characters when possible.',
+        'Make it a topic label, not a copy of the user question.',
+        'Do not use emoji. Do not diagnose. Do not mention Qimi.',
+      ].join(' ');
 
   const response = await fetch(`${DEEPSEEK_API_BASE}/chat/completions`, {
     method: 'POST',
@@ -41,18 +103,13 @@ async function generateTitle(userMessage: string, assistantMessage: string) {
     },
     body: JSON.stringify({
       model: DEEPSEEK_MODEL,
+      thinking: DEEPSEEK_THINKING,
       temperature: 0.2,
-      max_tokens: 40,
+      max_tokens: 80,
       messages: [
         {
           role: 'system',
-          content: [
-            'Generate a concise chat title for an ADHD family support conversation.',
-            'Return the title only, with no quotes and no punctuation wrapper.',
-            'Use the same language as the user.',
-            'English: 3-6 words. Chinese: 4-12 Chinese characters when possible.',
-            'Do not use emoji. Do not diagnose. Do not mention Qimi.',
-          ].join(' '),
+          content: systemPrompt,
         },
         {
           role: 'user',
@@ -126,8 +183,17 @@ export default async function handler(req: NextApiRequest, res: NextApiResponse)
       return res.status(200).json({ title: conversation.title, skipped: true });
     }
 
-    const rawTitle = await generateTitle(userMessage, assistantMessage);
-    const title = cleanTitle(rawTitle, userMessage);
+    let rawTitle = await generateTitle(userMessage, assistantMessage);
+    let title = cleanTitle(rawTitle);
+
+    if (isEchoTitle(title, userMessage, expectedFallback)) {
+      rawTitle = await generateTitle(userMessage, assistantMessage, true);
+      title = cleanTitle(rawTitle);
+    }
+
+    if (!title || isEchoTitle(title, userMessage, expectedFallback)) {
+      return res.status(200).json({ title: conversation.title, skipped: true });
+    }
 
     const { data: updated, error: updateError } = await supabase
       .from('conversations')
