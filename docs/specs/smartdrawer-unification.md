@@ -106,7 +106,7 @@ Evidence basis:
 - [x] Dashboard button in SmartDrawer navigates to `/dashboard`
 - [x] Mobile: hamburger menu opens SmartDrawer on all pages
 - [x] Desktop: SmartDrawer collapse/expand works on all pages
-- [x] Chat page retains all current functionality (messages, streaming, guest mode, onboarding, RAG toggle)
+- [x] Chat page retains all current functionality (messages, streaming, guest mode, onboarding, automatic LLM-decided RAG)
 - [x] Touch swipe-to-open gesture works on all pages (mobile)
 - [x] UserMenu (avatar + dropdown) is visible in top-right on all logged-in pages
 - [x] SmartDrawer bottom "Logged in / Sign out" footer is removed
@@ -253,7 +253,7 @@ Evidence basis:
       >
       ```
 - **Important**: The early returns for `status === 'loading'` and `showOnboarding` should remain OUTSIDE AppLayout (they are full-screen takeovers that don't show SmartDrawer).
-- **Constraint**: Do not change message sending logic, guest mode, RAG toggle, or any chat functionality. Only refactor the layout wrapper.
+- **Constraint**: Do not change message sending logic, guest mode, automatic RAG behavior, or any chat functionality. Only refactor the layout wrapper.
 - **Reference**: Current `pages/chat.tsx` for all existing functionality that must be preserved.
 - **Verify**: `npx eslint pages/chat.tsx`, `npx tsc --noEmit`, `npm run build`. Then manually verify: chat page looks and works the same as before (SmartDrawer visible, messages work, guest mode works).
 - ⚠️ **不要 commit。** 告诉用户你改了什么，等用户说"可以 commit"后执行：`git commit -m "[T003] refactor: chat page uses AppLayout instead of inline SmartDrawer"`。未经确认绝对不要 commit。

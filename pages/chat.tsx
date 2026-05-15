@@ -39,12 +39,6 @@ export default function ChatPage() {
     const [showOnboarding, setShowOnboarding] = useState(false);
     const [guestMessageCount, setGuestMessageCount] = useState(0);
 
-    // RAG 强化模式状态 (Force RAG)
-    const [forceRAG, setForceRAG] = useState(false);
-
-    // Paper count for RAG display
-    const [paperCount, setPaperCount] = useState(0);
-
     // 使用流式聊天 Hook (连接真实 API)
     const {
         messages,
@@ -91,18 +85,6 @@ export default function ChatPage() {
     useEffect(() => {
         scrollToBottom();
     }, [messages]);
-
-    // Fetch paper count for RAG display
-    useEffect(() => {
-        fetch('/api/rag/stats')
-            .then(res => res.json())
-            .then(data => {
-                if (data.success && data.totalPapers) {
-                    setPaperCount(data.totalPapers);
-                }
-            })
-            .catch(err => console.error('Failed to fetch paper count:', err));
-    }, []);
 
     // Handle conversation query param from SmartDrawer navigation
     useEffect(() => {
@@ -255,7 +237,7 @@ export default function ChatPage() {
         }
         // TODO: 登录用户从 Supabase 获取 userProfile (Phase 2)
 
-        await sendMessage(content, attachments, forceRAG, userProfile, activeFolderKey);
+        await sendMessage(content, attachments, false, userProfile, activeFolderKey);
     };
 
     // 访客引导完成
@@ -523,24 +505,11 @@ export default function ChatPage() {
                     </div>
                 </div>
 
-                {/* RAG 模式提示 */}
-                {forceRAG && (
-                    <div className="flex-shrink-0 px-4 py-2 bg-gradient-to-r from-primary-teal/10 to-primary-purple/10 border-t border-primary-teal/20">
-                        <div className="max-w-3xl mx-auto flex items-center justify-center gap-2 text-sm">
-                            <span className="text-primary-teal font-medium animate-pulse">
-                                ✨ Searching {paperCount > 0 ? paperCount.toLocaleString() : '15,844'} ADHD research papers • Response will take longer
-                            </span>
-                        </div>
-                    </div>
-                )}
-
                 {/* 输入区域 */}
                 <div className="flex-shrink-0 pb-6 pt-2 px-4 bg-white border-t border-slate-50">
                     <ChatInput
                         onSend={handleSend}
                         disabled={isStreaming}
-                        forceRAG={forceRAG}
-                        onToggleRAG={() => setForceRAG(!forceRAG)}
                     />
                 </div>
             </div>

@@ -39,6 +39,10 @@ function hasCjk(text: string) {
   return /[\u4e00-\u9fff]/.test(text);
 }
 
+function shouldGenerateEnglishTitle(userMessage: string) {
+  return !hasCjk(userMessage);
+}
+
 function clampTitleLength(title: string) {
   if (hasCjk(title)) {
     return title.length > MAX_CJK_TITLE_CHARS ? title.slice(0, MAX_CJK_TITLE_CHARS) : title;
@@ -78,19 +82,24 @@ async function generateTitle(userMessage: string, assistantMessage: string, retr
     throw new Error('DEEPSEEK_API_KEY is not configured');
   }
 
+  const languageRule = shouldGenerateEnglishTitle(userMessage)
+    ? 'Generate the title in English. For ambiguous or short inputs like "hi", default to English.'
+    : 'The user message contains Chinese characters, so a Chinese title is allowed.';
+
   const systemPrompt = retry
     ? [
         'Create a short topic label for this chat.',
         'Return ONLY a noun phrase, not the user sentence.',
         'Do not start with "I", "why", "how", or "what".',
         'Examples: "Child Sleep Dreams", "Homework Meltdowns", "Medication Questions".',
-        'Use the same language as the user. No emoji. No quotes.',
+        languageRule,
+        'No emoji. No quotes.',
       ].join(' ')
     : [
         'Generate a concise chat title for an ADHD family support conversation.',
         'Return the title only, with no quotes and no punctuation wrapper.',
-        'Use the same language as the user.',
-        'English: 2-5 words. Chinese: 4-12 Chinese characters when possible.',
+        languageRule,
+        'English: 2-5 words. Chinese: 4-12 Chinese characters only when the user wrote Chinese.',
         'Make it a topic label, not a copy of the user question.',
         'Do not use emoji. Do not diagnose. Do not mention Qimi.',
       ].join(' ');
@@ -183,15 +192,16 @@ export default async function handler(req: NextApiRequest, res: NextApiResponse)
       return res.status(200).json({ title: conversation.title, skipped: true });
     }
 
+    const requireEnglishTitle = shouldGenerateEnglishTitle(userMessage);
     let rawTitle = await generateTitle(userMessage, assistantMessage);
     let title = cleanTitle(rawTitle);
 
-    if (isEchoTitle(title, userMessage, expectedFallback)) {
+    if (isEchoTitle(title, userMessage, expectedFallback) || (requireEnglishTitle && hasCjk(title))) {
       rawTitle = await generateTitle(userMessage, assistantMessage, true);
       title = cleanTitle(rawTitle);
     }
 
-    if (!title || isEchoTitle(title, userMessage, expectedFallback)) {
+    if (!title || isEchoTitle(title, userMessage, expectedFallback) || (requireEnglishTitle && hasCjk(title))) {
       return res.status(200).json({ title: conversation.title, skipped: true });
     }
 
