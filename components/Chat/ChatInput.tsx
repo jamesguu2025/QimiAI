@@ -186,7 +186,7 @@ export const ChatInput: React.FC<ChatInputProps> = ({ onSend, disabled }) => {
   const handleSubmit = (e?: React.FormEvent) => {
     e?.preventDefault();
     const validAttachments = attachments.filter(a => a.status === 'done');
-    if ((input.trim() || validAttachments.length > 0) && !disabled) {
+    if ((input.trim() || validAttachments.length > 0) && !disabled && !isStreaming) {
       onSend(input.trim(), validAttachments.length > 0 ? validAttachments : undefined);
       setInput('');
       // 清理附件的 URL
@@ -203,6 +203,7 @@ export const ChatInput: React.FC<ChatInputProps> = ({ onSend, disabled }) => {
   const handleKeyDown = (e: React.KeyboardEvent) => {
     if (e.key === 'Enter' && !e.shiftKey) {
       e.preventDefault();
+      if (isStreaming) return;
       handleSubmit();
     }
   };
@@ -217,7 +218,8 @@ export const ChatInput: React.FC<ChatInputProps> = ({ onSend, disabled }) => {
   }, []);
 
   const hasValidAttachments = attachments.some(a => a.status === 'done');
-  const canSend = (input.trim() || hasValidAttachments) && !disabled;
+  const isInputDisabled = !!disabled && !isStreaming;
+  const canSend = (input.trim() || hasValidAttachments) && !disabled && !isStreaming;
 
   return (
     <div className="w-full max-w-3xl mx-auto p-4">
@@ -319,7 +321,7 @@ export const ChatInput: React.FC<ChatInputProps> = ({ onSend, disabled }) => {
           placeholder="Ask anything..."
           className="w-full max-h-[200px] py-3 px-4 bg-transparent border-none focus:ring-0 outline-none resize-none text-slate-800 placeholder:text-slate-400 text-[0.95rem] leading-relaxed"
           rows={1}
-          disabled={disabled}
+          disabled={isInputDisabled}
           style={{ minHeight: '52px' }}
         />
 
@@ -329,7 +331,7 @@ export const ChatInput: React.FC<ChatInputProps> = ({ onSend, disabled }) => {
             {/* 上传按钮 */}
             <button
               onClick={handleFileSelect}
-              disabled={disabled || attachments.length >= MAX_FILES}
+              disabled={isInputDisabled || isStreaming || attachments.length >= MAX_FILES}
               className={`
                 p-2 rounded-lg transition-all duration-200 flex items-center justify-center
                 ${attachments.length >= MAX_FILES

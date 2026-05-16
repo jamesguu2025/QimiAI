@@ -5,14 +5,149 @@ import type { NextApiRequest, NextApiResponse } from 'next';
 import { getServerSession } from 'next-auth';
 import { authOptions } from '../auth/[...nextauth]';
 import { buildSystemMessage, UserProfile } from '../../../lib/prompts';
-import { getRagTools } from '../../../lib/rag-definitions';
 import {
-  executeRAGToolCall,
   executeRAGWithSmartSummary,
-  RAGToolCallResult
 } from '../../../services/rag-service';
 import { getSupabaseAdmin } from '../../../lib/supabase';
 import { isTopicFolder, normalizeTopicFolder, TopicFolder } from '../../../types/chat';
+import { routeRagNeed } from '../../../lib/rag-router';
+
+// DeepSeek V3.2/V4 emits DSML markers using FULLWIDTH vertical lines (U+FF5C `｜`),
+// often doubled: `<｜｜DSML｜｜tagname>`. ASCII `|` is also seen in some variants.
+// We normalize `｜` → `|` and match 1+ pipes on either side of `DSML`.
+
+// Strip DSML markup from AI responses before saving to DB or passing as context.
+// Leaving raw DSML in saved messages causes the model to imitate the format in subsequent turns.
+function stripDsml(text: string): string {
+  // Normalize fullwidth pipes to ASCII so a single set of patterns covers both variants.
+  const normalized = text.replace(/｜/g, '|');
+  // Named element blocks: <|+DSML|+tagname ...>...</|+DSML|+tagname> — strip iteratively for nesting
+  const namedBlock = /<\|+DSML\|+[A-Za-z_]\w*[^>]*>[\s\S]*?<\/\|+DSML\|+[A-Za-z_]\w*>/g;
+  let result = normalized;
+  let prev = '';
+  while (result !== prev) {
+    prev = result;
+    result = result.replace(namedBlock, '');
+  }
+  return result
+    .replace(/<\|+DSML\|+invoke\s+[^>]*\/>\s*(?:<\|+DSML\|+>)?/g, '')  // self-closing invocations
+    .replace(/<\|+DSML\|+>[\s\S]*?<\/?\|+DSML\|+>/g, '')                // unnamed blocks
+    .replace(/<\/\|+DSML\|+[A-Za-z_]\w*>/g, '')                         // orphaned close tags
+    .replace(/<\|+DSML\|+[A-Za-z_]\w*[^>]*>/g, '')                      // orphaned open tags
+    .replace(/<\|+DSML\|*[\s\S]*$/, '')                                 // trailing partial
+    .replace(/\n{3,}/g, '\n\n')
+    .trim();
+}
+
+// Streaming DSML filter — mirrors vLLM's server-side prefix-buffer fix client-side.
+// Known issue: DeepSeek V3.2/V4 with tool_choice=auto + stream=true intermittently leaks
+// DSML tool-call XML as plain content (vLLM #40800, sglang #14695). We buffer any tail
+// that could be the start of a DSML marker (in either ASCII or fullwidth variant) and
+// swallow entire DSML blocks before emit.
+
+// A complete DSML opening prefix: `<` + 1+ pipes + `DSML` + 1+ pipes (pipes already normalized).
+const DSML_OPEN_PREFIX_RE = /<\|+DSML\|+/;
+// Partial DSML start at the very end of the buffer — any prefix of the full pattern.
+// Must include the bare `<` case so 1-char chunked streams (worst case) still hold it.
+const DSML_PARTIAL_TAIL_RE = /<(?:\|+(?:D(?:S(?:M(?:L\|*)?)?)?)?)?$/;
+// Stricter: definite partial marker (used at flush time to drop, not at-stream to hold).
+const DSML_DEFINITE_PARTIAL_RE = /<\|+(?:D(?:S(?:M(?:L\|*)?)?)?)?$/;
+
+interface DsmlFilterState {
+  buffer: string;
+  waitingForClose: RegExp | null;
+}
+
+function createDsmlFilter(): DsmlFilterState {
+  return { buffer: '', waitingForClose: null };
+}
+
+function feedDsmlFilter(state: DsmlFilterState, chunk: string): string {
+  // Normalize fullwidth pipes to ASCII so all downstream matching is single-form.
+  state.buffer += chunk.replace(/｜/g, '|');
+  let out = '';
+
+  while (state.buffer.length > 0) {
+    if (state.waitingForClose) {
+      const m = state.buffer.match(state.waitingForClose);
+      if (!m || m.index === undefined) {
+        // No close yet — keep a bounded tail in case the close marker is split across chunks.
+        const keep = Math.min(state.buffer.length, 40);
+        state.buffer = state.buffer.slice(-keep);
+        return out;
+      }
+      state.buffer = state.buffer.substring(m.index + m[0].length);
+      state.waitingForClose = null;
+      continue;
+    }
+
+    const openMatch = state.buffer.match(DSML_OPEN_PREFIX_RE);
+    if (!openMatch || openMatch.index === undefined) {
+      // No full DSML prefix. Hold any partial-marker tail; emit the rest.
+      const partial = state.buffer.match(DSML_PARTIAL_TAIL_RE);
+      if (partial && partial.index !== undefined) {
+        out += state.buffer.substring(0, partial.index);
+        state.buffer = state.buffer.substring(partial.index);
+      } else {
+        out += state.buffer;
+        state.buffer = '';
+      }
+      return out;
+    }
+
+    // Found a DSML start — emit content before it, then classify the opening tag.
+    out += state.buffer.substring(0, openMatch.index);
+    state.buffer = state.buffer.substring(openMatch.index);
+    const prefixLen = openMatch[0].length;
+
+    // Unnamed block: <|+DSML|+>
+    if (state.buffer.charAt(prefixLen) === '>') {
+      state.buffer = state.buffer.substring(prefixLen + 1);
+      state.waitingForClose = /<\/\|+DSML\|+>/;
+      continue;
+    }
+
+    const gt = state.buffer.indexOf('>');
+    if (gt === -1) return out; // wait for opening tag to complete
+
+    const openTag = state.buffer.substring(0, gt + 1);
+
+    // Self-closing: <|+DSML|+invoke .../>
+    if (openTag.endsWith('/>')) {
+      state.buffer = state.buffer.substring(gt + 1);
+      const trailing = state.buffer.match(/^<\|+DSML\|+>/);
+      if (trailing) state.buffer = state.buffer.substring(trailing[0].length);
+      continue;
+    }
+
+    // Named: <|+DSML|+tagname ...>
+    const afterPrefix = openTag.substring(prefixLen);
+    const tag = afterPrefix.match(/^([A-Za-z_]\w*)/);
+    if (tag) {
+      state.buffer = state.buffer.substring(gt + 1);
+      state.waitingForClose = new RegExp(`<\\/\\|+DSML\\|+${tag[1]}>`);
+      continue;
+    }
+
+    // Unrecognized shape — emit first char to avoid infinite loop.
+    out += state.buffer[0];
+    state.buffer = state.buffer.substring(1);
+  }
+
+  return out;
+}
+
+function flushDsmlFilter(state: DsmlFilterState): string {
+  if (state.waitingForClose) {
+    state.buffer = '';
+    state.waitingForClose = null;
+    return '';
+  }
+  // Drop a clearly-partial DSML marker; emit anything else (including a stray `<`).
+  const tail = state.buffer;
+  state.buffer = '';
+  return DSML_DEFINITE_PARTIAL_RE.test(tail) ? '' : tail;
+}
 
 // DeepSeek API configuration from environment variables
 const DEEPSEEK_API_KEY = process.env.DEEPSEEK_API_KEY;
@@ -83,13 +218,13 @@ async function saveMessagesToDatabase(
       console.error('[chat/stream] Failed to save user message:', userMsgError);
     }
 
-    // Save AI response
+    // Save AI response — strip DSML before storing so history stays clean
     const { error: aiMsgError } = await supabase
       .from('messages')
       .insert({
         conversation_id: convId,
         role: 'assistant',
-        content: aiResponse,
+        content: stripDsml(aiResponse),
         sources: sources || null,
       });
 
@@ -269,14 +404,14 @@ export default async function handler(
       { role: 'system', content: systemPrompt },
     ];
 
-    // Add conversation history if provided
+    // Add conversation history if provided — strip any DSML from past assistant messages
     if (Array.isArray(conversationHistory) && conversationHistory.length > 0) {
       const recentHistory = conversationHistory.slice(-10);
       for (const msg of recentHistory) {
         if (msg.role === 'user' || msg.role === 'assistant') {
           messages.push({
             role: msg.role,
-            content: msg.content
+            content: msg.role === 'assistant' ? stripDsml(msg.content) : msg.content,
           });
         }
       }
@@ -331,7 +466,14 @@ export default async function handler(
     const accumulator = { content: '', sources: [] as Array<{ title: string; url: string; snippet?: string }> };
 
     // Call DeepSeek with potential RAG tool support
-    const { fullResponse, sources } = await streamChatWithRAG(messages, res, forceRAG || false, abortController.signal, accumulator);
+    const { fullResponse, sources } = await streamChatWithRAG(
+      messages,
+      res,
+      forceRAG || false,
+      abortController.signal,
+      accumulator,
+      requestedFolderKey
+    );
 
     // Final check if client is still connected before saving
     const socketDestroyed = (res.socket as any)?.destroyed === true;
@@ -358,9 +500,9 @@ export default async function handler(
         requestedFolderKey
       );
 
-      // Fire-and-forget memory extraction after save completes
+      // Fire-and-forget memory extraction — gate runs inside extract.ts
       if (activeConversationId) {
-        const baseUrl = process.env.NEXTAUTH_URL || 'http://localhost:3000';
+        const baseUrl = process.env.NEXTAUTH_URL || 'http://localhost:4000';
         fetch(`${baseUrl}/api/memory/extract`, {
           method: 'POST',
           headers: {
@@ -410,7 +552,8 @@ async function streamChatWithRAG(
   res: NextApiResponse,
   forceRAG: boolean = false,
   abortSignal?: AbortSignal,
-  accumulator?: StreamAccumulator
+  accumulator?: StreamAccumulator,
+  folderKey?: TopicFolder | null
 ): Promise<{ fullResponse: string; sources: Array<{ title: string; url: string; snippet?: string }> }> {
   // Use external accumulator if provided, otherwise create local one
   const acc = accumulator || { content: '', sources: [] };
@@ -465,136 +608,189 @@ async function streamChatWithRAG(
       }
     }
 
-    // Prepare request body
-    const requestBody: any = {
-      model: DEEPSEEK_MODEL,
-      messages,
-      stream: true,
-      temperature: 0.7,
-      max_tokens: 2048,
-      thinking: DEEPSEEK_THINKING,
-    };
+    // Capture current user question once — used as context for routing and retrieval
+    const userQuestion = [...messages].reverse().find(m => m.role === 'user')?.content || '';
 
-    // Add RAG tools if enabled and NOT in forceRAG mode
-    // (in forceRAG mode, we already injected RAG results)
-    if (ENABLE_RAG && !forceRAG) {
-      requestBody.tools = getRagTools();
-      console.log('[chat/stream] RAG tools enabled - AI can decide when to search papers');
-    } else if (!ENABLE_RAG) {
-      console.log('[chat/stream] RAG disabled - using general knowledge only');
-    } else {
-      console.log('[chat/stream] Force RAG mode - RAG results already injected');
-    }
-
-    // First API call
-    const response = await fetch(`${DEEPSEEK_API_BASE}/chat/completions`, {
-      method: 'POST',
-      headers: {
-        'Content-Type': 'application/json',
-        'Authorization': `Bearer ${DEEPSEEK_API_KEY}`,
-      },
-      body: JSON.stringify(requestBody),
-      signal: abortSignal,
-    });
-
-    if (!response.ok) {
-      const errorText = await response.text();
-      console.error('[chat/stream] DeepSeek API error:', response.status, errorText);
-      res.write(`data: ${JSON.stringify({ type: 'error', error: 'API request failed' })}\n\n`);
-      res.end();
-      return { fullResponse: '', sources: [] };
-    }
-
-    const reader = response.body?.getReader();
-    if (!reader) {
-      res.write(`data: ${JSON.stringify({ type: 'error', error: 'No response body' })}\n\n`);
-      res.end();
-      return { fullResponse: '', sources: [] };
-    }
-
-    // Process stream and check for tool calls
-    // Pass accumulator to update in real-time for partial saves
-    const { shouldExecuteTools, toolCalls, assistantMessage } = await processFirstStream(reader, res, abortSignal, acc);
-
-    // Track partial response (for saving even if user stops mid-stream)
-    fullResponse = assistantMessage;
-    acc.content = assistantMessage;
-
-    // If AI requested tool calls, execute them and make second API call
-    if (shouldExecuteTools && toolCalls.length > 0) {
-      console.log(`[chat/stream] AI requested ${toolCalls.length} tool calls, executing RAG search...`);
-
-      // Add assistant message with tool calls to history
-      messages.push({
-        role: 'assistant',
-        content: assistantMessage || '',
-        tool_calls: toolCalls
+    // Web RAG routing follows the mini-program's two-stage decision pattern:
+    // a required, non-streaming classifier first decides whether retrieval is needed.
+    // The final streaming call then answers with no tools attached, which avoids
+    // auto tool-call misses and DSML/tool-call leakage in the user-visible stream.
+    if (!forceRAG && ENABLE_RAG) {
+      const decision = await routeRagNeed({
+        messages,
+        currentUserMessage: userQuestion,
+        folderKey,
+        signal: abortSignal,
       });
 
-      // Collect all sources from all tool calls
-      const allSources: Array<{ title: string; url: string; snippet?: string }> = [];
+      if (decision.shouldSearch) {
+        console.log('[chat/stream] RAG router selected search:', {
+          queryLength: decision.query.length,
+          reason: decision.reason,
+        });
+        writeStatus(res, 'Searching the ADHD research library...');
 
-      // Execute each tool call and add results
-      // 使用双LLM架构：如果开启智能摘要，先用第一个LLM提取核心发现
-      for (const toolCall of toolCalls) {
         try {
-          console.log(`[chat/stream] Executing tool: ${toolCall.function.name}`);
-
-          // Parse tool arguments to get query
-          const args = JSON.parse(toolCall.function.arguments);
-          const query = args.query || '';
-
-          // Get user's original question for smart summary context
-          const userMessage = messages.find(m => m.role === 'user');
-          const userQuestion = userMessage?.content || query;
-
-          // Use smart summary if available
-          writeStatus(res, 'Searching the ADHD research library...');
-          const toolResult = await executeRAGWithSmartSummary(
-            query,
+          const ragResult = await executeRAGWithSmartSummary(
+            decision.query || userQuestion,
             userQuestion,
-            args.top_k || 10
+            10
           );
 
-          console.log(`[chat/stream] Tool result using ${toolResult.summaryMode} mode`);
+          console.log(`[chat/stream] Router RAG: Using ${ragResult.summaryMode} mode`);
 
-          // Add formatted text to conversation for LLM
+          if (ragResult.sources.length > 0) {
+            console.log(`[chat/stream] Router RAG: Sending ${ragResult.sources.length} paper sources to frontend`);
+            collectedSources = ragResult.sources;
+            acc.sources = collectedSources;
+            res.write(`data: ${JSON.stringify({ type: 'sources', sources: collectedSources })}\n\n`);
+          }
+
           messages.push({
-            role: 'tool',
-            tool_call_id: toolCall.id,
-            content: toolResult.formattedText
+            role: 'system',
+            content: `Research papers found for the user's question:\n\n${ragResult.formattedText}\n\nPlease provide a comprehensive answer based on these research findings. Integrate the evidence naturally, and clearly distinguish research-backed guidance from general practical judgment.`,
           });
 
-          // Collect sources for frontend
-          allSources.push(...toolResult.sources);
-
-          // Send a status update to client with mode info
-          const modeInfo = toolResult.summaryMode === 'smart' ? '(智能摘要)' : '';
-          writeStatus(
-            res,
-            `Found ${toolResult.sources.length} research ${toolResult.sources.length === 1 ? 'paper' : 'papers'} ${modeInfo}. Synthesizing answer...`
-          );
+          const paperLabel = ragResult.sources.length === 1 ? 'paper' : 'papers';
+          writeStatus(res, `Found ${ragResult.sources.length} research ${paperLabel}. Synthesizing answer...`);
         } catch (error) {
-          console.error(`[chat/stream] Tool execution failed:`, error);
+          console.error('[chat/stream] Router RAG search failed:', error);
           messages.push({
-            role: 'tool',
-            tool_call_id: toolCall.id,
-            content: `Error: ${error instanceof Error ? error.message : 'Tool execution failed'}`
+            role: 'system',
+            content: 'Research retrieval was attempted but failed. Answer from your general knowledge, avoid pretending that papers were retrieved, and recommend professional evaluation when the topic is medical or safety-sensitive.',
           });
         }
+      } else {
+        console.log('[chat/stream] RAG router skipped search:', decision.reason);
+      }
+    }
+
+    // Streaming answer pass. RAG, when needed, has already been injected above.
+    const MAX_TOOL_ROUNDS = 1;
+    let needForcedSynthesis = false;
+
+    for (let round = 0; round < MAX_TOOL_ROUNDS; round++) {
+      const requestBody: any = {
+        model: DEEPSEEK_MODEL,
+        messages,
+        stream: true,
+        temperature: 0.7,
+        max_tokens: 2048,
+        thinking: DEEPSEEK_THINKING,
+      };
+
+      if (round === 0) {
+        console.log(ENABLE_RAG
+          ? '[chat/stream] RAG decision completed before final stream'
+          : '[chat/stream] RAG disabled - using general knowledge only');
       }
 
-      // Send sources to frontend immediately after tool execution and collect for database
-      if (allSources.length > 0) {
-        console.log(`[chat/stream] Sending ${allSources.length} paper sources to frontend`);
-        res.write(`data: ${JSON.stringify({ type: 'sources', sources: allSources })}\n\n`);
-        collectedSources = allSources;
+      const response = await fetch(`${DEEPSEEK_API_BASE}/chat/completions`, {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+          'Authorization': `Bearer ${DEEPSEEK_API_KEY}`,
+        },
+        body: JSON.stringify(requestBody),
+        signal: abortSignal,
+      });
+
+      if (!response.ok) {
+        const errorText = await response.text();
+        console.error(`[chat/stream] DeepSeek API error (round ${round}):`, response.status, errorText);
+        res.write(`data: ${JSON.stringify({ type: 'error', error: 'API request failed' })}\n\n`);
+        res.end();
+        return { fullResponse, sources: collectedSources };
       }
 
-      // Second API call with tool results
-      console.log('[chat/stream] Making second API call with RAG results...');
-      writeStatus(res, 'Generating research-informed answer...');
-      const secondResponse = await fetch(`${DEEPSEEK_API_BASE}/chat/completions`, {
+      const reader = response.body?.getReader();
+      if (!reader) {
+        res.write(`data: ${JSON.stringify({ type: 'error', error: 'No response body' })}\n\n`);
+        res.end();
+        return { fullResponse, sources: collectedSources };
+      }
+
+      const { finishReason, toolCalls, content } = await processOneRound(
+        reader, res, abortSignal, acc, fullResponse
+      );
+
+      fullResponse += content;
+      acc.content = fullResponse;
+      console.log(`[chat/stream] Round ${round}: finish_reason=${finishReason}, tool_calls=${toolCalls.length}, content_chars=${content.length}`);
+
+      // Natural stop — model wrote its answer
+      if (finishReason === 'stop') break;
+
+      // Tool calls requested — execute and continue loop
+      if (finishReason === 'tool_calls' && toolCalls.length > 0) {
+        if (round === MAX_TOOL_ROUNDS - 1) {
+          // Cap reached with model still wanting tools (DeepSeek #15 repetitive-call quirk).
+          // Don't execute the Nth tool call — the model has enough data from prior rounds.
+          // Trigger forced synthesis below instead.
+          console.warn(`[chat/stream] Hit MAX_TOOL_ROUNDS=${MAX_TOOL_ROUNDS}, forcing synthesis`);
+          needForcedSynthesis = true;
+          break;
+        }
+
+        messages.push({
+          role: 'assistant',
+          content: content || '',
+          tool_calls: toolCalls,
+        });
+
+        const roundSources: Array<{ title: string; url: string; snippet?: string }> = [];
+        writeStatus(res, 'Searching the ADHD research library...');
+
+        for (const toolCall of toolCalls) {
+          try {
+            console.log(`[chat/stream] Executing tool: ${toolCall.function.name}`);
+            const args = JSON.parse(toolCall.function.arguments);
+            const toolResult = await executeRAGWithSmartSummary(
+              args.query || '', userQuestion, args.top_k || 10
+            );
+            console.log(`[chat/stream] Tool result using ${toolResult.summaryMode} mode`);
+            messages.push({ role: 'tool', tool_call_id: toolCall.id, content: toolResult.formattedText });
+            roundSources.push(...toolResult.sources);
+          } catch (error) {
+            console.error('[chat/stream] Tool execution failed:', error);
+            messages.push({
+              role: 'tool',
+              tool_call_id: toolCall.id,
+              content: `Error: ${error instanceof Error ? error.message : 'Tool execution failed'}`,
+            });
+          }
+        }
+
+        if (roundSources.length > 0) {
+          collectedSources = [...collectedSources, ...roundSources];
+          res.write(`data: ${JSON.stringify({ type: 'sources', sources: collectedSources })}\n\n`);
+        }
+
+        const paperLabel = roundSources.length === 1 ? 'paper' : 'papers';
+        writeStatus(res, `Found ${roundSources.length} research ${paperLabel}. Synthesizing answer...`);
+        continue;
+      }
+
+      // Unexpected finish reason (e.g. 'length', 'content_filter') — close gracefully
+      console.warn(`[chat/stream] Round ${round}: unexpected finish_reason=${finishReason}`);
+      if (!res.writableEnded) res.write(`data: ${JSON.stringify({ type: 'done' })}\n\n`);
+      break;
+    }
+
+    // Forced synthesis: model burned through MAX_TOOL_ROUNDS without producing an answer.
+    // LangChain's `early_stopping_method='generate'` pattern — one final call without tools,
+    // forcing the model to synthesize from the research it already has.
+    if (needForcedSynthesis && !abortSignal?.aborted) {
+      console.log('[chat/stream] Starting forced synthesis pass');
+      writeStatus(res, 'Synthesizing answer from research...');
+
+      // Inject explicit instruction so the model doesn't try to emit DSML tool-calls anyway
+      messages.push({
+        role: 'system',
+        content: 'You have all the research findings you need above. Write your final answer to the user now based on these findings — do NOT request additional searches or emit any tool-call markup.',
+      });
+
+      const synthResponse = await fetch(`${DEEPSEEK_API_BASE}/chat/completions`, {
         method: 'POST',
         headers: {
           'Content-Type': 'application/json',
@@ -607,21 +803,26 @@ async function streamChatWithRAG(
           temperature: 0.7,
           max_tokens: 2048,
           thinking: DEEPSEEK_THINKING,
+          // No tools passed — model cannot call tools, must produce text
         }),
         signal: abortSignal,
       });
 
-      if (!secondResponse.ok) {
-        console.error('[chat/stream] Second API call failed');
-        res.write(`data: ${JSON.stringify({ type: 'error', error: 'Failed to generate response with research' })}\n\n`);
-        res.end();
-        return { fullResponse: '', sources: collectedSources };
+      if (synthResponse.ok) {
+        const synthReader = synthResponse.body?.getReader();
+        if (synthReader) {
+          const { content: synthContent, finishReason: synthFinish } = await processOneRound(
+            synthReader, res, abortSignal, acc, fullResponse
+          );
+          fullResponse += synthContent;
+          acc.content = fullResponse;
+          console.log(`[chat/stream] Forced synthesis: finish_reason=${synthFinish}, content_chars=${synthContent.length}`);
+        }
+      } else {
+        console.error('[chat/stream] Forced synthesis call failed:', synthResponse.status);
       }
 
-      const secondReader = secondResponse.body?.getReader();
-      if (secondReader) {
-        fullResponse = await streamFinalResponse(secondReader, res, abortSignal);
-      }
+      if (!res.writableEnded) res.write(`data: ${JSON.stringify({ type: 'done' })}\n\n`);
     }
 
     res.end();
@@ -672,30 +873,33 @@ function writeStatus(res: NextApiResponse, message: string) {
 }
 
 /**
- * Process first stream and detect tool calls
+ * Process one round of the streaming API response.
+ * Emits 'done' SSE only on finish_reason='stop'; all other termination is the caller's responsibility.
+ * baseContent tracks content from prior rounds so the accumulator stays cumulative for abort saves.
  */
-async function processFirstStream(
+async function processOneRound(
   reader: ReadableStreamDefaultReader<Uint8Array>,
   res: NextApiResponse,
   abortSignal?: AbortSignal,
-  accumulator?: StreamAccumulator
+  accumulator?: StreamAccumulator,
+  baseContent: string = ''
 ): Promise<{
-  shouldExecuteTools: boolean;
+  finishReason: string | null;
   toolCalls: Array<{ id: string; type: 'function'; function: { name: string; arguments: string } }>;
-  assistantMessage: string;
+  content: string;
 }> {
   const decoder = new TextDecoder();
   let buffer = '';
-  let assistantMessage = '';
+  let content = '';
+  const dsmlFilter = createDsmlFilter();
   const toolCalls: Array<{ id: string; type: 'function'; function: { name: string; arguments: string } }> = [];
   let currentToolCallIndex = -1;
   let finishReason: string | null = null;
 
   try {
     while (true) {
-      // Check if client is still connected
       if (!isClientConnected(res, abortSignal)) {
-        console.log('[chat/stream] Client disconnected during first stream processing');
+        console.log('[chat/stream] Client disconnected during round');
         break;
       }
 
@@ -708,141 +912,41 @@ async function processFirstStream(
 
       for (const line of lines) {
         const trimmedLine = line.trim();
-        if (!trimmedLine || trimmedLine === 'data: [DONE]') {
-          continue;
-        }
+        if (!trimmedLine || trimmedLine === 'data: [DONE]') continue;
 
         if (trimmedLine.startsWith('data: ')) {
           const jsonStr = trimmedLine.slice(6);
           try {
             const data = JSON.parse(jsonStr);
             const choice = data.choices?.[0];
-
             if (!choice) continue;
 
-            // Handle content delta (stream text to user)
             if (choice.delta?.content) {
-              assistantMessage += choice.delta.content;
-              // Update accumulator in real-time for partial saves on abort
-              if (accumulator) {
-                accumulator.content = assistantMessage;
+              const safe = feedDsmlFilter(dsmlFilter, choice.delta.content);
+              if (safe) {
+                content += safe;
+                if (accumulator) accumulator.content = baseContent + content;
+                res.write(`data: ${JSON.stringify({ type: 'token', content: safe })}\n\n`);
               }
-              res.write(`data: ${JSON.stringify({ type: 'token', content: choice.delta.content })}\n\n`);
             }
 
-            // Handle tool calls delta
             if (choice.delta?.tool_calls) {
-              if (toolCalls.length === 0) {
-                writeStatus(res, 'Searching the ADHD research library...');
-              }
-
               for (const toolCallDelta of choice.delta.tool_calls) {
                 const index = toolCallDelta.index;
-
-                // Initialize new tool call
                 if (index > currentToolCallIndex) {
                   currentToolCallIndex = index;
                   toolCalls[index] = {
                     id: toolCallDelta.id || `call_${Date.now()}_${index}`,
                     type: 'function',
-                    function: {
-                      name: toolCallDelta.function?.name || '',
-                      arguments: ''
-                    }
+                    function: { name: toolCallDelta.function?.name || '', arguments: '' },
                   };
                 }
-
-                // Append function name
-                if (toolCallDelta.function?.name) {
-                  toolCalls[index].function.name = toolCallDelta.function.name;
-                }
-
-                // Append function arguments
-                if (toolCallDelta.function?.arguments) {
-                  toolCalls[index].function.arguments += toolCallDelta.function.arguments;
-                }
+                if (toolCallDelta.function?.name) toolCalls[index].function.name = toolCallDelta.function.name;
+                if (toolCallDelta.function?.arguments) toolCalls[index].function.arguments += toolCallDelta.function.arguments;
               }
             }
 
-            // Capture finish reason
-            if (choice.finish_reason) {
-              finishReason = choice.finish_reason;
-            }
-          } catch (parseError) {
-            // Skip unparseable lines
-            continue;
-          }
-        }
-      }
-    }
-  } finally {
-    reader.releaseLock();
-  }
-
-  // Determine if we should execute tools
-  const shouldExecuteTools = finishReason === 'tool_calls' && toolCalls.length > 0;
-
-  if (shouldExecuteTools) {
-    console.log(`[chat/stream] Finish reason: tool_calls, collected ${toolCalls.length} tool calls`);
-  } else if (finishReason) {
-    console.log(`[chat/stream] Finish reason: ${finishReason}`);
-    res.write(`data: ${JSON.stringify({ type: 'done' })}\n\n`);
-  }
-
-  return { shouldExecuteTools, toolCalls, assistantMessage };
-}
-
-/**
- * Stream final response after tool execution
- * Returns the collected response text for database storage
- */
-async function streamFinalResponse(
-  reader: ReadableStreamDefaultReader<Uint8Array>,
-  res: NextApiResponse,
-  abortSignal?: AbortSignal
-): Promise<string> {
-  const decoder = new TextDecoder();
-  let buffer = '';
-  let collectedResponse = '';
-
-  try {
-    while (true) {
-      // Check if client is still connected
-      if (!isClientConnected(res, abortSignal)) {
-        console.log('[chat/stream] Client disconnected during final stream');
-        break;
-      }
-
-      const { done, value } = await reader.read();
-      if (done) break;
-
-      buffer += decoder.decode(value, { stream: true });
-      const lines = buffer.split('\n');
-      buffer = lines.pop() || '';
-
-      for (const line of lines) {
-        const trimmedLine = line.trim();
-        if (!trimmedLine || trimmedLine === 'data: [DONE]') {
-          if (trimmedLine === 'data: [DONE]') {
-            res.write('data: [DONE]\n\n');
-          }
-          continue;
-        }
-
-        if (trimmedLine.startsWith('data: ')) {
-          const jsonStr = trimmedLine.slice(6);
-          try {
-            const data = JSON.parse(jsonStr);
-            const tokenContent = data.choices?.[0]?.delta?.content;
-
-            if (tokenContent) {
-              collectedResponse += tokenContent;
-              res.write(`data: ${JSON.stringify({ type: 'token', content: tokenContent })}\n\n`);
-            }
-
-            if (data.choices?.[0]?.finish_reason === 'stop') {
-              res.write(`data: ${JSON.stringify({ type: 'done' })}\n\n`);
-            }
+            if (choice.finish_reason) finishReason = choice.finish_reason;
           } catch {
             continue;
           }
@@ -853,5 +957,16 @@ async function streamFinalResponse(
     reader.releaseLock();
   }
 
-  return collectedResponse;
+  const tail = flushDsmlFilter(dsmlFilter);
+  if (tail) {
+    content += tail;
+    if (accumulator) accumulator.content = baseContent + content;
+    res.write(`data: ${JSON.stringify({ type: 'token', content: tail })}\n\n`);
+  }
+
+  if (finishReason === 'stop') {
+    res.write(`data: ${JSON.stringify({ type: 'done' })}\n\n`);
+  }
+
+  return { finishReason, toolCalls, content };
 }
