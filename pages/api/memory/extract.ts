@@ -254,6 +254,59 @@ async function callDeepSeek(messages: Array<{ role: 'system' | 'user'; content: 
   return responseText;
 }
 
+const MEMORY_GATE_SYSTEM_PROMPT = `You are a memory gate for a family profile system.
+Decide if the recent conversation contains facts worth saving to the user's family profile.
+
+Return shouldExtract=true if the messages contain:
+- Facts about the child (name, age, school, behavior, health, physical observations, habits, abilities)
+- Family situation (living arrangement, siblings, parent context)
+- Parent concerns, goals, or direct observations about their child
+- Medical, educational, behavioral, or progress information
+
+Return shouldExtract=false if the messages are:
+- Pure greetings, thanks, or small talk with no personal facts
+- Generic questions about ADHD with no personal context about their child
+- Requests to continue, repeat, or elaborate with no new personal information
+
+Output only JSON, no extra text:
+{"shouldExtract": true, "reason": "brief reason"}`;
+
+interface ConversationMessage {
+  role: string;
+  content: string;
+}
+
+async function shouldExtractMemory(messages: ConversationMessage[]): Promise<boolean> {
+  // Gate uses last 4 messages (both roles) for context
+  const gateMessages = messages.slice(0, 4);
+  const hasUserMessage = gateMessages.some((m) => m.role === 'user');
+  if (!hasUserMessage) return false;
+
+  const formatted = gateMessages
+    .map((m, i) => `[${i + 1}][${m.role}] ${m.content.trim()}`)
+    .join('\n');
+
+  try {
+    const responseText = await callDeepSeek(
+      [
+        { role: 'system', content: MEMORY_GATE_SYSTEM_PROMPT },
+        { role: 'user', content: `Recent conversation:\n${formatted}\n\nShould facts be extracted?` },
+      ],
+      100
+    );
+    const cleaned = cleanJsonResponse(responseText);
+    const parsed = JSON.parse(cleaned) as { shouldExtract?: boolean; reason?: string };
+    if (typeof parsed.shouldExtract === 'boolean') {
+      console.log(`[memory/extract] Gate: shouldExtract=${parsed.shouldExtract}, reason=${parsed.reason}`);
+      return parsed.shouldExtract;
+    }
+  } catch (err) {
+    // Fail-open: gate errors must not block extraction
+    console.warn('[memory/extract] Gate failed, defaulting to extract:', err instanceof Error ? err.message : err);
+  }
+  return true;
+}
+
 async function rewriteSystemSummary(
   supabase: ReturnType<typeof getSupabaseAdmin>,
   userId: string
@@ -352,12 +405,11 @@ export default async function handler(
       return res.status(404).json({ error: 'User not found' });
     }
 
-    // Load last 10 user messages from this conversation
+    // Load last 10 messages (all roles) — gate uses last 4, extraction uses user-only subset
     const { data: messages, error: msgError } = await supabase
       .from('messages')
-      .select('content')
+      .select('role, content')
       .eq('conversation_id', conversationId)
-      .eq('role', 'user')
       .order('created_at', { ascending: false })
       .limit(10);
 
@@ -367,11 +419,22 @@ export default async function handler(
     }
 
     if (!messages || messages.length === 0) {
-      // Skip extraction only when there is no user-authored content.
       return res.status(200).json({ success: true, added: 0, updated: 0, deleted: 0 });
     }
 
-    const recentMessages = messages.reverse().map((m) => m.content);
+    // messages are newest-first; reverse to chronological for readability
+    const chronological = [...messages].reverse();
+
+    // AI Gate: lightweight classifier before running full extraction
+    const gate = await shouldExtractMemory(chronological.slice(-4));
+    if (!gate) {
+      return res.status(200).json({ success: true, skipped: 'gate_no_family_context', added: 0, updated: 0, deleted: 0 });
+    }
+
+    // Extraction uses user messages only
+    const recentMessages = chronological
+      .filter((m) => m.role === 'user')
+      .map((m) => m.content);
 
     // Load existing active memory items
     const { data: existingFacts } = await supabase

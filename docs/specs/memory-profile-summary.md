@@ -1,6 +1,6 @@
 # Module Spec: Memory And Profile Summary
 
-> Status: REVISED — 2026-03-17 | Self-reviewed: 2026-03-17 | Cross-reviewed: 2026-03-17, 2 P0 + 5 P1 fixed | Implementation status: Partially implemented
+> Status: REVISED — 2026-03-17 | Self-reviewed: 2026-03-17 | Cross-reviewed: 2026-03-17, 2 P0 + 5 P1 fixed | Amended: 2026-05-14 (Memory Gate addendum) | Implementation status: Partially implemented
 > Module: memory-profile-summary
 > Routes: `pages/api/memory/`
 > Scope: Conversation-derived memory extraction (A.U.D.N.) + editable family summary + prompt injection
@@ -28,7 +28,9 @@
 | Deviation | Blueprint Says | MVP Decision | Reason | Upgrade Path |
 |---|---|---|---|---|
 | Retrieval algorithm | LLM judges relevance for >5 facts | Heuristic scoring (confidence × 0.5 + recency × 0.3 + usage × 0.2) | Cost efficiency — avoid extra LLM call per chat turn | Replace scoring with LLM relevance call in retrieval route |
-| Extraction trigger location | Server-side async after done event | Client-side fire-and-forget POST after receiving `done` SSE | Avoids cross-module edit to `stream.ts`; see § 3.1 | Move to server-side hook when chat module supports extraction callbacks |
+| Extraction trigger location | Server-side async after done event | Server-side fire-and-forget POST inside `stream.ts` after save completes | Implementation followed server-side path directly; client-side hook was planned but not built | No change needed; server-side is simpler and equally reliable |
+| Memory Gate | Not mentioned in blueprint | AI LLM gate (max_tokens=100, temperature=0.1) embedded in `extract.ts` before fact extraction | Blueprint has no pre-filter; keyword matching was implemented ad hoc and caused false negatives; AI gate is needed | Gate prompt, token budget, and fail-open behavior are Provisional; promote to Accepted after 30-day observation |
+| Extraction + A.U.D.N. combined | Not specified | Single LLM call handles both extraction and A.U.D.N. decisions | WeChat mini-program separates them; Mem0 paper validates single-call approach for cost efficiency | Split into two calls if combined accuracy proves insufficient |
 
 ### References
 
@@ -42,8 +44,9 @@
 - `lib/prompts.ts` accepts `familyNotes?: string` and `extractedFacts?: string[]`
 - `profile_summaries` and `memory_items` tables exist in `supabase/migrations/20260506000300_memory_profile_summary_tables.sql:L3-L59`
 - Memory API routes exist under `pages/api/memory/`; extraction starts in `pages/api/memory/extract.ts:L1-L18`, and relevant retrieval starts in `pages/api/memory/relevant.ts:L1-L53`
-- Chat stream handler triggers server-side extraction after stream completion in `pages/api/chat/stream.ts`.
+- Chat stream handler triggers server-side extraction after stream completion in `pages/api/chat/stream.ts:L363-L378`.
 - 2026-05-08 quality update: extraction prompt must normalize profile facts instead of storing raw first-person user phrasing.
+- **Known defect (2026-05-14)**: `stream.ts:L363` and `extract.ts:L376` use `mentionsFamilyOrChildSituation()` — a regex keyword gate in `utils/lightweight-content-gates.ts`. This causes false negatives (e.g. "he does have white and yellow patterns on one of his footnails" is silently skipped). The keyword gate is being replaced by the AI Memory Gate described in § 3.1 below.
 
 ### Execution Baseline
 
@@ -208,16 +211,73 @@ Each `memory_item` maps to the blueprint's `extractedFact`:
 
 Blueprint: `每次用户对话后自动运行` / `异步执行：记忆提取`
 
-**Client-side trigger** (avoids cross-module edit to `pages/api/chat/stream.ts`):
+**Server-side trigger** (actual implementation):
 
-- The chat client (`stores/chatStore.ts` or the component calling the stream) already receives the `done` SSE event
-- After receiving `done`, the client fires a fire-and-forget `POST /api/memory/extract` with the `conversationId`
-- Implementation: create a `hooks/useMemoryExtraction.ts` hook that listens for stream completion and triggers extraction
-- Only trigger if: user is authenticated (not guest) AND conversation has ≥2 user messages
+- After `saveMessagesToDatabase` completes in `pages/api/chat/stream.ts`, a fire-and-forget `fetch POST /api/memory/extract` is sent with `{ conversationId }` and the session cookie forwarded.
+- Only trigger if: user is authenticated (`session?.user?.email` present) AND `activeConversationId` is set.
+- Guest sessions never trigger extraction.
 
-**Why client-side**: `pages/api/chat/stream.ts` is in the chat module namespace. Per CLAUDE.md concurrency rules, the memory module must not modify files outside `pages/api/memory/` and `components/Memory/`. The client-side trigger achieves the same result without cross-module coupling.
+### 3.1.1 Memory Gate (AI LLM classifier — replaces keyword matching)
 
-**Future upgrade**: When the chat module adds a post-completion callback system, extraction can move server-side for reliability.
+Before running fact extraction, `extract.ts` calls a lightweight LLM gate to decide whether the conversation contains family/child facts worth extracting.
+
+**Input**: last 10 messages from the conversation (both `user` and `assistant` roles, loaded in one DB query); gate uses the last 4 of those for context.
+
+**LLM call parameters**:
+- `temperature: 0.1`, `max_tokens: 100`
+- Same DeepSeek client as extraction (`callDeepSeek`)
+
+**System prompt**:
+
+```
+You are a memory gate for a family profile system.
+Decide if the recent conversation contains facts worth saving to the user's family profile.
+
+Return shouldExtract=true if the messages contain:
+- Facts about the child (name, age, school, behavior, health, physical observations, habits, abilities)
+- Family situation (living arrangement, siblings, parent context)
+- Parent concerns, goals, or direct observations about their child
+- Medical, educational, behavioral, or progress information
+
+Return shouldExtract=false if the messages are:
+- Pure greetings, thanks, or small talk with no personal facts
+- Generic questions about ADHD with no personal context about their child
+- Requests to continue/repeat/elaborate with no new personal information
+
+Output only JSON, no extra text:
+{"shouldExtract": true, "reason": "brief reason"}
+```
+
+**Fail-open rule**: If the LLM call fails, times out, or returns unparseable JSON, default to `shouldExtract = true` and proceed with extraction. Do not silently drop potentially valuable data.
+
+**DB query change**: The existing user-messages-only query is replaced by a single query for the last 10 messages without role filter:
+```ts
+supabase.from('messages')
+  .select('role, content')
+  .eq('conversation_id', conversationId)
+  .order('created_at', { ascending: false })
+  .limit(10)
+```
+Gate receives the 4 most recent (`.slice(0, 4)`); extraction receives the user-only subset (`.filter(m => m.role === 'user')`). One query, zero extra round trips.
+
+**Reference**: Adapted from `api/core/memory-extractor.js:shouldTriggerMemoryExtraction` in the WeChat mini-program (same Gate LLM pattern, same fail-open behavior, adapted for bilingual English/Chinese input and Supabase storage).
+
+### 3.1.2 Search Ledger
+
+| Decision ID | Query | Result | Source URL |
+|---|---|---|---|
+| ADR-GATE-1 | `Mem0 memory gate LLM classifier production` | Found(partial) | https://arxiv.org/pdf/2504.19413 |
+| ADR-GATE-1 | `LLM memory relevance gate separate classifier` | Found(partial) | https://aclanthology.org/2025.acl-long.413.pdf |
+| ADR-GATE-2 | `LLM extraction AUDN single call vs separate calls` | Found(partial) | https://arxiv.org/pdf/2504.19413 |
+| ADR-GATE-3 | `WeChat mini-program memory-extractor.js` | Found | internal: `/Users/jamesguu/WeChatProjects/adhdhelper-cursor/api/core/memory-extractor.js:L180-L286` |
+
+### 3.1.3 ADR-lite
+
+| Decision ID | Decision | Risk | External Evidence | Local Evidence | Supported Claim | Unsupported Gap | Status | Confirmation |
+|---|---|---|---|---|---|---|---|---|
+| ADR-GATE-1 | Replace keyword gate with AI LLM gate (max_tokens=100, temp=0.1, fail-open) inside `extract.ts` | Normal | Found(partial): Mem0 paper uses extraction-embedded relevance filter; WeChat mini-program uses explicit gate with identical parameters | `utils/lightweight-content-gates.ts` caused false negative on physical observation message (2026-05-14) | Explicit lightweight gate prevents wasted extraction LLM calls; fail-open prevents data loss | Mem0 paper does not mandate a separate gate step; optimal token budget for this domain is unvalidated | Provisional (expires 2026-06-14) | Monitor `skipped: no_family_context` log rate after deploy; promote to Accepted if false-negative rate is zero over 30 days |
+| ADR-GATE-2 | Keep extraction + A.U.D.N. in a single LLM call (do not split like WeChat) | Normal | Found(partial): Mem0 paper validates single-call for write-path cost efficiency | Current `extract.ts:L390-L413` combined call works correctly for existing facts | Single call reduces latency and cost; industry validated | WeChat splits calls for higher accuracy; split accuracy advantage is unquantified | Accepted | No action required unless combined accuracy degrades |
+| ADR-GATE-3 | Load last 10 messages (all roles, one query) and split for gate vs. extraction | Normal | Exempt: internal DB query design, no external standard needed | Current query at `extract.ts:L357-L368` loads user-only; new query adds role column | One query round trip instead of two | No external validation needed | Accepted | TypeScript + build pass |
 
 ### 3.2 Extraction Input
 
