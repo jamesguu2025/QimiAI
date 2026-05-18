@@ -14,11 +14,19 @@ export function RAGSources({ sources }: RAGSourcesProps) {
     return null;
   }
 
+  const formatMeta = (source: RAGSource) => {
+    const author = Array.isArray(source.authors) && source.authors.length > 0
+      ? `${source.authors[0]}${source.authors.length > 1 ? ' et al.' : ''}`
+      : null;
+    return [source.year, source.journal, author].filter(Boolean).join(' · ');
+  };
+
   return (
     <div className="mt-3 border-t border-gray-200 pt-3">
       <button
         onClick={() => setIsExpanded(!isExpanded)}
-        className="flex items-center gap-2 text-sm text-gray-600 hover:text-gray-900 transition-colors"
+        className="inline-flex items-center gap-2 rounded-md border border-teal-100 bg-teal-50 px-3 py-1.5 text-sm text-teal-800 hover:border-teal-200 hover:bg-teal-100 transition-colors"
+        aria-expanded={isExpanded}
       >
         <svg
           className={`w-4 h-4 transition-transform ${isExpanded ? 'rotate-90' : ''}`}
@@ -29,7 +37,7 @@ export function RAGSources({ sources }: RAGSourcesProps) {
           <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 5l7 7-7 7" />
         </svg>
         <span className="font-medium">
-          {sources.length} Research {sources.length === 1 ? 'Paper' : 'Papers'} Referenced
+          Based on {sources.length} research {sources.length === 1 ? 'paper' : 'papers'}
         </span>
       </button>
 
@@ -57,6 +65,11 @@ export function RAGSources({ sources }: RAGSourcesProps) {
                   ) : (
                     <p className="text-sm font-medium text-gray-900 line-clamp-2">
                       {source.title}
+                    </p>
+                  )}
+                  {formatMeta(source) && (
+                    <p className="mt-1 text-xs text-gray-500 line-clamp-1">
+                      {formatMeta(source)}
                     </p>
                   )}
                   {source.snippet && (

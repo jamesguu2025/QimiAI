@@ -12,6 +12,18 @@ import { getSupabaseAdmin } from '../../../lib/supabase';
 import { isTopicFolder, normalizeTopicFolder, TopicFolder } from '../../../types/chat';
 import { routeRagNeed } from '../../../lib/rag-router';
 
+type ChatSource = {
+  title: string;
+  url: string;
+  snippet?: string;
+  year?: number | string;
+  journal?: string;
+  authors?: string[];
+  doi?: string;
+  pmid?: string;
+};
+type HistoryMessage = { role: string; content: string; sources?: ChatSource[] };
+
 // DeepSeek V3.2/V4 emits DSML markers using FULLWIDTH vertical lines (U+FF5C `｜`),
 // often doubled: `<｜｜DSML｜｜tagname>`. ASCII `|` is also seen in some variants.
 // We normalize `｜` → `|` and match 1+ pipes on either side of `DSML`.
@@ -156,6 +168,67 @@ const DEEPSEEK_MODEL = process.env.DEEPSEEK_MODEL || 'deepseek-v4-flash';
 const DEEPSEEK_THINKING = { type: 'disabled' };
 const ENABLE_RAG = process.env.ENABLE_RAG === 'true';
 
+function shouldReusePriorSources(userMessage: string): boolean {
+  return /\b(re-?output|rewrite|restate|repeat|again|same answer|previous answer|above|same plan)\b|重新输出|再输出|重写|复述|再说一遍|刚才|上面|同一个方案/i.test(userMessage);
+}
+
+function getRecentHistorySources(conversationHistory: unknown): ChatSource[] {
+  if (!Array.isArray(conversationHistory)) return [];
+
+  const seen = new Set<string>();
+  const sources: ChatSource[] = [];
+  for (const msg of conversationHistory.slice(-10).reverse() as HistoryMessage[]) {
+    if (!Array.isArray(msg.sources) || msg.sources.length === 0) continue;
+    for (const source of msg.sources) {
+      if (!source?.url || !source.title || seen.has(source.url)) continue;
+      seen.add(source.url);
+      sources.push({
+        title: source.title,
+        url: source.url,
+        snippet: source.snippet,
+        year: source.year,
+        journal: source.journal,
+        authors: source.authors,
+        doi: source.doi,
+        pmid: source.pmid,
+      });
+      if (sources.length >= 10) return sources;
+    }
+  }
+  return sources;
+}
+
+function formatSourceLinksForPrompt(sources: ChatSource[]): string {
+  return sources
+    .filter(source => source.url)
+    .map((source, index) => {
+      const meta = [
+        source.year,
+        source.journal,
+        Array.isArray(source.authors) && source.authors.length > 0 ? `${source.authors[0]}${source.authors.length > 1 ? ' et al.' : ''}` : null,
+      ].filter(Boolean).join(' | ');
+      return `${index + 1}. [${source.title}](${source.url})${meta ? ` — ${meta}` : ''}`;
+    })
+    .join('\n');
+}
+
+function buildRagAnswerInstruction(sourceCount: number): string {
+  const paperLabel = sourceCount === 1 ? 'paper' : 'papers';
+  return `Use the retrieved research as the backbone for this answer, not as optional decoration.
+
+How to answer:
+- Start by answering the parent's actual question in plain English.
+- Let the studies constrain the recommendation: intervention choice, frequency, duration, expected benefit, limits, and confidence should come from the research when available.
+- If a study provides concrete parameters, use them instead of inventing generic ones.
+- Do not turn the answer into a literature review. Mention the evidence naturally where it supports a key point.
+- Include 1-3 clickable Markdown citations in the body when making evidence-based claims, using the source links provided above.
+- Also rely on the separate "Based on ${sourceCount} research ${paperLabel}" source list that the UI will show below the message.
+- If the research does not directly support a claim, say that part is practical judgment or clinical/common-sense guidance rather than pretending it is paper-backed.
+- If you include saveable guidance, format a compact Growth Plan-ready block with: Goal, Try this for, action table when there are multiple steps, Watch for, and Why this may help. This block should be self-contained enough to save.
+- Use a Markdown table for multiple actions, stages, repeated timing/frequency fields, school/home comparisons, or weekly schedules.
+- For a single strategy, keep When, How often, and How long on separate lines.`;
+}
+
 /**
  * Save messages to database for logged-in users
  */
@@ -164,7 +237,7 @@ async function saveMessagesToDatabase(
   userMessage: string,
   aiResponse: string,
   conversationId?: string,
-  sources?: Array<{ title: string; url: string; snippet?: string }>,
+  sources?: ChatSource[],
   folderKey?: TopicFolder | null
 ): Promise<string | null> {
   try {
@@ -324,6 +397,9 @@ export default async function handler(
     }
 
     const { content, attachments, conversationHistory, userProfile, forceRAG, conversationId } = req.body;
+    const reusableSources = shouldReusePriorSources(content || '')
+      ? getRecentHistorySources(conversationHistory)
+      : [];
     const requestedFolderKey = isTopicFolder(req.body.folderKey)
       ? normalizeTopicFolder(req.body.folderKey)
       : null;
@@ -417,6 +493,13 @@ export default async function handler(
       }
     }
 
+    if (reusableSources.length > 0) {
+      messages.push({
+        role: 'system',
+        content: `The user is asking to restate or re-output a previous answer. Reuse these previously retrieved research source links when citing evidence in the new answer. Include clickable Markdown links in the body when referencing specific studies:\n${formatSourceLinksForPrompt(reusableSources)}`,
+      });
+    }
+
     // Add current user message
     messages.push({ role: 'user', content: content || '' });
 
@@ -462,8 +545,12 @@ export default async function handler(
       }
     }
 
+    if (reusableSources.length > 0) {
+      res.write(`data: ${JSON.stringify({ type: 'sources', sources: reusableSources })}\n\n`);
+    }
+
     // Shared accumulator to track content even if abort happens
-    const accumulator = { content: '', sources: [] as Array<{ title: string; url: string; snippet?: string }> };
+    const accumulator = { content: '', sources: reusableSources };
 
     // Call DeepSeek with potential RAG tool support
     const { fullResponse, sources } = await streamChatWithRAG(
@@ -539,7 +626,7 @@ export default async function handler(
  */
 interface StreamAccumulator {
   content: string;
-  sources: Array<{ title: string; url: string; snippet?: string }>;
+  sources: ChatSource[];
 }
 
 /**
@@ -554,11 +641,11 @@ async function streamChatWithRAG(
   abortSignal?: AbortSignal,
   accumulator?: StreamAccumulator,
   folderKey?: TopicFolder | null
-): Promise<{ fullResponse: string; sources: Array<{ title: string; url: string; snippet?: string }> }> {
+): Promise<{ fullResponse: string; sources: ChatSource[] }> {
   // Use external accumulator if provided, otherwise create local one
   const acc = accumulator || { content: '', sources: [] };
   let fullResponse = '';
-  let collectedSources: Array<{ title: string; url: string; snippet?: string }> = [];
+  let collectedSources: ChatSource[] = [...acc.sources];
 
   try {
     // If forceRAG is enabled and ENABLE_RAG is true, make direct RAG call first
@@ -593,7 +680,7 @@ async function streamChatWithRAG(
         // Inject RAG results into conversation as a system message
         messages.push({
           role: 'system',
-          content: `Research papers found for the user's question:\n\n${ragResult.formattedText}\n\nPlease provide a comprehensive answer based on these research findings.`
+          content: `Research papers found for the user's question:\n\n${ragResult.formattedText}\n\n${buildRagAnswerInstruction(ragResult.sources.length)}`
         });
 
         // Send status update with mode info
@@ -648,7 +735,7 @@ async function streamChatWithRAG(
 
           messages.push({
             role: 'system',
-            content: `Research papers found for the user's question:\n\n${ragResult.formattedText}\n\nPlease provide a comprehensive answer based on these research findings. Integrate the evidence naturally, and clearly distinguish research-backed guidance from general practical judgment.`,
+            content: `Research papers found for the user's question:\n\n${ragResult.formattedText}\n\n${buildRagAnswerInstruction(ragResult.sources.length)}`,
           });
 
           const paperLabel = ragResult.sources.length === 1 ? 'paper' : 'papers';
@@ -738,7 +825,7 @@ async function streamChatWithRAG(
           tool_calls: toolCalls,
         });
 
-        const roundSources: Array<{ title: string; url: string; snippet?: string }> = [];
+        const roundSources: ChatSource[] = [];
         writeStatus(res, 'Searching the ADHD research library...');
 
         for (const toolCall of toolCalls) {
@@ -787,7 +874,7 @@ async function streamChatWithRAG(
       // Inject explicit instruction so the model doesn't try to emit DSML tool-calls anyway
       messages.push({
         role: 'system',
-        content: 'You have all the research findings you need above. Write your final answer to the user now based on these findings — do NOT request additional searches or emit any tool-call markup.',
+        content: `You have all the research findings you need above. Write your final answer to the user now based on these findings. Do NOT request additional searches or emit any tool-call markup.\n\n${buildRagAnswerInstruction(collectedSources.length)}`,
       });
 
       const synthResponse = await fetch(`${DEEPSEEK_API_BASE}/chat/completions`, {

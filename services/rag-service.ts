@@ -43,6 +43,13 @@ export interface PaperResult {
   topic?: string;
 }
 
+function getPaperUrl(paper: PaperResult): string {
+  if (paper.url) return paper.url;
+  if (paper.doi) return `https://doi.org/${paper.doi}`;
+  if (paper.pmid) return `https://pubmed.ncbi.nlm.nih.gov/${paper.pmid}`;
+  return '';
+}
+
 /**
  * Search request options
  */
@@ -125,6 +132,12 @@ export function formatPapersForLLM(papers: PaperResult[]): string {
     if (paper.url) {
       sections.push(`**Source**: ${paper.url}`);
       sections.push('');
+    } else if (paper.doi) {
+      sections.push(`**Source**: https://doi.org/${paper.doi}`);
+      sections.push('');
+    } else if (paper.pmid) {
+      sections.push(`**Source**: https://pubmed.ncbi.nlm.nih.gov/${paper.pmid}`);
+      sections.push('');
     }
   });
 
@@ -193,7 +206,25 @@ export interface RAGToolCallResult {
     title: string;
     url: string;
     snippet?: string;
+    year?: number | string;
+    journal?: string;
+    authors?: string[];
+    doi?: string;
+    pmid?: string;
   }>;
+}
+
+function toRAGSource(paper: PaperResult) {
+  return {
+    title: paper.title,
+    url: getPaperUrl(paper),
+    snippet: paper.abstract.slice(0, 200) + (paper.abstract.length > 200 ? '...' : ''),
+    year: paper.year,
+    journal: paper.journal,
+    authors: paper.authors,
+    doi: paper.doi,
+    pmid: paper.pmid,
+  };
 }
 
 /**
@@ -232,11 +263,7 @@ export async function executeRAGToolCall(toolCall: {
     const formattedText = `${formattedResults}\n\n**Topic Distribution**: ${topicsInfo}`;
 
     // Convert papers to frontend sources format
-    const sources = papers.map(paper => ({
-      title: paper.title,
-      url: paper.url || `https://pubmed.ncbi.nlm.nih.gov/${paper.pmid || ''}`,
-      snippet: paper.abstract.slice(0, 200) + (paper.abstract.length > 200 ? '...' : ''),
-    }));
+    const sources = papers.map(toRAGSource);
 
     return {
       formattedText,
@@ -280,11 +307,13 @@ export async function summarizePapers(
       const authors = paper.authors?.join(', ') || '研究团队';
       const title = paper.title || '相关研究';
       const content = paper.abstract || '';
+      const sourceUrl = getPaperUrl(paper) || '未提供';
 
       return `【论文 ${i + 1}】
 标题: ${title}
 作者: ${authors}
 年份: ${year}
+原文链接: ${sourceUrl}
 内容摘要: ${content.substring(0, 2000)}${content.length > 2000 ? '...' : ''}`;
     }).join('\n\n---\n\n');
 
@@ -298,6 +327,7 @@ export async function summarizePapers(
 3. 保留关键数据（样本量、效果百分比等）
 4. 语言通俗，家长能听懂
 5. 如果研究有局限性（样本小、只针对特定人群等），要诚实告知
+6. 引用具体论文时保留可点击 Markdown 链接，例如 [作者 2024](https://...)
 
 论文内容：
 ${papersText}
@@ -364,11 +394,11 @@ export async function executeRAGWithSmartSummary(
   const papers = await searchPapers({ query, top_k: topK });
 
   // 2. 转换为前端显示格式
-  const sources = papers.map(paper => ({
-    title: paper.title,
-    url: paper.url || `https://pubmed.ncbi.nlm.nih.gov/${paper.pmid || ''}`,
-    snippet: paper.abstract.slice(0, 200) + (paper.abstract.length > 200 ? '...' : ''),
-  }));
+  const sources = papers.map(toRAGSource);
+  const sourceLinks = sources
+    .filter(source => source.url)
+    .map((source, index) => `${index + 1}. [${source.title}](${source.url})`)
+    .join('\n');
 
   // 3. 根据开关决定使用哪种模式
   if (ENABLE_SMART_SUMMARY && userQuestion) {
@@ -379,7 +409,7 @@ export async function executeRAGWithSmartSummary(
     if (summary) {
       console.log('[RAG] ✅ 智能摘要生成成功');
       return {
-        formattedText: `【研究支持】在ADHD研究数据库中找到 ${papers.length} 篇相关研究\n\n${summary}`,
+        formattedText: `Research support: found ${papers.length} relevant ADHD studies.\n\n${summary}\n\nClickable source links:\n${sourceLinks || 'No source links available.'}`,
         sources,
         summaryMode: 'smart',
       };
@@ -398,7 +428,7 @@ export async function executeRAGWithSmartSummary(
     .join(', ');
 
   return {
-    formattedText: `${formattedResults}\n\n**Topic Distribution**: ${topicsInfo}`,
+    formattedText: `${formattedResults}\n\n**Clickable Source Links**:\n${sourceLinks || 'No source links available.'}\n\n**Topic Distribution**: ${topicsInfo}`,
     sources,
     summaryMode: 'raw',
   };

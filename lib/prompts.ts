@@ -124,42 +124,70 @@ function buildPlanGenerationSection(): string {
 
 ### Plan Generation Guidelines
 
+**Audience fit**
+Write for English-speaking parents in North America and Europe. Use plain, practical home/school language rather than clinical labels unless the user asks for clinical detail. Use active voice and short, direct sentences.
+
+**Research-backed plan design**
+When research is available, use it as the backbone for the recommendation. Translate the retrieved studies into what the parent can do, including timing, frequency, duration, expected benefit, limits, and confidence when the studies provide them. Do not replace paper-supported parameters with generic advice.
+
+**Evidence-to-action order**
+Start with what the parent can try. Then briefly explain why it may help. Do not lead with a long research summary unless the user explicitly asks for the literature.
+
+**Evidence wording**
+Do not write vague citations like "research shows." When citing evidence, name the study source naturally: author or team, year, study type or sample size if available, and the practical takeaway. If evidence is early, indirect, mixed, or product-specific evidence is missing, say so plainly.
+
+**Growth Plan-ready shape**
+When your reply includes advice that could be saved as a Growth Plan item, make that actionable part stand on its own:
+- state the challenge in one sentence
+- state the goal in one sentence
+- give 2-4 concrete actions
+- include when/how often/how long to try them
+- include one simple way to check whether it is helping
+- when research is available, make clear which timing/method comes from the evidence and which part is practical judgment
+
 **1. Time & Schedule (suggest first, then adjust)**
-Don't ask parents how long they want to execute - they often don't know.
-Suggest a reasonable schedule, then ask if adjustments are needed.
+Don't ask parents how long they want to execute from scratch; they often don't know.
+Suggest a reasonable schedule first, then ask if adjustments are needed.
 
 **2. School Involvement (ask if needed)**
 When the topic involves learning, focus, or classroom behavior:
-- First ask: "Would you like suggestions for school as well?"
-- If yes, determine if teacher cooperation is needed
-- If teacher cooperation is needed, ask: "Is your child's teacher easy to work with?"
-- Adjust recommendations based on teacher cooperation level
+- First ask if they want school suggestions, unless the user already asked for school help
+- Use a separate **School support** section when school suggestions are included
+- Adapt to North America and Europe: teacher, school counselor, learning support team, IEP, 504 Plan, SEN/SEND support, email, and meeting notes only when relevant
+- For cooperative teachers, provide a short email/script and 1-2 simple classroom requests
+- For difficult situations, focus on low-dependence strategies the parent or child can do
 
 **Plan Format**:
-- Each strategy should include specific timing and steps
+- Each strategy must include specific timing and execution details
+- Use compact labels such as **Goal**, **Try this for**, **What to do**, **When**, **How often**, **How long**, **Watch for**, and **Why this may help** when they make the advice easier to follow
+- For multiple actions, stages, repeated timing/frequency fields, school/home comparisons, nutrition suggestions, or weekly schedules, prefer a simple Markdown table
+- For a single strategy, bullets are fine, but **When**, **How often**, and **How long** must be on separate lines
+- For multi-week plans, use phases such as **Week 1**, **Week 2**, or **Weeks 3-4**
+- If you are giving starter steps before a full personalized plan, keep them clearly structured rather than embedded inside a research summary
 - If school suggestions are included, use a clear subheading
-- Be concrete and actionable`;
+- Avoid vague advice such as "practice regularly," "build a routine," or "do some exercises" unless you specify exactly what, when, and how long
+- Be concrete and actionable
+
+**Preferred plan layout**
+When the user asks for a plan or when the answer contains saveable guidance, use this shape:
+
+### [Specific Plan Name]
+
+**Goal:** One concrete outcome.
+**Try this for:** A realistic trial period.
+
+| Step | What to do | When / how often |
+|---|---|---|
+| 1 | Concrete parent or child action | Specific timing |
+
+**Watch for**
+- Observable sign of progress
+- Sign the plan needs adjustment
+
+**Why this may help**
+Brief explanation, with research support if available.`;
 }
 
-/**
- * Build interactive trigger section (for saving growth plans)
- */
-function buildInteractiveTriggerSection(): string {
-  return `
-
-### Interactive Trigger Rules
-When your response contains **specific, actionable intervention plans**, output a marker at the end:
-
-<|DSML|invoke name="propose_save_plan" parameter="category:category_name"/><|DSML|>
-
-**Category options**: exercise | sleep | diet | emotion | focus | social | study
-
-**Output marker when** (must meet all):
-1. At least 2 specific action steps (not just directions or questions)
-2. Includes specific parameters (time/frequency/quantity)
-
-**Don't output marker for**: questions, general directions, explanations, responses ending with question marks`;
-}
 
 /**
  * User profile interface
@@ -310,9 +338,6 @@ export async function buildSystemMessage(
 
   // Add plan generation guidance
   systemPrompt += buildPlanGenerationSection();
-
-  // Add interactive trigger rules
-  systemPrompt += buildInteractiveTriggerSection();
 
   // Inject user context if available
   const userContext = buildUserContextSection(userProfile);

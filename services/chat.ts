@@ -20,7 +20,7 @@ export interface SendMessageOptions {
   conversationId?: string;
   folderKey?: TopicFolder;
   signal?: AbortSignal;
-  conversationHistory?: Array<{ role: string; content: string }>;
+  conversationHistory?: Array<{ role: string; content: string; sources?: RAGSource[] }>;
   userProfile?: UserProfile;
   forceRAG?: boolean; // Force RAG mode - when true, always use RAG
 }

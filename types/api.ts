@@ -31,6 +31,11 @@ export interface RAGSource {
   title: string;
   url: string;
   snippet?: string;
+  year?: number | string;
+  journal?: string;
+  authors?: string[];
+  doi?: string;
+  pmid?: string;
 }
 
 /** 分页参数 */
