@@ -17,6 +17,22 @@ export default function ConsentPage() {
     ? router.query.returnTo
     : '/dashboard';
 
+  function getFriendlyConsentError(message: string) {
+    if (
+      message.includes('prepare user account') ||
+      message.includes('record consent') ||
+      message.includes('Internal server error')
+    ) {
+      const localHint = typeof window !== 'undefined' && window.location.hostname === 'localhost'
+        ? ' If you are testing locally, make sure local Supabase is running.'
+        : '';
+
+      return `We could not finish setting up your account. Please try again.${localHint}`;
+    }
+
+    return message;
+  }
+
   useEffect(() => {
     if (status !== 'loading' && !session) {
       openLoginModal('login');
@@ -72,7 +88,8 @@ export default function ConsentPage() {
 
       router.replace(returnTo);
     } catch (err) {
-      setError(err instanceof Error ? err.message : 'Unable to record consent');
+      const message = err instanceof Error ? err.message : 'Unable to record consent';
+      setError(getFriendlyConsentError(message));
     } finally {
       setSubmitting(false);
     }
