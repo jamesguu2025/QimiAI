@@ -4,6 +4,7 @@ import { authOptions } from '../auth/[...nextauth]';
 import { getSupabaseAdmin } from '../../../lib/supabase';
 import type { ActionPlanItem, PlanCategory, PlanContentBlock, WeekDay } from '../../../types/plan';
 import { PLAN_CATEGORIES } from '../../../types/plan';
+import { extractMarkdownTables } from '../../../utils/markdown-tables';
 
 type PlanItemRow = {
   id: string;
@@ -41,7 +42,7 @@ const DEEPSEEK_API_BASE = process.env.DEEPSEEK_API_BASE || 'https://api.deepseek
 const DEEPSEEK_MODEL = process.env.DEEPSEEK_MODEL || 'deepseek-v4-flash';
 const DEEPSEEK_THINKING = { type: 'disabled' };
 const VALID_CATEGORIES = new Set(PLAN_CATEGORIES.map((category) => category.id));
-const UUID_REGEX = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
+const UUID_REGEX = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
 const FREE_PLAN_LIMIT = 5;
 const HARD_BLOCK_FLAGS = new Set(['crisis']);
 const MEDICATION_DIRECTIVE_PATTERN = /\b(increase|decrease|raise|lower|reduce|stop|start|switch|change|double|halve|take|give)\b.*\b(\d+\s?mg|dose|dosage|tablet|pill|capsule)\b|(\d+\s?mg).*\b(increase|decrease|raise|lower|reduce|stop|start|switch|change|take|give)\b/i;
@@ -104,6 +105,10 @@ function validateSourceTime(value: unknown): string {
     return new Date(value).toISOString();
   }
   return new Date().toISOString();
+}
+
+function normalizeMessageContent(value: string): string {
+  return value.replace(/\s+/g, ' ').trim();
 }
 
 async function getUserId(req: NextApiRequest, res: NextApiResponse) {
@@ -188,6 +193,36 @@ async function verifySourceOwnership(
   return true;
 }
 
+async function resolveSourceMessageId(
+  supabase: ReturnType<typeof getSupabaseAdmin>,
+  sourceConversationId: string | null,
+  sourceMessageId: string | null,
+  assistantContent: string
+) {
+  if (sourceMessageId || !sourceConversationId) return sourceMessageId;
+
+  const normalizedAssistantContent = normalizeMessageContent(assistantContent);
+  const { data: messages, error } = await supabase
+    .from('messages')
+    .select('id, content')
+    .eq('conversation_id', sourceConversationId)
+    .eq('role', 'assistant')
+    .order('created_at', { ascending: false })
+    .limit(10);
+
+  if (error) {
+    console.error('[plan/save-from-chat] source message lookup error:', error);
+    return null;
+  }
+
+  const match = (messages || []).find((message) => (
+    typeof message.content === 'string' &&
+    normalizeMessageContent(message.content) === normalizedAssistantContent
+  ));
+
+  return match?.id || null;
+}
+
 async function extractPlan(assistantContent: string, userContext?: string): Promise<ExtractedPlan> {
   if (!DEEPSEEK_API_KEY) {
     throw new Error('DEEPSEEK_API_KEY not configured');
@@ -199,6 +234,7 @@ Rules:
 - Return JSON only.
 - The user already clicked "Save to Growth Plan"; this is the confirmation. Do not ask for another confirmation.
 - Preserve useful Markdown from the assistant response, especially GitHub-Flavored Markdown tables, bullet lists, numbered steps, and bold text.
+- If the assistant response contains a Markdown table, copy that table into interventionBlocks.contentMarkdown exactly. Do not rewrite table rows into plain paragraphs.
 - Store semantic structure first: painPoint, explanationMarkdown, interventionBlocks[], strategySummary.
 - interventionBlocks must be an array of focused sections. Each block has optional title and contentMarkdown.
 - contentMarkdown must be GFM-compatible Markdown, not HTML.
@@ -401,7 +437,7 @@ export default async function handler(req: NextApiRequest, res: NextApiResponse)
   const { supabase, userId } = context;
   const { assistantContent, userContext, duplicateOverride } = req.body || {};
   const sourceConversationId = asUuidOrNull(req.body?.sourceConversationId || req.body?.conversationId);
-  const sourceMessageId = asUuidOrNull(req.body?.sourceMessageId);
+  const requestSourceMessageId = asUuidOrNull(req.body?.sourceMessageId);
   const sourceTime = validateSourceTime(req.body?.sourceTime);
 
   if (typeof assistantContent !== 'string' || assistantContent.trim().length < 10) {
@@ -409,10 +445,16 @@ export default async function handler(req: NextApiRequest, res: NextApiResponse)
   }
 
   try {
-    const ownsSource = await verifySourceOwnership(supabase, userId, sourceConversationId, sourceMessageId);
+    const ownsSource = await verifySourceOwnership(supabase, userId, sourceConversationId, requestSourceMessageId);
     if (!ownsSource) {
       return res.status(404).json({ error: 'Source conversation not found' });
     }
+    const sourceMessageId = await resolveSourceMessageId(
+      supabase,
+      sourceConversationId,
+      requestSourceMessageId,
+      assistantContent.trim()
+    );
 
     const extracted = await extractPlan(
       assistantContent.trim().slice(0, 8000),
@@ -424,13 +466,27 @@ export default async function handler(req: NextApiRequest, res: NextApiResponse)
     }
 
     const plan = validation.plan;
+    const sourceTables = extractMarkdownTables(assistantContent);
+    const planHasTable = plan.interventionBlocks.some((block) => (
+      extractMarkdownTables(block.contentMarkdown, 1).length > 0
+    ));
+    const interventionBlocks = planHasTable
+      ? plan.interventionBlocks
+      : [
+        ...plan.interventionBlocks,
+        ...sourceTables.map((table, index) => ({
+          title: sourceTables.length === 1 ? 'Plan Table' : `Plan Table ${index + 1}`,
+          contentMarkdown: table,
+        })),
+      ];
+
     const duplicate = await findDuplicate(
       supabase,
       userId,
       plan.category,
       plan.painPoint,
       plan.strategySummary,
-      plan.interventionBlocks,
+      interventionBlocks,
       sourceConversationId,
       sourceMessageId
     );
@@ -469,11 +525,8 @@ export default async function handler(req: NextApiRequest, res: NextApiResponse)
         strategy: plan.strategySummary,
         strategy_summary: plan.strategySummary,
         explanation_markdown: plan.explanationMarkdown || null,
-        intervention_blocks: plan.interventionBlocks,
+        intervention_blocks: interventionBlocks,
         check_in_days: [],
-        source_conversation_id: sourceConversationId,
-        source_message_id: sourceMessageId,
-        source_time: sourceTime,
         source_type: 'chat',
       })
       .select('*')
@@ -484,7 +537,28 @@ export default async function handler(req: NextApiRequest, res: NextApiResponse)
       return res.status(500).json({ error: 'Failed to save plan item' });
     }
 
-    return res.status(201).json({ item: mapPlanItem(data as PlanItemRow), safetyFlags: plan.safetyFlags });
+    let savedRow = data as PlanItemRow;
+    if (sourceConversationId || sourceMessageId) {
+      const { data: sourcedData, error: sourceUpdateError } = await supabase
+        .from('plan_items')
+        .update({
+          source_conversation_id: sourceConversationId,
+          source_message_id: sourceMessageId,
+          source_time: sourceTime,
+        })
+        .eq('id', savedRow.id)
+        .eq('user_id', userId)
+        .select('*')
+        .single();
+
+      if (sourceUpdateError) {
+        console.error('[plan/save-from-chat] source update error:', sourceUpdateError);
+      } else if (sourcedData) {
+        savedRow = sourcedData as PlanItemRow;
+      }
+    }
+
+    return res.status(201).json({ item: mapPlanItem(savedRow), safetyFlags: plan.safetyFlags });
   } catch (error) {
     console.error('[plan/save-from-chat] unexpected error:', error);
     return res.status(500).json({ error: 'Failed to save plan item' });

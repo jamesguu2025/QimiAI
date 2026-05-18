@@ -29,26 +29,45 @@ export default function PlanItemCard({ item, onStar, onEdit, onDelete }: PlanIte
           type="button"
           onClick={() => setIsOpen((current) => !current)}
           aria-expanded={isOpen}
-          className="flex min-w-0 flex-1 items-start justify-between gap-3 text-left"
+          className="min-w-0 flex-1 text-left"
         >
           <span className="min-w-0">
             <span className="block truncate text-sm font-semibold text-slate-900">{item.painPoint}</span>
             <span className="mt-1 line-clamp-2 block text-sm leading-relaxed text-slate-600">{summary}</span>
           </span>
-          <ChevronDown
-            className={`mt-0.5 h-4 w-4 flex-shrink-0 text-slate-400 transition-transform ${isOpen ? 'rotate-180' : ''}`}
-            aria-hidden="true"
-          />
         </button>
 
-        <button
-          type="button"
-          onClick={() => onStar(item.id, !item.star)}
-          className="rounded-lg p-1.5 text-slate-400 transition-colors hover:bg-slate-100 hover:text-primary-teal"
-          aria-label={item.star ? 'Unstar this item' : 'Star this item'}
-        >
-          <Star className="h-4 w-4" fill={item.star ? 'currentColor' : 'none'} />
-        </button>
+        <div className="flex flex-shrink-0 items-center gap-1">
+          <button
+            type="button"
+            onClick={() => setIsOpen((current) => !current)}
+            aria-expanded={isOpen}
+            className="rounded-lg p-1.5 text-slate-400 transition-colors hover:bg-slate-100 hover:text-slate-700"
+            aria-label={isOpen ? 'Collapse plan item' : 'Expand plan item'}
+          >
+            <ChevronDown
+              className={`h-4 w-4 transition-transform ${isOpen ? 'rotate-180' : ''}`}
+              aria-hidden="true"
+            />
+          </button>
+
+          <button
+            type="button"
+            onClick={() => onStar(item.id, !item.star)}
+            className="rounded-lg p-1.5 text-slate-400 transition-colors hover:bg-slate-100 hover:text-primary-teal"
+            aria-label={item.star ? 'Unstar this item' : 'Star this item'}
+          >
+            <Star className="h-4 w-4" fill={item.star ? 'currentColor' : 'none'} />
+          </button>
+          <button
+            type="button"
+            onClick={handleDelete}
+            className="rounded-lg p-1.5 text-slate-400 transition-colors hover:bg-red-50 hover:text-red-600"
+            aria-label="Delete plan item"
+          >
+            <Trash2 className="h-4 w-4" />
+          </button>
+        </div>
       </div>
 
       {isOpen && (
@@ -91,17 +110,9 @@ export default function PlanItemCard({ item, onStar, onEdit, onDelete }: PlanIte
             >
               <Pencil className="h-4 w-4" />
             </button>
-            <button
-              type="button"
-              onClick={handleDelete}
-              className="rounded-lg p-1.5 text-slate-400 transition-colors hover:bg-red-50 hover:text-red-600"
-              aria-label="Delete plan item"
-            >
-              <Trash2 className="h-4 w-4" />
-            </button>
           </div>
         </div>
-        )}
+      )}
     </article>
   );
 }

@@ -197,6 +197,7 @@ export const useChatStore = create<ChatState & ChatActions>((set, get) => ({
       .map(msg => ({
         role: msg.role,
         content: msg.content,
+        sources: msg.sources,
       }));
 
     try {
@@ -268,6 +269,13 @@ export const useChatStore = create<ChatState & ChatActions>((set, get) => ({
               activeFolderKey: folderKey,
               conversations: newConversations,
             });
+            set(state => ({
+              messages: state.messages.map(msg =>
+                msg.id === userMessage.id || msg.id === aiMessageId
+                  ? { ...msg, sourceConversationId: conversationId }
+                  : msg
+              ),
+            }));
             saveConversationsToCache(newConversations);
           },
           onDone: () => {
@@ -472,6 +480,7 @@ export const useChatStore = create<ChatState & ChatActions>((set, get) => ({
             sources: msg.sources,
             attachments: msg.attachments,
             sourceMessageId: msg.role === 'assistant' ? msg.id : undefined,
+            sourceConversationId: conversation.id,
           });
         }
       }

@@ -63,6 +63,8 @@ export default function ChatPage() {
     } = useChatStore();
 
     const messagesEndRef = useRef<HTMLDivElement>(null);
+    const messagesContainerRef = useRef<HTMLDivElement>(null);
+    const shouldAutoScrollRef = useRef(true);
     const modeHandledRef = useRef<string | null>(null);
     const guestMigrationKeyRef = useRef<string | null>(null);
     const activeTopicLabel = activeFolderKey ? TOPIC_LABELS[activeFolderKey] : null;
@@ -77,14 +79,22 @@ export default function ChatPage() {
             return new Date(b.updatedAt).getTime() - new Date(a.updatedAt).getTime();
         });
 
-    // 自动滚动到底部
-    const scrollToBottom = () => {
-        messagesEndRef.current?.scrollIntoView({ behavior: 'smooth' });
+    const isNearBottom = () => {
+        const container = messagesContainerRef.current;
+        if (!container) return true;
+
+        const distanceFromBottom = container.scrollHeight - container.scrollTop - container.clientHeight;
+        return distanceFromBottom < 120;
     };
 
     useEffect(() => {
-        scrollToBottom();
+        if (!shouldAutoScrollRef.current && !isNearBottom()) return;
+        messagesEndRef.current?.scrollIntoView({ behavior: isStreaming ? 'auto' : 'smooth' });
     }, [messages]);
+
+    const handleMessagesScroll = () => {
+        shouldAutoScrollRef.current = isNearBottom();
+    };
 
     // Handle conversation query param from SmartDrawer navigation
     useEffect(() => {
@@ -210,6 +220,8 @@ export default function ChatPage() {
             openLoginModal('signup');
             return;
         }
+
+        shouldAutoScrollRef.current = true;
 
         if (isGuest) {
             guestStorage.addMessage({
@@ -356,7 +368,11 @@ export default function ChatPage() {
                     </div>
                 )}
                 {/* Chat 内容 */}
-                <div className="flex-1 overflow-y-auto">
+                <div
+                    ref={messagesContainerRef}
+                    onScroll={handleMessagesScroll}
+                    className="flex-1 overflow-y-auto"
+                >
                     <div className="max-w-3xl mx-auto px-4 py-8 flex flex-col min-h-full">
                         {activeFolderKey && !currentConversation && messages.length === 1 ? (
                             <div className="flex-1 flex flex-col pb-10">
@@ -488,7 +504,7 @@ export default function ChatPage() {
                                                 <div className="ml-0 md:ml-0">
                                                     <SaveFromChatButton
                                                         assistantContent={msg.content}
-                                                        conversationId={currentConversation?.id || null}
+                                                        conversationId={msg.sourceConversationId || currentConversation?.id || null}
                                                         sourceMessageId={msg.sourceMessageId || null}
                                                         clientMessageId={msg.id}
                                                         sourceTime={msg.timestamp}

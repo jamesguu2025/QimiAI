@@ -2,8 +2,9 @@ import type { NextApiRequest, NextApiResponse } from 'next';
 import { getServerSession } from 'next-auth';
 import { authOptions } from '../auth/[...nextauth]';
 import { getSupabaseAdmin } from '../../../lib/supabase';
-import type { PlanCategory } from '../../../types/plan';
+import type { PlanCategory, PlanContentBlock } from '../../../types/plan';
 import { PLAN_CATEGORIES } from '../../../types/plan';
+import { extractMarkdownTables } from '../../../utils/markdown-tables';
 
 const DEEPSEEK_API_KEY = process.env.DEEPSEEK_API_KEY;
 const DEEPSEEK_API_BASE = process.env.DEEPSEEK_API_BASE || 'https://api.deepseek.com';
@@ -19,8 +20,12 @@ type ExtractionCategory = PlanCategory | 'none';
 type ExtractedPlanDraft = {
   hasActionableStrategy: boolean;
   category: ExtractionCategory;
-  challenge: string;
-  strategy: string;
+  painPoint?: string;
+  challenge?: string;
+  explanationMarkdown?: string;
+  interventionBlocks?: PlanContentBlock[];
+  strategySummary?: string;
+  strategy?: string;
   confidence: number;
   safetyFlags: string[];
 };
@@ -67,6 +72,10 @@ function validateSourceTime(value: unknown): string {
     return new Date(value).toISOString();
   }
   return new Date().toISOString();
+}
+
+function normalizeMessageContent(value: string): string {
+  return value.replace(/\s+/g, ' ').trim();
 }
 
 async function getUserId(req: NextApiRequest, res: NextApiResponse) {
@@ -151,6 +160,36 @@ async function verifySourceOwnership(
   return true;
 }
 
+async function resolveSourceMessageId(
+  supabase: ReturnType<typeof getSupabaseAdmin>,
+  sourceConversationId: string | null,
+  sourceMessageId: string | null,
+  assistantContent: string
+) {
+  if (sourceMessageId || !sourceConversationId) return sourceMessageId;
+
+  const normalizedAssistantContent = normalizeMessageContent(assistantContent);
+  const { data: messages, error } = await supabase
+    .from('messages')
+    .select('id, content')
+    .eq('conversation_id', sourceConversationId)
+    .eq('role', 'assistant')
+    .order('created_at', { ascending: false })
+    .limit(10);
+
+  if (error) {
+    console.error('[plan/extract-from-chat] source message lookup error:', error);
+    return null;
+  }
+
+  const match = (messages || []).find((message) => (
+    typeof message.content === 'string' &&
+    normalizeMessageContent(message.content) === normalizedAssistantContent
+  ));
+
+  return match?.id || null;
+}
+
 async function extractDraft(assistantContent: string, userContext?: string): Promise<ExtractedPlanDraft> {
   if (!DEEPSEEK_API_KEY) {
     throw new Error('DEEPSEEK_API_KEY not configured');
@@ -160,20 +199,32 @@ async function extractDraft(assistantContent: string, userContext?: string): Pro
 
 Rules:
 - Return JSON only.
+- Preserve useful Markdown from the assistant response, especially GitHub-Flavored Markdown tables, bullet lists, numbered steps, and bold text.
+- If the assistant response contains a Markdown table, copy that table into interventionBlocks.contentMarkdown exactly. Do not rewrite table rows into plain paragraphs.
+- Store semantic structure first: painPoint, explanationMarkdown, interventionBlocks[], strategySummary.
+- interventionBlocks must be an array of focused sections. Each block has optional title and contentMarkdown.
+- contentMarkdown must be GFM-compatible Markdown, not HTML.
 - Extract only strategies a parent can choose to save and try.
 - Do not create diagnosis, medication dosage, emergency, legal, or professional-treatment instructions.
 - If content is diagnosis/IEP/legal-adjacent but can be turned into a safe parent action, extract the parent action instead of rejecting it.
 - If there is no concrete strategy, return hasActionableStrategy=false and category="none".
 - Use only these categories for saveable strategies: emotion, learning, exercise, nutrition, social, sleep, school.
-- Keep challenge and strategy concise, concrete, and editable by the user.
 - Safety flags may include: none, medical, diagnosis, medication, crisis, legal, not_child_related, too_vague.
+
+Field rules:
+- "painPoint": a SHORT noun phrase (max 60 chars) naming the core issue — like a card title. Examples: "Bedtime routine resistance", "Homework avoidance", "Discolored toenail concern". Do NOT write a full sentence or include "Parent concerned about..." framing.
+- "strategySummary": one concise sentence for card display.
+- "explanationMarkdown": optional context that explains why the plan may help. Keep useful Markdown but omit generic empathy.
+- "interventionBlocks": the concrete saved plan details. Preserve tables when the assistant used or implied step/schedule/phase structure.
 
 Output JSON shape:
 {
   "hasActionableStrategy": boolean,
   "category": "none" | "emotion" | "learning" | "exercise" | "nutrition" | "social" | "sleep" | "school",
-  "challenge": string,
-  "strategy": string,
+  "painPoint": string,
+  "explanationMarkdown": string,
+  "interventionBlocks": [{ "title": string, "contentMarkdown": string }],
+  "strategySummary": string,
   "confidence": number,
   "safetyFlags": string[]
 }
@@ -198,9 +249,10 @@ ${assistantContent}`;
       ],
       stream: false,
       temperature: 0.1,
-      max_tokens: 700,
+      max_tokens: 1600,
       thinking: DEEPSEEK_THINKING,
     }),
+    signal: AbortSignal.timeout(30000),
   });
 
   if (!response.ok) {
@@ -216,6 +268,27 @@ ${assistantContent}`;
   return JSON.parse(cleanJsonResponse(text)) as ExtractedPlanDraft;
 }
 
+function validateBlocks(value: unknown): PlanContentBlock[] {
+  if (!Array.isArray(value)) return [];
+
+  const blocks: PlanContentBlock[] = [];
+  for (const block of value) {
+    if (!block || typeof block !== 'object') continue;
+    const maybeBlock = block as Partial<PlanContentBlock>;
+    if (typeof maybeBlock.contentMarkdown !== 'string' || !maybeBlock.contentMarkdown.trim()) continue;
+
+    blocks.push({
+      title: typeof maybeBlock.title === 'string' && maybeBlock.title.trim()
+        ? maybeBlock.title.trim().slice(0, 120)
+        : undefined,
+      contentMarkdown: maybeBlock.contentMarkdown.trim().slice(0, 3000),
+    });
+    if (blocks.length >= 8) break;
+  }
+
+  return blocks;
+}
+
 function validateDraft(draft: ExtractedPlanDraft) {
   if (!draft.hasActionableStrategy) {
     return { error: 'No actionable strategy found' as const };
@@ -225,11 +298,18 @@ function validateDraft(draft: ExtractedPlanDraft) {
     return { error: 'No actionable strategy found' as const };
   }
 
-  if (typeof draft.challenge !== 'string' || draft.challenge.trim().length < 3) {
+  const painPointValue = typeof draft.painPoint === 'string' ? draft.painPoint : draft.challenge;
+  const strategySummaryValue = typeof draft.strategySummary === 'string' ? draft.strategySummary : draft.strategy;
+  const explanationMarkdown = typeof draft.explanationMarkdown === 'string'
+    ? draft.explanationMarkdown.trim().slice(0, 3000)
+    : '';
+  const interventionBlocks = validateBlocks(draft.interventionBlocks);
+
+  if (typeof painPointValue !== 'string' || painPointValue.trim().length < 3) {
     return { error: 'No actionable strategy found' as const };
   }
 
-  if (typeof draft.strategy !== 'string' || draft.strategy.trim().length < 3) {
+  if (typeof strategySummaryValue !== 'string' || strategySummaryValue.trim().length < 3) {
     return { error: 'No actionable strategy found' as const };
   }
 
@@ -242,16 +322,30 @@ function validateDraft(draft: ExtractedPlanDraft) {
     return { error: 'Unsafe or unsupported plan item' as const };
   }
 
-  if (flags.includes('medication') && MEDICATION_DIRECTIVE_PATTERN.test(draft.strategy)) {
+  const blockContent = interventionBlocks.map((block) => `${block.title || ''}\n${block.contentMarkdown}`).join('\n');
+  if (
+    flags.includes('medication') &&
+    MEDICATION_DIRECTIVE_PATTERN.test(`${strategySummaryValue}\n${blockContent}`)
+  ) {
     return { error: 'Unsafe or unsupported plan item' as const };
   }
+
+  const strategySummary = strategySummaryValue.trim().slice(0, 1200);
+  const safeBlocks = interventionBlocks.length > 0
+    ? interventionBlocks
+    : [{ contentMarkdown: strategySummary }];
+  const painPoint = painPointValue.trim().slice(0, 500);
 
   return {
     draft: {
       ...draft,
       category: draft.category,
-      challenge: draft.challenge.trim().slice(0, 500),
-      strategy: draft.strategy.trim().slice(0, 1200),
+      painPoint,
+      challenge: painPoint,
+      explanationMarkdown,
+      interventionBlocks: safeBlocks,
+      strategySummary,
+      strategy: strategySummary,
       confidence: Math.max(0, Math.min(1, draft.confidence)),
       safetyFlags: flags.length > 0 ? flags : ['none'],
     },
@@ -262,8 +356,9 @@ async function findDuplicate(
   supabase: ReturnType<typeof getSupabaseAdmin>,
   userId: string,
   category: PlanCategory,
-  challenge: string,
-  strategy: string,
+  painPoint: string,
+  strategySummary: string,
+  interventionBlocks: PlanContentBlock[],
   sourceConversationId: string | null,
   sourceMessageId: string | null
 ): Promise<PlanItemDuplicate> {
@@ -282,7 +377,7 @@ async function findDuplicate(
 
   let query = supabase
     .from('plan_items')
-    .select('id, pain_point, strategy')
+    .select('id, pain_point, strategy, strategy_summary, intervention_blocks')
     .eq('user_id', userId)
     .eq('category', category);
 
@@ -293,10 +388,18 @@ async function findDuplicate(
   const { data: items, error } = await query.limit(20);
   if (error) throw error;
 
-  const normalizedDraft = normalizeForDuplicate(`${challenge} ${strategy}`);
+  const draftDetails = interventionBlocks
+    .map((block) => `${block.title || ''} ${block.contentMarkdown}`)
+    .join(' ');
+  const normalizedDraft = normalizeForDuplicate(`${painPoint} ${strategySummary} ${draftDetails}`);
   const match = (items || []).find((item) => (
-    looksSimilar(normalizedDraft, normalizeForDuplicate(`${item.pain_point} ${item.strategy}`)) ||
-    looksSimilar(normalizeForDuplicate(strategy), normalizeForDuplicate(item.strategy))
+    looksSimilar(
+      normalizedDraft,
+      normalizeForDuplicate(
+        `${item.pain_point} ${item.strategy_summary || ''} ${item.strategy} ${JSON.stringify(item.intervention_blocks || [])}`
+      )
+    ) ||
+    looksSimilar(normalizeForDuplicate(strategySummary), normalizeForDuplicate(item.strategy_summary || item.strategy))
   ));
 
   if (match) {
@@ -320,7 +423,7 @@ export default async function handler(req: NextApiRequest, res: NextApiResponse)
   const { supabase, userId } = context;
   const { assistantContent, userContext } = req.body || {};
   const sourceConversationId = asUuidOrNull(req.body?.conversationId || req.body?.sourceConversationId);
-  const sourceMessageId = asUuidOrNull(req.body?.sourceMessageId);
+  const requestSourceMessageId = asUuidOrNull(req.body?.sourceMessageId);
   const sourceTime = validateSourceTime(req.body?.sourceTime);
 
   if (typeof assistantContent !== 'string' || assistantContent.trim().length < 10) {
@@ -328,13 +431,19 @@ export default async function handler(req: NextApiRequest, res: NextApiResponse)
   }
 
   try {
-    const ownsSource = await verifySourceOwnership(supabase, userId, sourceConversationId, sourceMessageId);
+    const ownsSource = await verifySourceOwnership(supabase, userId, sourceConversationId, requestSourceMessageId);
     if (!ownsSource) {
       return res.status(404).json({ error: 'Source conversation not found' });
     }
+    const sourceMessageId = await resolveSourceMessageId(
+      supabase,
+      sourceConversationId,
+      requestSourceMessageId,
+      assistantContent.trim()
+    );
 
     const extracted = await extractDraft(
-      assistantContent.trim().slice(0, 6000),
+      assistantContent.trim().slice(0, 8000),
       typeof userContext === 'string' ? userContext.trim().slice(0, 1000) : undefined
     );
     const validation = validateDraft(extracted);
@@ -342,12 +451,27 @@ export default async function handler(req: NextApiRequest, res: NextApiResponse)
       return res.status(validation.error === 'Unsafe or unsupported plan item' ? 400 : 400).json({ error: validation.error });
     }
 
+    const sourceTables = extractMarkdownTables(assistantContent);
+    const draftHasTable = validation.draft.interventionBlocks.some((block) => (
+      extractMarkdownTables(block.contentMarkdown, 1).length > 0
+    ));
+    const interventionBlocks = draftHasTable
+      ? validation.draft.interventionBlocks
+      : [
+        ...validation.draft.interventionBlocks,
+        ...sourceTables.map((table, index) => ({
+          title: sourceTables.length === 1 ? 'Plan Table' : `Plan Table ${index + 1}`,
+          contentMarkdown: table,
+        })),
+      ];
+
     const duplicate = await findDuplicate(
       supabase,
       userId,
       validation.draft.category,
-      validation.draft.challenge,
-      validation.draft.strategy,
+      validation.draft.painPoint,
+      validation.draft.strategySummary,
+      interventionBlocks,
       sourceConversationId,
       sourceMessageId
     );
@@ -355,7 +479,11 @@ export default async function handler(req: NextApiRequest, res: NextApiResponse)
     return res.status(200).json({
       draft: {
         category: validation.draft.category,
+        painPoint: validation.draft.painPoint,
         challenge: validation.draft.challenge,
+        explanationMarkdown: validation.draft.explanationMarkdown,
+        interventionBlocks,
+        strategySummary: validation.draft.strategySummary,
         strategy: validation.draft.strategy,
         confidence: validation.draft.confidence,
         safetyFlags: validation.draft.safetyFlags,

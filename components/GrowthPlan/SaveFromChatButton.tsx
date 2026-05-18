@@ -1,4 +1,4 @@
-import { useMemo, useState } from 'react';
+import { useEffect, useState } from 'react';
 import { BookmarkPlus, Check } from 'lucide-react';
 import { useSession } from 'next-auth/react';
 import { useAuthUIStore } from '@/stores/authUIStore';
@@ -10,30 +10,6 @@ interface SaveFromChatButtonProps {
   clientMessageId?: string;
   sourceTime?: string;
   userContext?: string;
-}
-
-function hasActionableShape(content: string) {
-  const normalized = content.toLowerCase();
-  const actionWords = [
-    'try',
-    'start',
-    'use',
-    'create',
-    'set up',
-    'practice',
-    'write',
-    'ask',
-    'prepare',
-    'track',
-    'routine',
-    'strategy',
-    'step',
-    'plan',
-    'table',
-    'checklist',
-  ];
-
-  return content.trim().length > 80 && actionWords.some((word) => normalized.includes(word));
 }
 
 export default function SaveFromChatButton({
@@ -50,8 +26,78 @@ export default function SaveFromChatButton({
   const [saved, setSaved] = useState(false);
   const [duplicateCanOverride, setDuplicateCanOverride] = useState(false);
   const [error, setError] = useState<string | null>(null);
+  const [shouldOfferSave, setShouldOfferSave] = useState(false);
 
-  const shouldOfferSave = useMemo(() => hasActionableShape(assistantContent), [assistantContent]);
+  useEffect(() => {
+    if (!session || (!sourceMessageId && !conversationId)) {
+      setSaved(false);
+      return;
+    }
+
+    const controller = new AbortController();
+    fetch('/api/plan/saved-status', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({
+        sourceMessageId,
+        sourceConversationId: conversationId,
+      }),
+      signal: controller.signal,
+    })
+      .then((response) => response.ok ? response.json() : { saved: false })
+      .then((data) => {
+        if (!controller.signal.aborted) {
+          setSaved(data?.saved === true);
+        }
+      })
+      .catch(() => {
+        if (!controller.signal.aborted) {
+          setSaved(false);
+        }
+      });
+
+    return () => controller.abort();
+  }, [session, sourceMessageId, conversationId]);
+
+  useEffect(() => {
+    const trimmedContent = assistantContent.trim();
+    if (trimmedContent.length < 100) {
+      setShouldOfferSave(false);
+      return;
+    }
+
+    const controller = new AbortController();
+    setShouldOfferSave(false);
+
+    fetch('/api/plan/decision', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ assistantContent: trimmedContent }),
+      signal: controller.signal,
+    })
+      .then((response) => response.ok ? response.json() : { shouldPropose: false })
+      .then((data) => {
+        if (!controller.signal.aborted) {
+          setShouldOfferSave(data?.shouldPropose === true);
+        }
+      })
+      .catch(() => {
+        if (!controller.signal.aborted) {
+          setShouldOfferSave(false);
+        }
+      });
+
+    return () => controller.abort();
+  }, [assistantContent]);
+
+  if (saved) {
+    return (
+      <div className="mt-3 inline-flex items-center gap-1.5 rounded-lg bg-emerald-50 px-3 py-1.5 text-xs font-semibold text-emerald-700">
+        <Check className="h-3.5 w-3.5" />
+        Saved to Growth Plan
+      </div>
+    );
+  }
 
   if (!shouldOfferSave) return null;
 
@@ -96,15 +142,6 @@ export default function SaveFromChatButton({
     } finally {
       setIsSaving(false);
     }
-  }
-
-  if (saved) {
-    return (
-      <div className="mt-3 inline-flex items-center gap-1.5 rounded-lg bg-emerald-50 px-3 py-1.5 text-xs font-semibold text-emerald-700">
-        <Check className="h-3.5 w-3.5" />
-        Saved to Growth Plan
-      </div>
-    );
   }
 
   return (

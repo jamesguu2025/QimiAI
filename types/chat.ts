@@ -29,6 +29,7 @@ export interface Message {
   statusMessage?: string; // Status update like "Searching research papers..."
   isStreaming?: boolean;
   sourceMessageId?: string; // Persisted database message id when available
+  sourceConversationId?: string; // Persisted conversation id for source lookup/fallback
 }
 
 /** 主题文件夹类型 */

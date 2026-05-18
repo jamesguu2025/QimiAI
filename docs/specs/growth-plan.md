@@ -697,14 +697,17 @@ ADR-lite:
 
 Trigger rule:
 
-- After an assistant message finishes streaming, scan only the final assistant content.
-- Show `Save to Growth Plan` only when the assistant gives at least one concrete, family-actionable strategy. Examples: a routine, environmental adjustment, school communication script, sleep step, social practice, exercise/movement plan, nutrition support, or emotion-regulation strategy.
+- After an assistant message finishes streaming, send only the final assistant content to a server-side lightweight LLM decision endpoint.
+- Show `Save to Growth Plan` only when the decision endpoint returns `shouldPropose=true`. The decision must require at least two concrete parent-actionable steps plus timing, frequency, quantity, sequence, or other implementation detail. Examples: a routine, environmental adjustment, school communication script, sleep step, social practice, exercise/movement plan, nutrition support, or emotion-regulation strategy.
+- When RAG research is available, the assistant answer should use the retrieved papers as the backbone for intervention choice and parameters while keeping the visible response practical and parent-readable. This mirrors the mini-program principle of "research as the plan skeleton, natural explanation as the surface," rather than a heavy literature-review display.
+- Research-backed answers should expose clickable source access in Web: inline Markdown links for key claims when available, plus a compact `Based on N research papers` source list with paper metadata. This is a Web-specific improvement over the mini-program's non-clickable paper list.
 - Do not show the button for generic explanation, medication dosage instructions, crisis/emergency content, legal/IEP rights-only explanation without a strategy, or incomplete streaming messages. Diagnosis/IEP-adjacent content may be saveable when it is reframed as a parent action, such as "track observations for the clinician" or "prepare questions for the school meeting."
+- The previous front-end keyword/regex gate is not the primary path. It may only be used for historical DSML-style fallback if legacy messages contain explicit internal save markers.
 
 Flow:
 
 1. Assistant response appears in chat.
-2. If eligible, a small secondary button appears below that assistant message: `Save to Growth Plan`.
+2. Frontend calls `POST /api/plan/decision` with the final assistant message. If eligible, a small secondary button appears below that assistant message: `Save to Growth Plan`.
 3. User clicks the button. This click is the explicit user confirmation. If unauthenticated, open the existing login modal and do not extract/save yet.
 4. Frontend calls the chat-save API with `conversationId`, persisted `sourceMessageId` when available, `assistantContent`, and optional nearby user message context.
 5. Backend calls the LLM once to extract `category`, `painPoint`, `explanationMarkdown`, `interventionBlocks[]`, and `strategySummary`; it preserves GFM Markdown tables/lists inside content blocks.
