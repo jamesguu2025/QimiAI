@@ -12,7 +12,11 @@
     "supabase:stop": "supabase stop",
     "supabase:reset": "supabase db reset",
     "build": "next build",
-    "start": "next start -p 4000"
+    "start": "next start -p 4000",
+    "test:e2e": "playwright test",
+    "test:e2e:ui": "playwright test --ui",
+    "test:e2e:headed": "playwright test --headed",
+    "test:e2e:live": "PLAYWRIGHT_LIVE=1 playwright test e2e/live-chat-flow.spec.ts --workers=1"
   },
   "dependencies": {
     "@supabase/supabase-js": "^2.93.2",
@@ -25,6 +29,7 @@
     "zustand": "^5.0.10"
   },
   "devDependencies": {
+    "@playwright/test": "^1.60.0",
     "@tailwindcss/typography": "^0.5.19",
     "@types/bcryptjs": "^2.4.6",
     "@types/node": "20.11.30",
