@@ -7,6 +7,7 @@ import PlanCategoryAccordion from '@/components/GrowthPlan/PlanCategoryAccordion
 import PlanItemForm from '@/components/GrowthPlan/PlanItemForm';
 import PlanSummary from '@/components/GrowthPlan/PlanSummary';
 import { useAuthUIStore } from '@/stores/authUIStore';
+import AuthRequiredState from '@/components/Auth/AuthRequiredState';
 import type { ActionPlanItem, PlanCategory } from '@/types/plan';
 import { PLAN_CATEGORIES } from '@/types/plan';
 
@@ -15,6 +16,8 @@ type PlanFormValues = {
   painPoint: string;
   strategy: string;
 };
+
+const PLAN_AUTH_REASON = 'Sign up to save AI-recommended strategies into your Growth Plan and track what works for your family over time.';
 
 export default function GrowthPlanPage() {
   const { data: session, status } = useSession();
@@ -33,7 +36,7 @@ export default function GrowthPlanPage() {
 
   useEffect(() => {
     if (status !== 'loading' && !session) {
-      openLoginModal();
+      openLoginModal('signup', PLAN_AUTH_REASON);
     }
   }, [status, session, openLoginModal]);
 
@@ -221,7 +224,18 @@ export default function GrowthPlanPage() {
     );
   }
 
-  if (!session) return null;
+  if (!session) {
+    return (
+      <AppLayout>
+        <Head><title>Growth Plan - Qimi AI</title></Head>
+        <AuthRequiredState
+          title="Sign up to save your Growth Plan"
+          description="Growth Plan items are saved to your account so you can return to them and track progress."
+          reason={PLAN_AUTH_REASON}
+        />
+      </AppLayout>
+    );
+  }
 
   const quotaReached = totalItems >= 5 && entitlementTier !== 'pro';
 

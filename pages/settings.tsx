@@ -9,6 +9,7 @@ import AppLayout from '../components/Layout/AppLayout';
 import { useAuthUIStore } from '@/stores/authUIStore';
 import { AccountProfileCard } from '../components/Settings/AccountProfileCard';
 import { DeleteAccountSection } from '../components/Settings/DeleteAccountSection';
+import AuthRequiredState from '@/components/Auth/AuthRequiredState';
 
 interface UserProfile {
   id: string;
@@ -19,6 +20,8 @@ interface UserProfile {
   createdAt: string;
   updatedAt: string;
 }
+
+const SETTINGS_AUTH_REASON = 'Log in or sign up to manage your account settings and keep your family data protected.';
 
 export default function SettingsPage() {
   const { data: session, status } = useSession();
@@ -36,7 +39,7 @@ export default function SettingsPage() {
 
   useEffect(() => {
     if (status !== 'loading' && !session) {
-      openLoginModal();
+      openLoginModal('signup', SETTINGS_AUTH_REASON);
     }
   }, [status, session, openLoginModal]);
 
@@ -66,7 +69,7 @@ export default function SettingsPage() {
   };
 
   // Loading state
-  if (status === 'loading' || loading) {
+  if (status === 'loading') {
     return (
       <AppLayout>
         <Head><title>Settings - Qimi AI</title></Head>
@@ -79,7 +82,27 @@ export default function SettingsPage() {
 
   // Auth redirect
   if (!session) {
-    return null;
+    return (
+      <AppLayout>
+        <Head><title>Settings - Qimi AI</title></Head>
+        <AuthRequiredState
+          title="Sign up to manage settings"
+          description="Account settings are available after you create an account or log in."
+          reason={SETTINGS_AUTH_REASON}
+        />
+      </AppLayout>
+    );
+  }
+
+  if (loading) {
+    return (
+      <AppLayout>
+        <Head><title>Settings - Qimi AI</title></Head>
+        <div className="flex items-center justify-center h-64">
+          <div className="w-8 h-8 border-4 border-slate-200 rounded-full animate-spin" />
+        </div>
+      </AppLayout>
+    );
   }
 
   // Error state

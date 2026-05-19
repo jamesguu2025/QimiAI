@@ -1,16 +1,47 @@
 import { signIn } from 'next-auth/react';
 import { useRouter } from 'next/router';
 import { useState, useEffect } from 'react';
-import { Mail, Lock, User, Eye, EyeOff, X } from 'lucide-react';
+import { BarChart3, Brain, ListChecks, Mail, Lock, MessageCircle, User, Eye, EyeOff, X } from 'lucide-react';
 import { PARENTAL_CONSENT_TEXT } from '@/lib/compliance/consent';
+import { trackClientEvent } from '@/lib/client-analytics';
 
 interface LoginModalProps {
   isOpen: boolean;
   onClose: () => void;
   defaultTab?: 'login' | 'signup';
+  reason?: string;
 }
 
-export default function LoginModal({ isOpen, onClose, defaultTab = 'login' }: LoginModalProps) {
+function UnlockBenefitsPanel() {
+  const benefits = [
+    { label: 'Continue this chat', icon: MessageCircle },
+    { label: 'Remember your family', icon: Brain },
+    { label: "Save plans you've made", icon: ListChecks },
+    { label: 'Track progress over time', icon: BarChart3 },
+  ];
+
+  return (
+    <div className="mb-5 rounded-2xl bg-slate-50/80 p-4 ring-1 ring-slate-200/70">
+      <p className="text-[15px] font-semibold tracking-tight text-slate-900">
+        Save this conversation
+      </p>
+      <p className="mt-0.5 text-xs text-slate-500">
+        Sign up to keep what you&apos;ve built so far.
+      </p>
+
+      <ul className="mt-3 space-y-1.5">
+        {benefits.map(({ label, icon: Icon }) => (
+          <li key={label} className="flex items-center gap-2.5">
+            <Icon className="h-3.5 w-3.5 flex-shrink-0 text-primary-teal" strokeWidth={2.25} />
+            <span className="text-[13px] leading-tight text-slate-700">{label}</span>
+          </li>
+        ))}
+      </ul>
+    </div>
+  );
+}
+
+export default function LoginModal({ isOpen, onClose, defaultTab = 'login', reason }: LoginModalProps) {
   const router = useRouter();
   const [isLogin, setIsLogin] = useState(defaultTab === 'login');
   const [showPassword, setShowPassword] = useState(false);
@@ -73,6 +104,7 @@ export default function LoginModal({ isOpen, onClose, defaultTab = 'login' }: Lo
         if (result?.error) {
           setError(result.error);
         } else {
+          trackClientEvent('auth:login_success', { method: 'credentials' });
           onClose();
           router.push('/chat');
         }
@@ -113,6 +145,7 @@ export default function LoginModal({ isOpen, onClose, defaultTab = 'login' }: Lo
               return;
             }
 
+            trackClientEvent('auth:signup_success', { method: 'credentials', consent_captured: true });
             onClose();
             router.push('/chat');
           }
@@ -158,6 +191,8 @@ export default function LoginModal({ isOpen, onClose, defaultTab = 'login' }: Lo
               {isLogin ? 'Welcome back!' : 'Create your account'}
             </p>
           </div>
+
+          {reason && <UnlockBenefitsPanel />}
 
           {/* Tab Switcher */}
           <div className="flex mb-4 sm:mb-6 bg-slate-100 rounded-xl p-1">

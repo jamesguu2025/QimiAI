@@ -12,6 +12,7 @@ import {
   deleteConversation,
   generateConversationTitle,
 } from '../services/conversation';
+import { trackClientEvent } from '../lib/client-analytics';
 
 /** Welcome message */
 const WELCOME_MESSAGE: Message = {
@@ -318,6 +319,13 @@ export const useChatStore = create<ChatState & ChatActions>((set, get) => ({
             }
           },
           onError: (error) => {
+            trackClientEvent('chat:error', {
+              error_stage: 'stream',
+              error_code: 'sse_error',
+              http_status: 0,
+              auth_state: 'unknown',
+              retryable: true,
+            });
             set(state => ({
               messages: state.messages.map(msg =>
                 msg.id === aiMessageId
@@ -348,6 +356,13 @@ export const useChatStore = create<ChatState & ChatActions>((set, get) => ({
 
       // Handle other errors
       const errorMessage = error instanceof Error ? error.message : 'An error occurred';
+      trackClientEvent('chat:error', {
+        error_stage: 'request',
+        error_code: error instanceof Error ? error.name : 'unknown',
+        http_status: 0,
+        auth_state: 'unknown',
+        retryable: true,
+      });
       set(state => ({
         messages: state.messages.map(msg =>
           msg.id === aiMessageId

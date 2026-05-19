@@ -13,6 +13,7 @@ import { FamilyCompletionBar } from '../components/Family/FamilyCompletionBar';
 import ChildInfoCard from '../components/Family/ChildInfoCard';
 import ChallengeTags, { SelectedChallenge } from '../components/Family/ChallengeTags';
 import FamilySummarySection from '../components/Family/FamilySummarySection';
+import AuthRequiredState from '@/components/Auth/AuthRequiredState';
 
 // Internal ChildProfileData type (matches API response)
 interface ChildProfileData {
@@ -26,6 +27,8 @@ interface ChildProfileData {
   createdAt?: string;
   updatedAt?: string;
 }
+
+const FAMILY_AUTH_REASON = 'Sign up to save your family profile and let Qimi personalize future chat, Memory, and Growth Plan recommendations.';
 
 export default function FamilyPage() {
   const { data: session, status } = useSession();
@@ -63,7 +66,7 @@ export default function FamilyPage() {
 
   useEffect(() => {
     if (status !== 'loading' && !session) {
-      openLoginModal();
+      openLoginModal('signup', FAMILY_AUTH_REASON);
     }
   }, [status, session, openLoginModal]);
 
@@ -81,7 +84,16 @@ export default function FamilyPage() {
 
   // Auth check - redirect if no session
   if (!session) {
-    return null;
+    return (
+      <AppLayout>
+        <Head><title>Family Profile - Qimi AI</title></Head>
+        <AuthRequiredState
+          title="Sign up to save your family profile"
+          description="Family profile details are saved to your account so Qimi can personalize support across sessions."
+          reason={FAMILY_AUTH_REASON}
+        />
+      </AppLayout>
+    );
   }
 
   // Handle save callback - merge with existing challenges since ChildInfoCard doesn't edit them

@@ -5,12 +5,13 @@ import { useAuthUIStore } from '@/stores/authUIStore';
 import '../styles/globals.css';
 
 function GlobalLoginModal() {
-  const { isLoginModalOpen, loginModalTab, closeLoginModal } = useAuthUIStore();
+  const { isLoginModalOpen, loginModalTab, loginModalReason, closeLoginModal } = useAuthUIStore();
   return (
     <LoginModal
       isOpen={isLoginModalOpen}
       onClose={closeLoginModal}
       defaultTab={loginModalTab}
+      reason={loginModalReason}
     />
   );
 }

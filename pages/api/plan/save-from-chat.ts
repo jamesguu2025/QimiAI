@@ -5,6 +5,7 @@ import { getSupabaseAdmin } from '../../../lib/supabase';
 import type { ActionPlanItem, PlanCategory, PlanContentBlock, WeekDay } from '../../../types/plan';
 import { PLAN_CATEGORIES } from '../../../types/plan';
 import { extractMarkdownTables } from '../../../utils/markdown-tables';
+import { trackServerEvent } from '../../../lib/analytics';
 
 type PlanItemRow = {
   id: string;
@@ -557,6 +558,11 @@ export default async function handler(req: NextApiRequest, res: NextApiResponse)
         savedRow = sourcedData as PlanItemRow;
       }
     }
+
+    await trackServerEvent(req, 'plan:item_saved', {
+      save_source: 'chat',
+      category: plan.category,
+    }, { userId, pagePath: '/chat' });
 
     return res.status(201).json({ item: mapPlanItem(savedRow), safetyFlags: plan.safetyFlags });
   } catch (error) {

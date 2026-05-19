@@ -22,6 +22,7 @@ This document was re-checked against:
 - Keep Pages Router plus per-route auth checks as the established pattern
 - Prefer API routes plus server-side Supabase admin access for mutations
 - Avoid new services, registries, or abstractions unless the first 5,000 users truly need them
+- Keep RAG research as answer-time support in chat. Web MVP does not ship a public Paper Topics / Research Browser, does not add a `/paper-topics` route, and does not expose browsable abstracts, full text, or bulk paper lists.
 
 ### Current Implementation Notes
 
@@ -379,6 +380,7 @@ When the family-profile module is implemented, the migration endpoint must be up
 | Blog (`/blog`) | Full | Full | Full |
 | Chat (`/chat`) | 5 messages | 20 msg/day | Unlimited |
 | RAG research mode | No | 5 queries/day | Unlimited |
+| Paper Topics / Research Browser | No | No | No *(deferred; not in Web MVP)* |
 | ~~Mood tracking (`/mood`)~~ | ~~No~~ | ~~Full~~ | ~~Full~~ *(ARCHIVED)* |
 | Crisis calm (`/calm`) | Full | Full | Full |
 | Growth plan (`/plan`) | No | Full (max 5 items) | Full (unlimited) |

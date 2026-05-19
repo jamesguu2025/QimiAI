@@ -1,4 +1,7 @@
 import type { NextApiRequest, NextApiResponse } from 'next';
+import { getServerSession } from 'next-auth';
+import { authOptions } from './auth/[...nextauth]';
+import { getAnalyticsUserIdByEmail, trackServerEvent } from '@/lib/analytics';
 
 export default async function handler(req: NextApiRequest, res: NextApiResponse) {
   if (req.method !== 'POST') {
@@ -12,6 +15,9 @@ export default async function handler(req: NextApiRequest, res: NextApiResponse)
   }
 
   try {
+    const session = await getServerSession(req, res, authOptions);
+    const userId = await getAnalyticsUserIdByEmail(session?.user?.email);
+
     // Log the contact form submission
     console.log('[Contact Form]', {
       title,
@@ -19,6 +25,11 @@ export default async function handler(req: NextApiRequest, res: NextApiResponse)
       contact,
       timestamp: new Date().toISOString(),
     });
+
+    await trackServerEvent(req, 'contact:form_submitted', {
+      source: 'landing',
+      has_session: Boolean(session?.user?.email),
+    }, { userId, pagePath: '/contact' });
 
     return res.status(200).json({ success: true });
   } catch (error) {

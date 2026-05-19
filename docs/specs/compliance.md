@@ -207,6 +207,12 @@ Remove or redirect `public/terms.html` → `/terms`.
 
 No file storage exists (no Supabase Storage buckets, no uploaded images). `messages.attachments` is metadata-only JSONB.
 
+**Research content guardrail**:
+
+- Web MVP may display aggregate RAG source counts and limited bibliographic citations inside AI answers.
+- Web MVP must not expose a public Paper Topics / Research Browser, browsable paper lists, abstracts, full text, or cached third-party paper content.
+- If future work revisits paper browsing, it must pass a separate copyright/licensing review covering metadata, abstracts, full text, source attribution, caching, and redistribution terms.
+
 **API**: `POST /api/user/delete-account`
 - Auth: requires valid session
 - Input: `{ confirmation: "DELETE" }` (user must type "DELETE" to confirm)

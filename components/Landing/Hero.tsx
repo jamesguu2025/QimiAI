@@ -2,6 +2,7 @@ import React from 'react';
 import Link from 'next/link';
 import { ArrowRight, Clock, BookOpen, Users, Lightbulb, FileText } from 'lucide-react';
 import { Session } from 'next-auth';
+import { trackClientEvent } from '@/lib/client-analytics';
 
 interface HeroProps {
   session: Session | null;
@@ -119,6 +120,12 @@ const Hero = ({ session, userCount = 0, paperCount = 0 }: HeroProps) => {
           {/* CTA Button */}
           <Link
             href="/chat"
+            onClick={() => trackClientEvent('landing:cta_click', {
+              cta_id: 'hero_get_started',
+              cta_location: 'hero',
+              destination: '/chat',
+              auth_state: session ? 'authenticated' : 'guest',
+            })}
             className="group inline-flex items-center justify-center gap-2.5 px-9 py-4 bg-slate-900 text-white text-base font-semibold rounded-full transition-all duration-200 hover:bg-slate-800 hover:-translate-y-0.5 hover:shadow-[0_8px_24px_rgba(0,0,0,0.15)] w-full max-w-[280px]"
           >
             {session ? 'Continue to Chat' : 'Get Started'}

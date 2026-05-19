@@ -4,6 +4,7 @@ import { authOptions } from '../auth/[...nextauth]';
 import { getSupabaseAdmin } from '../../../lib/supabase';
 import type { ActionPlanItem, PlanCategory, PlanContentBlock, WeekDay } from '../../../types/plan';
 import { PLAN_CATEGORIES } from '../../../types/plan';
+import { trackServerEvent } from '../../../lib/analytics';
 
 type PlanItemRow = {
   id: string;
@@ -190,6 +191,11 @@ export default async function handler(req: NextApiRequest, res: NextApiResponse)
         console.error('[plan] create error:', error);
         return res.status(500).json({ error: 'Failed to create plan item' });
       }
+
+      await trackServerEvent(req, 'plan:item_saved', {
+        save_source: 'manual',
+        category,
+      }, { userId, pagePath: '/plan' });
 
       return res.status(201).json({ item: mapPlanItem(data as PlanItemRow) });
     }

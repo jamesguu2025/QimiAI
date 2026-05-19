@@ -2,6 +2,7 @@ import { useEffect, useState } from 'react';
 import { BookmarkPlus, Check } from 'lucide-react';
 import { useSession } from 'next-auth/react';
 import { useAuthUIStore } from '@/stores/authUIStore';
+import { trackClientEvent } from '@/lib/client-analytics';
 
 interface SaveFromChatButtonProps {
   assistantContent: string;
@@ -27,6 +28,7 @@ export default function SaveFromChatButton({
   const [duplicateCanOverride, setDuplicateCanOverride] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [shouldOfferSave, setShouldOfferSave] = useState(false);
+  const [offeredCategory, setOfferedCategory] = useState<string>('unknown');
 
   useEffect(() => {
     if (!session || (!sourceMessageId && !conversationId)) {
@@ -78,7 +80,15 @@ export default function SaveFromChatButton({
       .then((response) => response.ok ? response.json() : { shouldPropose: false })
       .then((data) => {
         if (!controller.signal.aborted) {
-          setShouldOfferSave(data?.shouldPropose === true);
+          const shouldShow = data?.shouldPropose === true;
+          setShouldOfferSave(shouldShow);
+          setOfferedCategory(data?.category || 'unknown');
+          if (shouldShow) {
+            trackClientEvent('plan:save_prompt_show', {
+              prompt_source: 'chat',
+              category: data?.category || 'unknown',
+            });
+          }
         }
       })
       .catch(() => {
@@ -102,6 +112,11 @@ export default function SaveFromChatButton({
   if (!shouldOfferSave) return null;
 
   async function handleSave(duplicateOverride = false) {
+    trackClientEvent('plan:save_prompt_click', {
+      prompt_source: 'chat',
+      category: offeredCategory,
+    });
+
     if (!session) {
       openLoginModal('signup');
       return;
