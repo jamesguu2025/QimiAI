@@ -112,7 +112,7 @@ export default function DashboardPage() {
                 <div className="text-2xl font-bold text-primary-teal">
                   {paperCount !== null ? paperCount.toLocaleString() : '0'}
                 </div>
-                <div className="text-sm text-slate-500">Research Papers</div>
+                <div className="text-sm text-slate-500">Research Sources</div>
               </>
             )}
           </div>

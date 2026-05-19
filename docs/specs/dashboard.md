@@ -34,6 +34,7 @@ Dashboard is **not** an analytics page. It is a feature hub — a place to quick
 - No analytics, charts, or usage statistics in MVP
 - Implemented module cards link to module detail pages; planned modules show disabled "Coming soon" cards until their pages exist
 - Each card fetches its own summary data independently
+- Research support is limited to an aggregate source count label. Dashboard must not link to a Paper Topics / Research Browser, expose a browsable paper list, or display abstracts/full text.
 
 ### Execution Baseline
 
