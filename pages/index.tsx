@@ -8,6 +8,7 @@ import { ArticleCard } from '../components/Landing/ArticleCard';
 import LoginModal from '../components/Auth/LoginModal';
 import ContactModal from '../components/Landing/ContactModal';
 import UserMenu from '@/components/UI/UserMenu';
+import { trackClientEvent } from '@/lib/client-analytics';
 
 import { HowItWorks } from '../components/Landing/HowItWorks';
 import { FAQ } from '../components/Landing/FAQ';
@@ -107,6 +108,13 @@ export default function Home() {
   };
 
   const handleStart = () => {
+    trackClientEvent('landing:cta_click', {
+      cta_id: 'start',
+      cta_location: 'landing',
+      destination: session ? '/dashboard' : 'signup_modal',
+      auth_state: session ? 'authenticated' : 'guest',
+    });
+
     if (session) {
       router.push('/dashboard');
       return;
@@ -215,16 +223,46 @@ export default function Home() {
               <UserMenu />
             ) : (
               <>
-                <button onClick={() => openAuthModal('login')} className="hidden md:block text-sm font-medium text-slate-600 hover:text-slate-900 transition-colors">
+                <button
+                  onClick={() => {
+                    trackClientEvent('landing:cta_click', {
+                      cta_id: 'nav_login',
+                      cta_location: 'navbar',
+                      destination: 'login_modal',
+                      auth_state: 'guest',
+                    });
+                    openAuthModal('login');
+                  }}
+                  className="hidden md:block text-sm font-medium text-slate-600 hover:text-slate-900 transition-colors"
+                >
                   Log in
                 </button>
-                <button onClick={() => openAuthModal('signup')} className="hidden md:block text-sm font-medium text-slate-600 hover:text-slate-900 transition-colors">
+                <button
+                  onClick={() => {
+                    trackClientEvent('landing:cta_click', {
+                      cta_id: 'nav_signup',
+                      cta_location: 'navbar',
+                      destination: 'signup_modal',
+                      auth_state: 'guest',
+                    });
+                    openAuthModal('signup');
+                  }}
+                  className="hidden md:block text-sm font-medium text-slate-600 hover:text-slate-900 transition-colors"
+                >
                   Sign up
                 </button>
               </>
             )}
             <button
-              onClick={() => setContactModalOpen(true)}
+              onClick={() => {
+                trackClientEvent('landing:cta_click', {
+                  cta_id: 'nav_contact',
+                  cta_location: 'navbar',
+                  destination: 'contact_modal',
+                  auth_state: session ? 'authenticated' : 'guest',
+                });
+                setContactModalOpen(true);
+              }}
               className="hidden md:inline-flex px-5 py-2.5 text-sm font-semibold text-white bg-slate-900 rounded-full transition-all duration-200 hover:bg-slate-800 hover:-translate-y-px hover:shadow-[0_4px_12px_rgba(0,0,0,0.15)]"
             >
               Contact Us

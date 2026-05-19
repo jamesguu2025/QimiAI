@@ -6,6 +6,7 @@ import type { NextApiRequest, NextApiResponse } from 'next';
 import { getServerSession } from 'next-auth';
 import { authOptions } from '../auth/[...nextauth]';
 import { getSupabaseAdmin } from '../../../lib/supabase';
+import { trackServerEvent } from '../../../lib/analytics';
 
 const DEEPSEEK_API_KEY = process.env.DEEPSEEK_API_KEY;
 const DEEPSEEK_API_BASE = process.env.DEEPSEEK_API_BASE || 'https://api.deepseek.com';
@@ -543,6 +544,13 @@ export default async function handler(
     if (added + updated + deleted > 0) {
       await rewriteSystemSummary(supabase, user.id);
     }
+
+    await trackServerEvent(req, 'memory:fact_extracted', {
+      added_count: added,
+      updated_count: updated,
+      deleted_count: deleted,
+      source: 'conversation',
+    }, { userId: user.id, pagePath: '/api/memory/extract' });
 
     console.log(`[memory/extract] Done: added=${added}, updated=${updated}, deleted=${deleted}`);
     return res.status(200).json({ success: true, added, updated, deleted });

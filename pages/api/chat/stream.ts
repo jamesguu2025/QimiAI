@@ -11,6 +11,7 @@ import {
 import { getSupabaseAdmin } from '../../../lib/supabase';
 import { isTopicFolder, normalizeTopicFolder, TopicFolder } from '../../../types/chat';
 import { routeRagNeed } from '../../../lib/rag-router';
+import { trackServerEvent } from '../../../lib/analytics';
 
 type ChatSource = {
   title: string;
@@ -222,9 +223,12 @@ How to answer:
 - If a study provides concrete parameters, use them instead of inventing generic ones.
 - Do not turn the answer into a literature review. Mention the evidence naturally where it supports a key point.
 - Include 1-3 clickable Markdown citations in the body when making evidence-based claims, using the source links provided above.
+- If you mention an author-year citation such as "Capodieci et al. (2017)", it must be a Markdown link using the matching source URL, e.g. "[Capodieci et al. (2017)](https://...)". Never leave author-year citations as plain text when the source URL is available.
 - Also rely on the separate "Based on ${sourceCount} research ${paperLabel}" source list that the UI will show below the message.
 - If the research does not directly support a claim, say that part is practical judgment or clinical/common-sense guidance rather than pretending it is paper-backed.
-- If you include saveable guidance, format a compact Growth Plan-ready block with: Goal, Try this for, action table when there are multiple steps, Watch for, and Why this may help. This block should be self-contained enough to save.
+- Do not let retrieved research override the consultative flow. For broad personalized behavior problems, give a short evidence-informed orientation, then ask the most diagnostic follow-up question before recommending a specific plan.
+- During information gathering, do not output a Growth Plan-ready action table just because papers were retrieved. First clarify the failure point and what the parent has already tried.
+- If the plan readiness gate is met and you include saveable guidance, format a compact Growth Plan-ready block with: Goal, Try this for, action table when there are multiple steps, Watch for, and Why this may help. This block should be self-contained enough to save.
 - Use a Markdown table for multiple actions, stages, repeated timing/frequency fields, school/home comparisons, or weekly schedules.
 - For a single strategy, keep When, How often, and How long on separate lines.`;
 }
@@ -239,7 +243,7 @@ async function saveMessagesToDatabase(
   conversationId?: string,
   sources?: ChatSource[],
   folderKey?: TopicFolder | null
-): Promise<string | null> {
+): Promise<{ conversationId: string; userId: string; userMessageCount: number } | null> {
   try {
     const supabase = getSupabaseAdmin();
 
@@ -315,8 +319,14 @@ async function saveMessagesToDatabase(
       console.error('[chat/stream] Failed to update conversation timestamp:', updateError);
     }
 
+    const { count: userMessageCount } = await supabase
+      .from('messages')
+      .select('id', { count: 'exact', head: true })
+      .eq('conversation_id', convId)
+      .eq('role', 'user');
+
     console.log('[chat/stream] Messages saved to conversation:', convId);
-    return convId ?? null;
+    return convId ? { conversationId: convId, userId: user.id, userMessageCount: userMessageCount || 0 } : null;
   } catch (error) {
     console.error('[chat/stream] Error saving messages:', error);
     return null;
@@ -383,9 +393,12 @@ export default async function handler(
     res.socket.on('error', () => handleDisconnect('socket.error'));
   }
 
+  let authStateForError: 'authenticated' | 'guest' = 'guest';
+
   try {
     // Get user ID from session or guest cookie (for logging/rate limiting)
     const session = await getServerSession(req, res, authOptions);
+    authStateForError = session?.user?.email ? 'authenticated' : 'guest';
     let userId: string;
 
     if (session?.user?.id) {
@@ -511,6 +524,7 @@ export default async function handler(
 
     // Pre-create conversation for logged-in users (before streaming starts)
     let activeConversationId = conversationId;
+    const hadExistingConversation = Boolean(conversationId);
 
     if (session?.user?.email && !activeConversationId) {
       const supabase = getSupabaseAdmin();
@@ -578,7 +592,7 @@ export default async function handler(
       if (isDisconnected) {
         console.log('[chat/stream] Client disconnected, saving partial response');
       }
-      await saveMessagesToDatabase(
+      const savedChat = await saveMessagesToDatabase(
         session.user.email,
         userMessage,
         fullResponse,
@@ -586,6 +600,24 @@ export default async function handler(
         sources,
         requestedFolderKey
       );
+
+      if (savedChat?.userMessageCount === 1) {
+        await trackServerEvent(req, 'chat:first_message_sent', {
+          conversation_type: hadExistingConversation ? 'existing' : 'new',
+          auth_state: 'authenticated',
+          has_attachment: Array.isArray(attachments) && attachments.length > 0,
+          folder_key: requestedFolderKey || 'general',
+        }, { userId: savedChat.userId, pagePath: '/chat' });
+      }
+
+      if (savedChat) {
+        if ([1, 3, 5, 10, 20].includes(savedChat.userMessageCount)) {
+          await trackServerEvent(req, 'chat:message_count_milestone_reach', {
+            milestone: savedChat.userMessageCount,
+            auth_state: 'authenticated',
+          }, { userId: savedChat.userId, pagePath: '/chat' });
+        }
+      }
 
       // Fire-and-forget memory extraction — gate runs inside extract.ts
       if (activeConversationId) {
@@ -611,6 +643,13 @@ export default async function handler(
       return;
     }
     console.error('[chat/stream] Handler error:', error);
+    await trackServerEvent(req, 'chat:error', {
+      error_stage: 'handler',
+      error_code: error instanceof Error ? error.name : 'unknown',
+      http_status: 500,
+      auth_state: authStateForError,
+      retryable: true,
+    }, { pagePath: '/chat' });
     // Don't try to send JSON response if headers already sent (SSE mode)
     if (!res.headersSent) {
       return res.status(500).json({

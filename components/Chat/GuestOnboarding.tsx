@@ -7,8 +7,9 @@
  * 步骤3：问题选择（根据挑战生成）
  */
 
-import { useState, useMemo } from 'react';
+import { useEffect, useRef, useState, useMemo } from 'react';
 import { ChevronRight, ChevronLeft, ChevronDown, ArrowLeft } from 'lucide-react';
+import { trackClientEvent } from '@/lib/client-analytics';
 
 // 气泡位置配置（9个分类，3x3超紧凑布局）
 const BUBBLE_POSITIONS = [
@@ -254,6 +255,14 @@ export default function GuestOnboarding({ onComplete, onLogin }: GuestOnboarding
   const [selectedQuestion, setSelectedQuestion] = useState<string>('');
   const [isLoadingQuestions, setIsLoadingQuestions] = useState(false);
   const [generatedQuestions, setGeneratedQuestions] = useState<string[]>([]);
+  const [stepStartedAt, setStepStartedAt] = useState(Date.now());
+  const dropoffStateRef = useRef({
+    currentStep: 1,
+    stepKey: 'child_info',
+    stepStartedAt: Date.now(),
+    isValid: false,
+  });
+  const completedRef = useRef(false);
 
   // 生成年份范围（当前年份往前推18年）
   const yearRange = useMemo(() => {
@@ -287,6 +296,25 @@ export default function GuestOnboarding({ onComplete, onLogin }: GuestOnboarding
   // 步骤3验证
   const canFinish = selectedQuestion !== '';
 
+  const stepKey = currentStep === 1 ? 'child_info' : currentStep === 2 ? 'challenges' : 'first_question';
+  const currentStepIsValid = currentStep === 1 ? canContinueStep1 : currentStep === 2 ? canContinueStep2 : canFinish;
+
+  dropoffStateRef.current = {
+    currentStep,
+    stepKey,
+    stepStartedAt,
+    isValid: currentStepIsValid,
+  };
+
+  const trackStepComplete = (stepNumber: number, completedStepKey: string, selectedCount?: number) => {
+    trackClientEvent('onboarding:step_complete', {
+      step_number: stepNumber,
+      step_key: completedStepKey,
+      selected_count: selectedCount,
+    });
+    setStepStartedAt(Date.now());
+  };
+
   // 切换挑战选择
   const toggleChallenge = (challenge: { id: string; name: string }, category: { id: string; name: string }) => {
     setSelectedChallenges(prev => {
@@ -317,6 +345,7 @@ export default function GuestOnboarding({ onComplete, onLogin }: GuestOnboarding
   // 进入步骤2
   const goToStep2 = () => {
     if (canContinueStep1) {
+      trackStepComplete(1, 'child_info');
       setCurrentStep(2);
     }
   };
@@ -324,6 +353,7 @@ export default function GuestOnboarding({ onComplete, onLogin }: GuestOnboarding
   // 进入步骤3
   const goToStep3 = () => {
     if (canContinueStep2) {
+      trackStepComplete(2, 'challenges', selectedChallenges.length);
       setCurrentStep(3);
       setIsLoadingQuestions(true);
 
@@ -350,6 +380,8 @@ export default function GuestOnboarding({ onComplete, onLogin }: GuestOnboarding
   // 完成引导
   const handleFinish = () => {
     if (canFinish && selectedYear && selectedMonth) {
+      completedRef.current = true;
+      trackStepComplete(3, 'first_question');
       onComplete({
         childName: childName.trim(),
         childBirthday: { year: selectedYear, month: selectedMonth },
@@ -362,6 +394,19 @@ export default function GuestOnboarding({ onComplete, onLogin }: GuestOnboarding
 
   // 进度条
   const progress = (currentStep / 3) * 100;
+
+  useEffect(() => {
+    return () => {
+      if (completedRef.current) return;
+      const state = dropoffStateRef.current;
+      trackClientEvent('onboarding:step_dropoff', {
+        step_number: state.currentStep,
+        step_key: state.stepKey,
+        time_on_step_ms: Date.now() - state.stepStartedAt,
+        last_valid_state: state.isValid,
+      }, { keepalive: true });
+    };
+  }, []);
 
   return (
     <div className="flex-1 flex flex-col h-full bg-slate-50">

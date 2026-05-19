@@ -5,6 +5,9 @@ import { useAuthUIStore } from '@/stores/authUIStore';
 import { useState, useEffect } from 'react';
 import AppLayout from '../components/Layout/AppLayout';
 import { DashboardCard } from '../components/Dashboard/DashboardCard';
+import AuthRequiredState from '@/components/Auth/AuthRequiredState';
+
+const DASHBOARD_AUTH_REASON = 'Sign up to unlock your Dashboard, preserve guest conversations, and activate Memory and Growth Plan features for personalized AI support.';
 
 export default function DashboardPage() {
   const { data: session, status } = useSession();
@@ -23,6 +26,8 @@ export default function DashboardPage() {
 
   // Fetch stats in parallel
   useEffect(() => {
+    if (!session?.user?.email) return;
+
     async function fetchStats() {
       setStatsLoading(true);
       try {
@@ -48,11 +53,11 @@ export default function DashboardPage() {
       }
     }
     fetchStats();
-  }, []);
+  }, [session?.user?.email]);
 
   useEffect(() => {
     if (status !== 'loading' && !session) {
-      openLoginModal();
+      openLoginModal('signup', DASHBOARD_AUTH_REASON);
     }
   }, [status, session, openLoginModal]);
 
@@ -69,7 +74,16 @@ export default function DashboardPage() {
   }
 
   if (!session) {
-    return null;
+    return (
+      <AppLayout>
+        <Head><title>Dashboard - Qimi AI</title></Head>
+        <AuthRequiredState
+          title="Sign up to view your Dashboard"
+          description="Your Dashboard brings together saved conversations, Memory, and Growth Plan progress after you create an account."
+          reason={DASHBOARD_AUTH_REASON}
+        />
+      </AppLayout>
+    );
   }
 
   const userName = session.user?.name || session.user?.email?.split('@')[0] || 'there';

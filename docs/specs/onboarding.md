@@ -41,11 +41,11 @@ Local testing rule: database-backed acceptance must use local Supabase first, no
 
 ### Evidence Summary
 
-- COPPA FAQ: when COPPA applies, operators must give parents access/delete controls, retain child data only as long as needed, and must not condition participation on more child information than reasonably necessary. Retrieval trace: FTC COPPA FAQ lines 384-395 in this planning session. Applicability: direct for child-data minimization principles; legal applicability remains governed by `docs/specs/compliance.md`.
-- FTC mobile health app guidance: health app developers should minimize data, avoid unnecessary access, protect retained data, and get affirmative express consent for health data collection outside hidden policy text. Retrieval trace: FTC Mobile Health App Developers lines 364-375 and 406-412 in this planning session. Applicability: direct for Qimi's health-adjacent family support posture.
-- GOV.UK question-page pattern: teams should know why each question is asked, ask only necessary information, avoid re-asking, pre-populate where possible, include back/continue controls, and optionally use progress indicators. Retrieval trace: GOV.UK Question Pages lines 181-218 in this planning session. Applicability: direct for 3-step onboarding UX structure.
-- USWDS complex-form trust pattern: sensitive forms should provide context, use progressive disclosure, avoid overwhelming users, and avoid asking difficult information without explaining why. Retrieval trace: USWDS Establish Trust lines 187-199 in this planning session. Applicability: direct for ADHD/family-stress challenge selection.
-- ICO Age Appropriate Design Code: child-oriented privacy design favors high-privacy defaults and collecting/retaining the minimum personal data. Retrieval trace: ICO Age Appropriate Design lines 124-132 in this planning session. Applicability: partial because Qimi MVP is adult-directed, but the minimization principle is relevant because Qimi stores child-related data.
+- COPPA FAQ: when COPPA applies, operators must give parents access/delete controls, retain child data only as long as needed, and must not condition participation on more child information than reasonably necessary. Applicability: direct for child-data minimization principles; legal applicability remains governed by `docs/specs/compliance.md`.
+- FTC mobile health app guidance: health app developers should minimize data, avoid unnecessary access, protect retained data, and get affirmative express consent for health data collection outside hidden policy text. Applicability: direct for Qimi's health-adjacent family support posture.
+- GOV.UK question-page pattern: teams should know why each question is asked, ask only necessary information, avoid re-asking, pre-populate where possible, include back/continue controls, and optionally use progress indicators. Applicability: direct for 3-step onboarding UX structure.
+- USWDS complex-form trust pattern: sensitive forms should provide context, use progressive disclosure, avoid overwhelming users, and avoid asking difficult information without explaining why. Applicability: direct for ADHD/family-stress challenge selection.
+- ICO Age Appropriate Design Code: child-oriented privacy design favors high-privacy defaults and collecting/retaining the minimum personal data. Applicability: partial because Qimi MVP is adult-directed, but the minimization principle is relevant because Qimi stores child-related data.
 
 Design conclusion: Qimi onboarding should remain short, contextual, and profile-light. It should collect only the fields needed to personalize the first AI exchange and seed the Family Profile, then let richer profile knowledge emerge progressively through later conversation and explicit Family Profile edits.
 
@@ -344,6 +344,6 @@ Behavior:
 
 ### Self-Detection
 
-1. Pre-flight evidence was performed in this planning pass: external sources were searched/opened and internal code was read with line numbers.
-2. Every external URL used above was accessed in this session through web retrieval.
+1. Pre-flight evidence was performed in the planning pass: external sources were searched/opened and internal code was read with line numbers.
+2. External evidence is recorded as source URLs plus claim summaries, not as non-reproducible chat-session line references.
 3. Existing-code assertions above use current line references, not memory.

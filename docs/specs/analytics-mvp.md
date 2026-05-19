@@ -1,6 +1,6 @@
 # Module Spec: Analytics MVP
 
-> Status: PROPOSED — 2026-05-11
+> Status: IMPLEMENTED, PENDING TECHNICAL ACCEPTANCE — 2026-05-19
 > Module: analytics-mvp
 > Routes: no user-facing route
 > API routes: `pages/api/analytics/event.ts`, `pages/api/analytics/summary.ts` (optional internal read endpoint)
@@ -31,6 +31,15 @@ This spec was written against:
 | Growth Plan CRUD and check-in are implemented on `/plan`. | `pages/plan/index.tsx:46-131`, `pages/plan/index.tsx:133-215` |
 | Growth Plan table has user-owned RLS. | `supabase/migrations/20260509000100_growth_plan_tables.sql:3-57` |
 | Contact form posts to `/api/contact`, which currently only logs the submission. | `components/Landing/ContactModal.tsx:35-64`, `pages/api/contact.ts:3-27` |
+
+### Implementation Pass Notes — 2026-05-19
+
+- Added internal Supabase `analytics_events` migration.
+- Added analytics event allowlist, server helper, client helper, and `POST /api/analytics/event`.
+- Instrumented landing CTA, credentials auth success, guest onboarding step/dropoff, guest chat milestones, authenticated chat milestones/errors, memory extraction counts, growth-plan save prompt show/click, plan item save, and contact form submission.
+- Updated `/privacy` with the MVP analytics disclosure.
+- Added QQ SMTP internal weekly email report endpoint at `pages/api/analytics/cron/weekly-report.ts`, protected by `CRON_SECRET`, plus Vercel cron schedule `10 0 * * 1` (Monday 08:10 Asia/Shanghai).
+- The production deletion behavior for analytics rows remains a launch gate: final privacy/legal review must choose de-identified operational history (`ON DELETE SET NULL`) or full analytics deletion (`ON DELETE CASCADE`) before production rollout.
 
 ### New Document Justification
 
@@ -85,7 +94,7 @@ The MVP must answer these questions without a heavy admin dashboard:
 - Thin client helper for CTA/onboarding UI events.
 - Event taxonomy documented in this spec.
 - SQL queries or a minimal internal JSON summary endpoint for weekly review.
-- Structured `chat_error` and memory/plan outcome events without raw user content.
+- Structured `chat:error` and memory/plan outcome events without raw user content.
 
 ### Out Of Scope
 
@@ -117,7 +126,7 @@ Reasons:
 
 ### Explicit Non-Decision
 
-Do not add Sentry in the analytics MVP. Error observability is covered by `chat_error` events and structured server logs for now. Sentry can be a later reliability task if Qimi accepts third-party telemetry, configures `beforeSend` scrubbing, disables PII, avoids replay, and updates privacy policy accordingly.
+Do not add Sentry in the analytics MVP. Error observability is covered by `chat:error` events and structured server logs for now. Sentry can be a later reliability task if Qimi accepts third-party telemetry, configures `beforeSend` scrubbing, disables PII, avoids replay, and updates privacy policy accordingly.
 
 ---
 
@@ -134,8 +143,9 @@ Rules:
 - Lowercase only.
 - Snake case for object/action.
 - Static event names only. Variable detail goes into properties.
-- Verb set: `view`, `click`, `submit`, `success`, `fail`, `complete`, `dropoff`, `send`, `reach`, `extract`, `show`, `save`.
-- Use past outcomes only when the event represents a completed server outcome: `auth:signup_success`, `plan:item_saved`.
+- Verb/action tokens are fixed by the allowlist. Prefer infinitive actions for UI signals (`click`, `show`) and completed-outcome tokens for server-confirmed results (`success`, `saved`, `extracted`, `submitted`).
+- Allowed initial tokens: `view`, `click`, `submit`, `submitted`, `success`, `fail`, `complete`, `dropoff`, `send`, `reach`, `extracted`, `show`, `save`, `saved`, `error`.
+- Use completed outcomes only when the event represents a confirmed result: `auth:signup_success`, `memory:fact_extracted`, `contact:form_submitted`, `plan:item_saved`.
 - Do not encode route, step number, milestone, or category into the event name.
 
 Examples:
@@ -273,6 +283,7 @@ Retention:
 - Raw analytics rows: keep 180 days for MVP.
 - Aggregated weekly metrics: keep indefinitely if a later aggregation table is added.
 - Account deletion: `user_id` becomes null via `ON DELETE SET NULL`; event payload must not contain PII, so aggregate event history can remain. If counsel prefers stricter deletion, change FK to `ON DELETE CASCADE` before launch.
+- Launch gate: the final privacy/legal review must explicitly choose `ON DELETE SET NULL` with de-identified operational history or `ON DELETE CASCADE` with full analytics deletion. Do not ship this migration to production while that choice is unresolved.
 
 ### 7.2 Write API
 
@@ -327,6 +338,20 @@ Access:
 
 - Only enabled outside production, or protected by existing admin mechanism if one exists by then.
 - If no admin auth exists, do not ship this endpoint to production. Use SQL manually.
+
+### 7.5 Weekly Email Report
+
+Implementation endpoint:
+
+`GET|POST /api/analytics/cron/weekly-report`
+
+Rules:
+
+- Requires `Authorization: Bearer ${CRON_SECRET}`.
+- Runs weekly through Vercel Cron at `10 0 * * 1`, which is Monday 08:10 in Asia/Shanghai.
+- Sends to `ADMIN_EMAIL` through QQ SMTP using `SMTP_HOST`, `SMTP_PORT`, `SMTP_SECURE`, `SMTP_USER`, `SMTP_PASSWORD`, and `MAIL_FROM`.
+- Supports `?dryRun=1` for local validation without sending email.
+- Report contains aggregate event counts only. It must not include user identifiers, chat text, contact content, memory values, plan text, or raw request metadata.
 
 ---
 

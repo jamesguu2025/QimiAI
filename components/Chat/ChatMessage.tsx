@@ -5,6 +5,7 @@ import { RAGSource } from '../../types/api';
 import { FileText, Image as ImageIcon, File } from 'lucide-react';
 import remarkGfm from 'remark-gfm';
 import { parseChatContent } from '../../utils/chat-message-format';
+import { linkifyResearchCitations } from '../../utils/research-citations';
 
 // 附件类型
 export interface Attachment {
@@ -45,9 +46,18 @@ const getFileIcon = (type: string) => {
   return <File size={16} className="text-slate-500" />;
 };
 
+const markdownComponents = {
+  a: ({ href, children, ...props }: React.AnchorHTMLAttributes<HTMLAnchorElement>) => (
+    <a href={href} target="_blank" rel="noopener noreferrer" {...props}>
+      {children}
+    </a>
+  ),
+};
+
 export const ChatMessage: React.FC<ChatMessageProps> = ({ role, content, sources, statusMessage, attachments, isStreaming }) => {
   const isUser = role === 'user';
   const { displayContent } = isUser ? { displayContent: content } : parseChatContent(content);
+  const markdownContent = isUser ? displayContent : linkifyResearchCitations(displayContent, sources);
 
   return (
     <div className={`flex w-full mb-6 group ${isUser ? 'justify-end' : 'justify-start'}`}>
@@ -100,7 +110,9 @@ export const ChatMessage: React.FC<ChatMessageProps> = ({ role, content, sources
             <p className="whitespace-pre-wrap">{displayContent}</p>
           ) : (
             <div className="prose prose-slate max-w-none prose-p:text-[15px] prose-p:leading-relaxed prose-p:text-slate-600 prose-p:font-medium prose-headings:font-semibold prose-headings:text-slate-800 prose-a:text-primary-teal prose-strong:text-slate-700 prose-strong:font-semibold prose-ul:my-2 prose-li:my-0.5 prose-li:text-[15px] prose-li:text-slate-600 prose-table:block prose-table:w-full prose-table:overflow-x-auto prose-table:border-collapse prose-th:border prose-th:border-slate-300 prose-th:bg-slate-50 prose-th:px-3 prose-th:py-2 prose-th:text-left prose-th:text-sm prose-td:border prose-td:border-slate-200 prose-td:px-3 prose-td:py-2 prose-td:text-sm">
-              <ReactMarkdown remarkPlugins={[remarkGfm]}>{displayContent}</ReactMarkdown>
+              <ReactMarkdown remarkPlugins={[remarkGfm]} components={markdownComponents}>
+                {markdownContent}
+              </ReactMarkdown>
             </div>
           )}
         </div>

@@ -15,6 +15,7 @@ import { useChatStore, WELCOME_MESSAGE } from '../stores/chatStore';
 import { useAuthUIStore } from '../stores/authUIStore';
 import MemoryToast from '../components/Chat/MemoryToast';
 import { isTopicFolder, Message, normalizeTopicFolder, TopicFolder } from '../types/chat';
+import { trackClientEvent } from '../lib/client-analytics';
 
 const TOPIC_LABELS: Record<TopicFolder, string> = {
     emotion: 'Emotions',
@@ -222,6 +223,8 @@ export default function ChatPage() {
         }
 
         shouldAutoScrollRef.current = true;
+        const nextGuestMessageCount = guestMessageCount + 1;
+        const hasAttachment = Boolean(attachments?.length);
 
         if (isGuest) {
             guestStorage.addMessage({
@@ -250,6 +253,24 @@ export default function ChatPage() {
         // TODO: 登录用户从 Supabase 获取 userProfile (Phase 2)
 
         await sendMessage(content, attachments, false, userProfile, activeFolderKey);
+
+        if (isGuest) {
+            if (nextGuestMessageCount === 1) {
+                trackClientEvent('chat:first_message_sent', {
+                    conversation_type: 'guest',
+                    auth_state: 'guest',
+                    has_attachment: hasAttachment,
+                    folder_key: activeFolderKey || 'general',
+                });
+            }
+
+            if ([1, 3, 5, 10, 20].includes(nextGuestMessageCount)) {
+                trackClientEvent('chat:message_count_milestone_reach', {
+                    milestone: nextGuestMessageCount,
+                    auth_state: 'guest',
+                });
+            }
+        }
     };
 
     // 访客引导完成

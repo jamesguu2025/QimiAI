@@ -9,6 +9,7 @@ const sections = [
       'Child and family profile information provided by an adult user, including child name or nickname, birth year and month, gender, and initial concerns.',
       'Chat messages, conversation titles, topic folders, attachments metadata, and AI-generated conversation context.',
       'AI-extracted family memory items and short profile summaries that help Qimi personalize future support.',
+      'Limited product analytics events, such as landing CTA clicks, onboarding step completion/dropoff, chat send milestones, memory extraction counts, growth-plan save actions, contact-form submission status, and chat error metadata.',
       'Consent records, including the exact consent text, timestamp, method/version, IP address, and user agent where available.',
     ],
   },
@@ -18,7 +19,17 @@ const sections = [
       'To provide AI-powered family support, personalize responses, keep conversation history available, and maintain your family profile.',
       'To remember important family preferences, interests, goals, concerns, and support context that you share during conversations.',
       'To operate account settings, account deletion, security checks, compliance records, debugging, fraud prevention, and service reliability.',
+      'To understand onboarding, activation, retention, feature reliability, and product usage through limited internal analytics.',
       'To improve Qimi using aggregated, de-identified, or internal operational learnings where appropriate. We do not sell child or family information, and we do not use child or family content to train public AI models unless we separately disclose that use and obtain any required consent.',
+    ],
+  },
+  {
+    title: 'Product Analytics',
+    body: [
+      'For the MVP, product analytics is stored in Qimi-controlled Supabase tables. We do not use third-party product analytics SDKs, ad pixels, heatmaps, session replay, or cross-site tracking for this analytics program.',
+      'Analytics events are limited to product and reliability metadata. They must not include chat message text, child names, contact message contents, plan text, memory fact values, emails, raw IP addresses, or raw user agents.',
+      'Raw analytics rows are intended to be retained for up to 180 days unless we shorten that period or need a different period for security, fraud prevention, legal compliance, or dispute handling.',
+      'When an account is deleted, analytics rows may be kept only as de-identified operational history if they do not contain personal or sensitive content. The final production deletion behavior will be confirmed before public launch.',
     ],
   },
   {

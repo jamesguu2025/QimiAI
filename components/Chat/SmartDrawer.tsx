@@ -711,6 +711,18 @@ export const SmartDrawer: React.FC<SmartDrawerProps> = ({
     });
   const recentConversations = filteredConversations.filter(conversation => !conversation.folderKey);
 
+  const openDashboard = () => {
+    if (isGuest) {
+      useAuthUIStore.getState().openLoginModal(
+        'signup',
+        'Sign up to unlock your Dashboard, preserve this guest conversation, and activate Memory and Growth Plan features for personalized AI support.'
+      );
+      return;
+    }
+
+    router.push('/dashboard');
+  };
+
   // Handle delete conversation
   const handleDeleteConversation = async (conversationId: string): Promise<void> => {
     console.log('[SmartDrawer] Deleting conversation:', conversationId);
@@ -855,7 +867,7 @@ export const SmartDrawer: React.FC<SmartDrawerProps> = ({
 
           {/* Home/Dashboard 按钮 */}
           <button
-            onClick={() => router.push('/dashboard')}
+            onClick={openDashboard}
             className={`flex items-center gap-2 rounded-lg hover:bg-slate-100 transition-colors ${effectiveCollapsed ? 'p-2' : 'px-3 py-1.5'}`}
             title="Dashboard"
           >
@@ -958,7 +970,10 @@ export const SmartDrawer: React.FC<SmartDrawerProps> = ({
         {!effectiveCollapsed && isGuest && (
           <div className="p-4 border-t border-slate-100">
             <button
-              onClick={() => useAuthUIStore.getState().openLoginModal()}
+              onClick={() => useAuthUIStore.getState().openLoginModal(
+                'signup',
+                'Create an account to keep your chat history, unlock Memory, and turn useful recommendations into a Growth Plan.'
+              )}
               className="w-full flex items-center justify-center gap-2 px-4 py-2.5 bg-primary-teal text-white rounded-lg hover:bg-primary-teal/90 transition-colors font-medium text-sm"
             >
               <LogIn size={18} />
