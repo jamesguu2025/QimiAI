@@ -2,6 +2,7 @@ import type { NextApiRequest, NextApiResponse } from 'next';
 import { getServerSession } from 'next-auth';
 import { authOptions } from '../auth/[...nextauth]';
 import { getSupabaseAdmin } from '../../../lib/supabase';
+import { getPayloadSizeBytes, rejectIfRateLimited } from '../../../lib/rate-limit';
 import type { PlanCategory, PlanContentBlock } from '../../../types/plan';
 import { PLAN_CATEGORIES } from '../../../types/plan';
 import { extractMarkdownTables } from '../../../utils/markdown-tables';
@@ -14,6 +15,7 @@ const VALID_CATEGORIES = new Set(PLAN_CATEGORIES.map((category) => category.id))
 const UUID_REGEX = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
 const HARD_BLOCK_FLAGS = new Set(['crisis']);
 const MEDICATION_DIRECTIVE_PATTERN = /\b(increase|decrease|raise|lower|reduce|stop|start|switch|change|double|halve|take|give)\b.*\b(\d+\s?mg|dose|dosage|tablet|pill|capsule)\b|(\d+\s?mg).*\b(increase|decrease|raise|lower|reduce|stop|start|switch|change|take|give)\b/i;
+const MAX_PAYLOAD_BYTES = 16 * 1024;
 
 type ExtractionCategory = PlanCategory | 'none';
 
@@ -421,6 +423,19 @@ export default async function handler(req: NextApiRequest, res: NextApiResponse)
   }
 
   const { supabase, userId } = context;
+  if (getPayloadSizeBytes(req) > MAX_PAYLOAD_BYTES) {
+    return res.status(413).json({ error: 'Payload too large' });
+  }
+
+  if (rejectIfRateLimited(req, res, {
+    namespace: 'plan-extract-from-chat',
+    key: userId,
+    limit: 20,
+    windowMs: 60 * 1000,
+  })) {
+    return;
+  }
+
   const { assistantContent, userContext } = req.body || {};
   const sourceConversationId = asUuidOrNull(req.body?.conversationId || req.body?.sourceConversationId);
   const requestSourceMessageId = asUuidOrNull(req.body?.sourceMessageId);

@@ -7,11 +7,13 @@ import { getServerSession } from 'next-auth';
 import { authOptions } from '../auth/[...nextauth]';
 import { getSupabaseAdmin } from '../../../lib/supabase';
 import { trackServerEvent } from '../../../lib/analytics';
+import { getPayloadSizeBytes, rejectIfRateLimited } from '../../../lib/rate-limit';
 
 const DEEPSEEK_API_KEY = process.env.DEEPSEEK_API_KEY;
 const DEEPSEEK_API_BASE = process.env.DEEPSEEK_API_BASE || 'https://api.deepseek.com';
 const DEEPSEEK_MODEL = process.env.DEEPSEEK_MODEL || 'deepseek-v4-flash';
 const DEEPSEEK_THINKING = { type: 'disabled' };
+const MAX_PAYLOAD_BYTES = 4 * 1024;
 
 const VALID_CATEGORIES = [
   'child_info', 'school', 'family', 'behavior',
@@ -385,6 +387,19 @@ export default async function handler(
   const session = await getServerSession(req, res, authOptions);
   if (!session?.user?.email) {
     return res.status(401).json({ error: 'Unauthorized' });
+  }
+
+  if (getPayloadSizeBytes(req) > MAX_PAYLOAD_BYTES) {
+    return res.status(413).json({ error: 'Payload too large' });
+  }
+
+  if (rejectIfRateLimited(req, res, {
+    namespace: 'memory-extract',
+    key: session.user.email,
+    limit: 20,
+    windowMs: 60 * 1000,
+  })) {
+    return;
   }
 
   const { conversationId } = req.body;

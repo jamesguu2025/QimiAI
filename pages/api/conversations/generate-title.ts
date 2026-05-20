@@ -2,6 +2,7 @@ import type { NextApiRequest, NextApiResponse } from 'next';
 import { getServerSession } from 'next-auth';
 import { authOptions } from '../auth/[...nextauth]';
 import { getSupabaseAdmin } from '../../../lib/supabase';
+import { getPayloadSizeBytes, rejectIfRateLimited } from '../../../lib/rate-limit';
 
 const DEEPSEEK_API_KEY = process.env.DEEPSEEK_API_KEY;
 const DEEPSEEK_API_BASE = process.env.DEEPSEEK_API_BASE || 'https://api.deepseek.com';
@@ -9,6 +10,7 @@ const DEEPSEEK_MODEL = process.env.DEEPSEEK_TITLE_MODEL || process.env.DEEPSEEK_
 const DEEPSEEK_THINKING = { type: 'disabled' };
 const MAX_ENGLISH_TITLE_CHARS = 36;
 const MAX_CJK_TITLE_CHARS = 14;
+const MAX_PAYLOAD_BYTES = 8 * 1024;
 
 function fallbackTitleFromMessage(message: string) {
   const trimmed = message.trim();
@@ -147,6 +149,19 @@ export default async function handler(req: NextApiRequest, res: NextApiResponse)
   const session = await getServerSession(req, res, authOptions);
   if (!session?.user?.email) {
     return res.status(401).json({ error: 'Unauthorized' });
+  }
+
+  if (getPayloadSizeBytes(req) > MAX_PAYLOAD_BYTES) {
+    return res.status(413).json({ error: 'Payload too large' });
+  }
+
+  if (rejectIfRateLimited(req, res, {
+    namespace: 'conversation-title',
+    key: session.user.email,
+    limit: 20,
+    windowMs: 60 * 1000,
+  })) {
+    return;
   }
 
   const { conversationId, userMessage, assistantMessage, fallbackTitle } = req.body || {};

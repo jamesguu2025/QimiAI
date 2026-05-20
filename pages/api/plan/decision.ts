@@ -1,4 +1,7 @@
 import type { NextApiRequest, NextApiResponse } from 'next';
+import { getServerSession } from 'next-auth';
+import { authOptions } from '../auth/[...nextauth]';
+import { getPayloadSizeBytes, rejectIfRateLimited } from '../../../lib/rate-limit';
 import type { PlanCategory } from '../../../types/plan';
 import { PLAN_CATEGORIES } from '../../../types/plan';
 
@@ -12,6 +15,7 @@ const DEEPSEEK_API_BASE = process.env.DEEPSEEK_API_BASE || 'https://api.deepseek
 const DEEPSEEK_MODEL = process.env.DEEPSEEK_MODEL || 'deepseek-v4-flash';
 const DEEPSEEK_THINKING = { type: 'disabled' };
 const VALID_CATEGORIES = new Set(PLAN_CATEGORIES.map((category) => category.id));
+const MAX_PAYLOAD_BYTES = 16 * 1024;
 
 function cleanJsonResponse(responseText: string): string {
   return responseText
@@ -107,6 +111,24 @@ export default async function handler(req: NextApiRequest, res: NextApiResponse)
   if (req.method !== 'POST') {
     res.setHeader('Allow', ['POST']);
     return res.status(405).json({ error: `Method ${req.method} not allowed` });
+  }
+
+  if (getPayloadSizeBytes(req) > MAX_PAYLOAD_BYTES) {
+    return res.status(413).json({ error: 'Payload too large' });
+  }
+
+  const session = await getServerSession(req, res, authOptions);
+  if (!session?.user?.email) {
+    return res.status(401).json({ error: 'Unauthorized' });
+  }
+
+  if (rejectIfRateLimited(req, res, {
+    namespace: 'plan-decision',
+    key: session.user.email,
+    limit: 30,
+    windowMs: 60 * 1000,
+  })) {
+    return;
   }
 
   const { assistantContent } = req.body || {};

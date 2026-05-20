@@ -6,6 +6,7 @@ import type { ActionPlanItem, PlanCategory, PlanContentBlock, WeekDay } from '..
 import { PLAN_CATEGORIES } from '../../../types/plan';
 import { extractMarkdownTables } from '../../../utils/markdown-tables';
 import { trackServerEvent } from '../../../lib/analytics';
+import { getPayloadSizeBytes, rejectIfRateLimited } from '../../../lib/rate-limit';
 
 type PlanItemRow = {
   id: string;
@@ -47,6 +48,7 @@ const UUID_REGEX = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12
 const FREE_PLAN_LIMIT = 5;
 const HARD_BLOCK_FLAGS = new Set(['crisis']);
 const MEDICATION_DIRECTIVE_PATTERN = /\b(increase|decrease|raise|lower|reduce|stop|start|switch|change|double|halve|take|give)\b.*\b(\d+\s?mg|dose|dosage|tablet|pill|capsule)\b|(\d+\s?mg).*\b(increase|decrease|raise|lower|reduce|stop|start|switch|change|take|give)\b/i;
+const MAX_PAYLOAD_BYTES = 16 * 1024;
 
 function mapPlanItem(row: PlanItemRow): ActionPlanItem {
   return {
@@ -436,6 +438,19 @@ export default async function handler(req: NextApiRequest, res: NextApiResponse)
   }
 
   const { supabase, userId } = context;
+  if (getPayloadSizeBytes(req) > MAX_PAYLOAD_BYTES) {
+    return res.status(413).json({ error: 'Payload too large' });
+  }
+
+  if (rejectIfRateLimited(req, res, {
+    namespace: 'plan-save-from-chat',
+    key: userId,
+    limit: 20,
+    windowMs: 60 * 1000,
+  })) {
+    return;
+  }
+
   const { assistantContent, userContext, duplicateOverride } = req.body || {};
   const sourceConversationId = asUuidOrNull(req.body?.sourceConversationId || req.body?.conversationId);
   const requestSourceMessageId = asUuidOrNull(req.body?.sourceMessageId);

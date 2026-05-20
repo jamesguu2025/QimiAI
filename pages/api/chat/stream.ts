@@ -12,6 +12,8 @@ import { getSupabaseAdmin } from '../../../lib/supabase';
 import { isTopicFolder, normalizeTopicFolder, TopicFolder } from '../../../types/chat';
 import { routeRagNeed } from '../../../lib/rag-router';
 import { trackServerEvent } from '../../../lib/analytics';
+import { getClientIp, getPayloadSizeBytes, rejectIfRateLimited } from '../../../lib/rate-limit';
+import { createHmac, randomUUID, timingSafeEqual } from 'crypto';
 
 type ChatSource = {
   title: string;
@@ -167,6 +169,11 @@ const DEEPSEEK_API_KEY = process.env.DEEPSEEK_API_KEY;
 const DEEPSEEK_API_BASE = process.env.DEEPSEEK_API_BASE || 'https://api.deepseek.com';
 const DEEPSEEK_MODEL = process.env.DEEPSEEK_MODEL || 'deepseek-v4-flash';
 const DEEPSEEK_THINKING = { type: 'disabled' };
+const MAX_CHAT_PAYLOAD_BYTES = 64 * 1024;
+const AUTH_DAILY_CHAT_LIMIT = 50;
+const GUEST_LIFETIME_CHAT_LIMIT = 10;
+const GUEST_SESSION_COOKIE = 'qimi_guest_session';
+const GUEST_CHAT_QUOTA_COOKIE = 'qimi_guest_chat_quota';
 const ENABLE_RAG = process.env.ENABLE_RAG === 'true';
 
 function shouldReusePriorSources(userMessage: string): boolean {
@@ -211,6 +218,82 @@ function formatSourceLinksForPrompt(sources: ChatSource[]): string {
       return `${index + 1}. [${source.title}](${source.url})${meta ? ` — ${meta}` : ''}`;
     })
     .join('\n');
+}
+
+function getCookieAttributes() {
+  const attrs = ['Path=/', 'Max-Age=31536000', 'HttpOnly', 'SameSite=Lax'];
+  if (process.env.NODE_ENV === 'production') attrs.push('Secure');
+  return attrs.join('; ');
+}
+
+function getCookieSigningSecret() {
+  return process.env.NEXTAUTH_SECRET || process.env.AUTH_SECRET || 'qimi-local-dev-secret';
+}
+
+function signGuestUsage(sessionId: string, count: number) {
+  return createHmac('sha256', getCookieSigningSecret())
+    .update(`${sessionId}.${count}`)
+    .digest('base64url');
+}
+
+function readGuestUsage(rawValue: string | undefined, sessionId: string) {
+  if (!rawValue) return 0;
+  const [countText, signature] = rawValue.split('.');
+  const count = Number.parseInt(countText || '', 10);
+  if (!Number.isFinite(count) || count < 0 || !signature) return 0;
+
+  const expected = signGuestUsage(sessionId, count);
+  const providedBuffer = Buffer.from(signature);
+  const expectedBuffer = Buffer.from(expected);
+  if (providedBuffer.length !== expectedBuffer.length) return 0;
+  if (!timingSafeEqual(providedBuffer, expectedBuffer)) return 0;
+  return count;
+}
+
+function appendSetCookie(res: NextApiResponse, cookie: string) {
+  const current = res.getHeader('Set-Cookie');
+  if (!current) {
+    res.setHeader('Set-Cookie', cookie);
+    return;
+  }
+  res.setHeader('Set-Cookie', Array.isArray(current) ? [...current, cookie] : [String(current), cookie]);
+}
+
+function setSignedGuestUsage(res: NextApiResponse, sessionId: string, count: number) {
+  const signature = signGuestUsage(sessionId, count);
+  appendSetCookie(res, `${GUEST_CHAT_QUOTA_COOKIE}=${count}.${signature}; ${getCookieAttributes()}`);
+}
+
+function ensureGuestSession(req: NextApiRequest, res: NextApiResponse) {
+  const existing = req.cookies[GUEST_SESSION_COOKIE];
+  if (existing) return existing;
+
+  const sessionId = randomUUID();
+  appendSetCookie(res, `${GUEST_SESSION_COOKIE}=${sessionId}; ${getCookieAttributes()}`);
+  return sessionId;
+}
+
+function shanghaiDayStartIso() {
+  const offsetMs = 8 * 60 * 60 * 1000;
+  const shanghaiNow = new Date(Date.now() + offsetMs);
+  shanghaiNow.setUTCHours(0, 0, 0, 0);
+  return new Date(shanghaiNow.getTime() - offsetMs).toISOString();
+}
+
+async function countUserMessagesToday(supabase: ReturnType<typeof getSupabaseAdmin>, userId: string) {
+  const { count, error } = await supabase
+    .from('messages')
+    .select('id, conversations!inner(user_id)', { count: 'exact', head: true })
+    .eq('role', 'user')
+    .eq('conversations.user_id', userId)
+    .gte('created_at', shanghaiDayStartIso());
+
+  if (error) {
+    console.error('[chat/stream] Daily quota count failed:', error);
+    return null;
+  }
+
+  return count || 0;
 }
 
 function buildRagAnswerInstruction(sourceCount: number): string {
@@ -418,13 +501,24 @@ export default async function handler(
 
     if (session?.user?.id) {
       userId = session.user.id;
-    } else if (req.cookies['qimi_guest_session']) {
-      userId = `guest_${req.cookies['qimi_guest_session']}`;
     } else {
-      userId = `guest_${Date.now()}_${Math.random().toString(36).slice(2, 9)}`;
+      userId = `guest_${ensureGuestSession(req, res)}`;
     }
 
     const { content, attachments, conversationHistory, userProfile, forceRAG, conversationId } = req.body;
+    if (getPayloadSizeBytes(req) > MAX_CHAT_PAYLOAD_BYTES) {
+      return res.status(413).json({ error: 'Payload too large' });
+    }
+
+    if (rejectIfRateLimited(req, res, {
+      namespace: 'chat-stream',
+      key: session?.user?.email || getClientIp(req),
+      limit: session?.user?.email ? 60 : 15,
+      windowMs: 60 * 1000,
+    })) {
+      return;
+    }
+
     const reusableSources = shouldReusePriorSources(content || '')
       ? getRecentHistorySources(conversationHistory)
       : [];
@@ -494,6 +588,27 @@ export default async function handler(
         console.error('[chat/stream] Memory retrieval failed, skipping:', memErr);
         // Silent failure — memory errors must not block chat
       }
+    }
+
+    if (session?.user?.email) {
+      if (!authenticatedUserId) {
+        return res.status(404).json({ error: 'User not found' });
+      }
+
+      const messagesToday = await countUserMessagesToday(supabaseMemory, authenticatedUserId);
+      if (messagesToday === null) {
+        return res.status(503).json({ error: 'Unable to check quota' });
+      }
+      if (messagesToday >= AUTH_DAILY_CHAT_LIMIT) {
+        return res.status(429).json({ error: 'Daily chat limit reached' });
+      }
+    } else {
+      const guestSessionId = ensureGuestSession(req, res);
+      const usedCount = readGuestUsage(req.cookies[GUEST_CHAT_QUOTA_COOKIE], guestSessionId);
+      if (usedCount >= GUEST_LIFETIME_CHAT_LIMIT) {
+        return res.status(429).json({ error: 'Guest chat limit reached' });
+      }
+      setSignedGuestUsage(res, guestSessionId, usedCount + 1);
     }
 
     if (conversationId) {
