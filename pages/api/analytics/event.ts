@@ -67,6 +67,7 @@ export default async function handler(req: NextApiRequest, res: NextApiResponse)
 
   await trackServerEvent(req, eventName, sanitizedProperties, {
     userId,
+    userEmail: session?.user?.email || null,
     anonymousId: getString(req.body?.anonymousId),
     sessionId: getString(req.body?.sessionId),
     pagePath: getString(req.body?.pagePath) || '/',

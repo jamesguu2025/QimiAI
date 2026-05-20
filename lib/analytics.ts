@@ -8,6 +8,7 @@ import {
 
 type TrackServerEventOptions = {
   userId?: string | null;
+  userEmail?: string | null;
   sessionId?: string | null;
   anonymousId?: string | null;
   pagePath?: string;
@@ -40,6 +41,16 @@ const INTERNAL_EMAIL_DOMAINS = (process.env.ANALYTICS_INTERNAL_EMAIL_DOMAINS || 
   .map((domain) => domain.trim().toLowerCase())
   .filter(Boolean);
 
+const INTERNAL_EMAILS = [
+  process.env.ANALYTICS_INTERNAL_EMAILS,
+  process.env.ADMIN_EMAIL,
+  process.env.FEEDBACK_TO,
+]
+  .filter(Boolean)
+  .flatMap((value) => value!.split(','))
+  .map((email) => email.trim().toLowerCase())
+  .filter(Boolean);
+
 function getEnvironment() {
   return process.env.VERCEL_ENV || process.env.NODE_ENV || 'local';
 }
@@ -69,12 +80,14 @@ function getRequestPath(req: NextApiRequest) {
 function isInternalRequest(req: NextApiRequest, userEmail?: string | null) {
   const host = getHeaderValue(req, 'host') || '';
   const env = getEnvironment();
-  const emailDomain = userEmail?.split('@')[1]?.toLowerCase();
+  const normalizedEmail = userEmail?.trim().toLowerCase();
+  const emailDomain = normalizedEmail?.split('@')[1]?.toLowerCase();
 
   return (
     env !== 'production' ||
     host.startsWith('localhost') ||
     host.startsWith('127.0.0.1') ||
+    Boolean(normalizedEmail && INTERNAL_EMAILS.includes(normalizedEmail)) ||
     Boolean(emailDomain && INTERNAL_EMAIL_DOMAINS.includes(emailDomain))
   );
 }
@@ -119,7 +132,7 @@ export async function trackServerEvent(
       utm_campaign: options.utmCampaign || null,
       device_type: options.deviceType || null,
       environment: getEnvironment(),
-      is_internal: isInternalRequest(req),
+      is_internal: isInternalRequest(req, options.userEmail),
       properties: sanitizedProperties,
     };
 
