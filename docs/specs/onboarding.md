@@ -142,7 +142,7 @@ These are required to complete the current guest onboarding:
 |---|---|---|
 | `childAge` | `qimi_guest_data.childAge` only | Derived from birthday; do not persist as durable source of truth |
 | `chatHistory[]` | `qimi_guest_data.chatHistory`, then `conversations` + `messages` | Migrated only if at least one user message exists |
-| `messageCount` | `qimi_guest_data.messageCount` | Guest quota/counting only |
+| `messageCount` | `qimi_guest_data.messageCount` | Guest quota/counting only. MVP quota decision: guest users receive a permanent 10-message trial allowance; registered users should receive 50 chat messages per day once server-side account quota is implemented. |
 | `createdAt`, `lastVisit` | `qimi_guest_data` | Guest lifecycle metadata |
 | `parental_consents.*` | Supabase `parental_consents` | Consent audit, not child profile |
 

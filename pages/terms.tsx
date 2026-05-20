@@ -52,7 +52,7 @@ const sections = [
   },
   {
     title: 'Contact',
-    body: 'For questions about these terms, contact us at qimi.ai2025@hotmail.com.',
+    body: 'For questions about these terms, contact us at gu778@hotmail.com.',
   },
 ];
 

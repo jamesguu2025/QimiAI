@@ -29,31 +29,31 @@ const sections = [
       'For the MVP, product analytics is stored in Qimi-controlled Supabase tables. We do not use third-party product analytics SDKs, ad pixels, heatmaps, session replay, or cross-site tracking for this analytics program.',
       'Analytics events are limited to product and reliability metadata. They must not include chat message text, child names, contact message contents, plan text, memory fact values, emails, raw IP addresses, or raw user agents.',
       'Raw analytics rows are intended to be retained for up to 180 days unless we shorten that period or need a different period for security, fraud prevention, legal compliance, or dispute handling.',
-      'When an account is deleted, analytics rows may be kept only as de-identified operational history if they do not contain personal or sensitive content. The final production deletion behavior will be confirmed before public launch.',
+      'When an account is deleted, analytics rows may be kept only as de-identified operational history if they do not contain personal or sensitive content.',
     ],
   },
   {
     title: 'AI Processing',
     body: [
-      'Chat messages and related context may be processed by third-party AI services, including text-generation and vision services, to generate responses and extract profile memories.',
+      'Chat messages and related context may be processed by third-party large language model and AI services, including text-generation and vision services, to generate responses and extract profile memories.',
       'We do not sell personal information or share it for cross-context behavioral advertising. We use third-party AI services only to operate, secure, troubleshoot, and improve Qimi features.',
-      'When you delete your account, we delete data from our own systems, but we cannot guarantee deletion of data already processed or retained by third-party AI providers. We will handle third-party deletion or retention limits according to provider terms, available controls, and applicable law.',
+      'When you delete your account, we delete account-owned content and child or family profile data from our own systems, but de-identified product analytics may remain. We cannot guarantee deletion of data already processed or retained by third-party AI service providers. We will handle third-party deletion or retention limits according to provider terms, available controls, and applicable law.',
     ],
   },
   {
     title: 'Children and Parent Rights',
     body: [
-      'Qimi is intended for adult users, including parents and legal guardians, and is not for independent use by children.',
+      'Qimi is designed for parents, legal guardians, and other adults supporting a family. Children should use Qimi only with parent or guardian involvement.',
       'An adult user must confirm they are authorized to provide child or family information before Qimi stores that information for an account.',
       'Parents may review and update family profile information in the app, and may delete the account and related data from Settings.',
-      'We do not knowingly allow children to create accounts independently.',
+      'Qimi is not designed as a child-directed service or as a tool for children to manage their own care independently.',
     ],
   },
   {
     title: 'Data Retention and Deletion',
     body: [
       'We retain account, profile, conversation, memory, and consent records while your account is active so Qimi can provide the service.',
-      'You can request self-service deletion from Settings. Deleting your account removes account-owned data from our database through cascading deletion.',
+      'You can request self-service deletion from Settings. Deleting your account removes account information, conversations, child and family profile data, memory items, growth plan items, and consent records from our database. De-identified product analytics may be retained for product measurement and service reliability.',
       'Some operational logs, backups, security records, legal-compliance records, or third-party provider records may persist for a limited period where reasonably necessary for security, fraud prevention, legal compliance, dispute handling, or provider operations.',
     ],
   },
@@ -67,7 +67,7 @@ const sections = [
   {
     title: 'Contact',
     body: [
-      'Operator: Qimi AI. For privacy questions, parent requests, or data requests, contact us at qimi.ai2025@hotmail.com.',
+      'Operator: Qimi AI. For privacy questions, parent requests, data requests, or user messages, contact us at gu778@hotmail.com.',
       'Additional business mailing address and telephone contact will be added before public launch if required for the final launch jurisdiction and COPPA operator disclosure.',
     ],
   },
@@ -87,7 +87,7 @@ export default function PrivacyPage() {
           <h1 className="mt-3 text-3xl font-bold text-slate-900">Privacy Policy</h1>
           <p className="mt-4 text-slate-600">
             This policy explains how Qimi AI collects, uses, and protects information for our ADHD family support service.
-            Qimi is designed for parents and legal guardians, not for independent use by children.
+            Qimi is designed for parents, legal guardians, and other adults supporting a family.
           </p>
 
           <div className="mt-10 space-y-8">

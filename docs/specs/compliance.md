@@ -1,6 +1,6 @@
 # Module Spec: Compliance — MVP Launch Gate
 
-> Status: PARTIALLY IMPLEMENTED — 2026-05-08 gate refresh. Original approval was 2026-03-17. MVP launch posture is adult-directed and conditional on keeping children from independently creating accounts or using Qimi as the intended user.
+> Status: PARTIALLY IMPLEMENTED — 2026-05-08 gate refresh, with 2026-05-20 MVP product decisions. Original approval was 2026-03-17. MVP launch posture is parent/adult-directed: Qimi is designed for parents, legal guardians, and adults supporting a family, not as a child-directed service or a tool for children to manage their own care independently.
 > Module: compliance (cross-cutting)
 > Routes: `/privacy`, `/terms`, `/settings`, `/consent`
 > API routes: `pages/api/user/delete-account.ts`, `pages/api/compliance/consent.ts`, `pages/api/compliance/consent-status.ts`
@@ -33,13 +33,13 @@ This is a high-risk compliance spec. Before any public launch decision, create o
 - EDPB GDPR territorial-scope guidance requires revisit if Qimi offers goods/services to people in the EU or monitors their behavior there: https://www.edpb.europa.eu/our-work-tools/our-documents/guidelines/guidelines-32018-territorial-scope-gdpr-article-3-version_en
 - Standardized launch gate and Search Ledger are recorded in `docs/reviews/compliance-mvp-launch-gate-2026-05-08.md`.
 - Current code evidence after the 2026-05-08 implementation pass: shared modal signup includes adult account-holder confirmation; global `AppLayout` checks consent status for logged-in app pages; account deletion API exists in `pages/api/user/delete-account.ts`; `/privacy`, `/terms`, `/consent`, `pages/api/compliance/consent.ts`, and `pages/api/compliance/consent-status.ts` exist; `supabase/migrations/20260508000100_compliance_consent_and_rls.sql` adds `parental_consents` and replaces active broad RLS policies with `auth.uid()` ownership checks.
-- Current remaining launch requirements: preserve adult-directed scope, complete human acceptance, add final business contact details if needed, and revisit COPPA/FTC Health Breach if child accounts, child-directed AI, health-record imports, device imports, or provider integrations are added.
+- Current remaining launch requirements: preserve parent/adult-directed scope, complete human acceptance, keep contact details current, and revisit COPPA/FTC Health Breach if Qimi adds child-directed account flows, school/clinic child-user deployments, health-record imports, device imports, or provider integrations.
 
 ### Regulatory Scope (MVP only)
 
 | Regulation | Applicability | MVP Action Required |
 |-----------|--------------|-------------------|
-| **COPPA** | MVP-CONDITIONAL — Qimi is scoped as an adult/parent-directed service, not child-directed independent use | Adult user attestation plus no child accounts/child-directed marketing. Revisit before child-accessible AI, school/clinic child-user deployments, or materially broader child data collection |
+| **COPPA** | MVP-CONDITIONAL — Qimi is scoped as a parent/adult-directed service, not a child-directed service | Adult user attestation plus no child-directed marketing or child-directed account flow. Revisit before school/clinic child-user deployments, child-directed AI, or materially broader child data collection |
 | **FTC Act § 5** | YES — deceptive practices if privacy policy doesn't match actual data collection | Accurate privacy policy + medical disclaimer in AI responses |
 | **FTC Health Breach Notification Rule** | MVP-CONDITIONAL — Qimi stores health-adjacent child/family information but does not import health records, connected-device data, provider data, or operate as a PHR aggregator | Keep breach notification reserve language. Revisit before health-record/device/provider integrations or any security incident |
 | **CCPA/CPRA** | DEFER WITH ADR — not a blocker while Qimi remains below statutory thresholds and does not sell/share personal information | Record threshold watch and revisit triggers; do not rely on a generic 5,000-user statement |
@@ -54,7 +54,7 @@ Internal design choice: CCPA/CPRA, HIPAA, GDPR, and FDA/SaMD are not implemented
 - Six items only — no cookie banners, no data export API, no GDPR machinery
 - Privacy Policy and Terms of Service are static Next.js pages (not dynamic)
 - Account deletion uses existing CASCADE infrastructure — no soft-delete, no retention period
-- Adult account-holder confirmation + timestamp is the MVP control while Qimi remains adult-directed and does not allow independent child use
+- Adult account-holder confirmation + timestamp is the MVP control while Qimi remains parent/adult-directed
 - RLS fix is a SQL migration — no application-level changes needed
 
 ### Evidence Layering
@@ -62,7 +62,7 @@ Internal design choice: CCPA/CPRA, HIPAA, GDPR, and FDA/SaMD are not implemented
 | Claim | Basis |
 |-------|-------|
 | COPPA requires verifiable parental consent when the rule applies | Official FTC evidence; see SOP v2.4 refresh status above |
-| Adult-directed MVP uses attestation rather than heavy verification | Internal MVP design choice tied to product scope: adult users only, no child accounts, no child-directed AI, no child-directed marketing |
+| Adult-directed MVP uses attestation rather than heavy verification | Internal MVP design choice tied to product scope: parent/adult-directed positioning, no child-directed account flow, no child-directed AI, no child-directed marketing |
 | CCPA/CPRA is not a blocker while statutory thresholds are not met and personal information is not sold/shared | External research supported by CPPA/OAG official guidance; must be tracked by threshold/revisit triggers, not a generic 5,000-user rule |
 | RLS `USING(true)` is a security gap | Internal design choice — current API routes use service_role key which bypasses RLS, so the gap is not currently exploitable. Fix anyway as defense-in-depth |
 | HIPAA is not assumed for the current consumer-app posture | External research supported by HHS covered-entity/business-associate guidance; revisit if Qimi partners with covered entities |
@@ -149,15 +149,15 @@ Do not rely on unsourced competitor claims as SOP evidence. Use official FTC sou
 
 ### Item 3: Privacy Policy Page
 
-**Problem**: Current `public/privacy.html` is a static HTML file from waitlist era (2025-01-17). It does not mention: child profiles, chat history, memory items, AI processing via DeepSeek API, data retention, or user rights beyond a generic sentence.
+**Problem**: Current `public/privacy.html` is a static HTML file from waitlist era (2025-01-17). It does not mention: child profiles, chat history, memory items, third-party AI processing, data retention, or user rights beyond a generic sentence.
 
 **Fix**: Create `/pages/privacy.tsx` as a Next.js page using LandingLayout. Content must accurately describe:
 - What data is collected (user account, child profile, chat messages, AI-extracted memory items)
-- How data is processed (DeepSeek API for text, GLM for vision)
+- How data is processed by third-party large language model and AI services, without naming specific model vendors in user-visible policy copy
 - Data sharing (no selling; third-party AI API processing)
 - **Third-party data retention disclosure**: "Chat messages are processed by third-party AI services to generate responses. While we delete all data from our servers upon account deletion, we cannot guarantee deletion of data already processed by third-party AI providers. These providers have their own data retention policies."
 - User rights (access via settings, deletion via settings)
-- Children's privacy (adult-directed service, no independent child accounts, adult authorization)
+- Children's privacy (parent/adult-directed service, not child-directed, adult authorization)
 - Contact information
 - Effective date
 
@@ -186,7 +186,7 @@ Remove or redirect `public/terms.html` → `/terms`.
 
 ### Item 5: Account Deletion
 
-**Problem**: COPPA requires parents to be able to delete their child's data. Current process is manual email to `qimi.ai2025@hotmail.com` with 30-day SLA. No automated mechanism exists.
+**Problem**: COPPA-related parent rights and general privacy expectations require parents/adult account holders to be able to delete account-owned child/family data. Current process is manual email to `gu778@hotmail.com` with 30-day SLA. No automated mechanism exists.
 
 **Fix**: Create self-service account deletion:
 
@@ -203,7 +203,7 @@ Remove or redirect `public/terms.html` → `/terms`.
 | Parental consent | `parental_consents` table | YES | Consent timestamp, text, IP |
 | Session cookie | Browser | Client `signOut()` | NextAuth JWT |
 | Chat cache | Browser localStorage | Auto-expires (5min TTL) | `qimi_conversations_cache` |
-| DeepSeek API logs | External | NO — cannot delete | Disclosed in Privacy Policy |
+| Third-party AI provider logs | External | NO — cannot guarantee deletion | Disclosed in Privacy Policy without naming specific providers |
 
 No file storage exists (no Supabase Storage buckets, no uploaded images). `messages.attachments` is metadata-only JSONB.
 

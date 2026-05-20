@@ -1,6 +1,6 @@
 # Project Control — Qimi Web
 
-> Created: 2026-03-15 | Amended: 2026-03-16 (route restructure, module rename, execution order update) | Amended: 2026-05-06 (SOP v2.4 + local Supabase acceptance + current code reality)
+> Created: 2026-03-15 | Amended: 2026-03-16 (route restructure, module rename, execution order update) | Amended: 2026-05-06 (SOP v2.4 + local Supabase acceptance + current code reality) | Amended: 2026-05-20 (Growth Plan accepted, Crisis Calm archived, Report Analysis moved to dedicated post-MVP planning)
 > Purpose: Freeze the execution order, document priority, branch acceptance policy, and current implementation/acceptance baseline so future work does not drift.
 > Status: ACTIVE
 
@@ -123,10 +123,10 @@ Current baseline:
 - Family Profile (was User Profile): `Implemented` and human-accepted in current working branch
 - **Compliance (MVP launch gate)**: `Partially implemented` (delete-account/settings pieces exist; privacy/terms/consent pages and high-risk EBG record still pending)
 - Settings (account): `Implemented` and human-accepted in current working branch
-- Growth Plan: `Planned`
-- Report Analysis: `Planned`
-- Crisis Calm: `Planned`
-- Memory Profile Summary: `Partially implemented` (memory API routes and migrations exist; prompt/chat integration still requires acceptance)
+- Growth Plan: `Implemented` and human-accepted in current working branch (manual plan management and chat save-to-plan path implemented; post-MVP export/reminder refinements remain separate)
+- Report Analysis: `Planned` (valuable, but moved out of the current MVP acceptance baseline; requires a dedicated refreshed spec and branch before implementation)
+- Crisis Calm: `Archived` (explicitly deferred from MVP by user decision on 2026-05-20)
+- Memory Profile Summary: `Implemented` and human-accepted in current working branch (conversation extraction, profile display, and profile summary path are active; future quality tuning is non-blocking)
 - Membership & Billing: `Planned` (post-MVP monetization module, spec: `docs/specs/membership-billing.md`)
 - ~~User Profile~~: `Superseded` — split into Family Profile + Settings (2026-03-16)
 
@@ -140,6 +140,7 @@ The project must move forward in this order unless the user explicitly overrides
 > Amended 2026-03-17: Added compliance module as launch gate. Can execute in parallel with feature modules.
 > Amended 2026-05-06: Before new feature implementation, refresh the active spec to SOP v2.4 if it contains current-code facts, external claims, or high-risk compliance/security decisions.
 > Amended 2026-05-07: Added SmartDrawer topic folder behavior closure before Family/Profile acceptance after manual QA found topic-started conversations were not persisted under the selected topic.
+> Amended 2026-05-20: Growth Plan, memory/profile learning, onboarding, analytics MVP, compliance copy, and Dashboard entry behavior have been implemented on the current baseline. Crisis Calm is archived. Report Analysis remains a separate P1/post-MVP candidate that requires refreshed planning before implementation.
 
 1. Stabilize and freeze shared chat infrastructure
 2. Finish only the minimum follow-up reminder closure needed to keep the current branch coherent
@@ -149,12 +150,13 @@ The project must move forward in this order unless the user explicitly overrides
 6. **Family Profile technical + human acceptance**
 7. ~~Settings technical + human acceptance~~ — completed 2026-05-07
 8. **Dashboard human acceptance**
-9. `growth-plan`
-10. `report-analysis`
-11. `crisis-calm`
-12. `memory-profile-summary` prompt integration + acceptance
-13. `membership-billing` (post-MVP monetization; Stripe checkout, billing portal, entitlement sync)
-14. Return to deeper follow-up reminder iteration only after the higher-frequency product paths above are stable
+9. **Growth Plan acceptance closure** — completed on current baseline; only carry forward non-blocking refinements
+10. **Memory Profile Summary acceptance closure** — completed on current baseline; only carry forward extraction quality tuning
+11. **Analytics MVP launch hygiene** — event correctness, internal-user filtering, and weekly report verification
+12. **Security and abuse-prevention pass** — rate limits for LLM/cost-bearing endpoints, logging minimization, ownership checks, upload boundaries, provider-neutral public errors/log labels, and public API review
+13. `report-analysis` refreshed spec + dedicated implementation branch as first P1/post-MVP feature after launch readiness is closed
+14. `membership-billing` (post-MVP monetization; Stripe checkout, billing portal, entitlement sync)
+15. Return to deeper follow-up reminder iteration only after the higher-frequency product paths above are stable
 
 Rationale:
 
@@ -164,9 +166,10 @@ Rationale:
 - **Compliance is a launch gate** — must be completed before public launch regardless of feature development order. Can be executed in parallel with feature modules since it touches separate files.
 - `family-profile` is the first module card on Dashboard and the simplest to validate.
 - `settings` is low-urgency (name editing works in UserMenu already) but needed for completeness. A minimal version (account deletion only) is created as part of compliance.
-- `growth-plan` and `report-analysis` follow as the next product-loop features.
-- `crisis-calm` is intentionally isolated and can be built later.
-- `memory-profile-summary` depends conceptually on stable profile and history foundations.
+- `growth-plan` is now part of the accepted product loop.
+- `report-analysis` is the first desired P1/post-MVP feature, but should not be implemented from the stale historical spec; it needs a fresh plan, upload/privacy/security review, provider-neutral user-visible copy, and a dedicated branch.
+- `crisis-calm` is archived for MVP and should not be selected unless the user reopens it.
+- `memory-profile-summary` is now part of the accepted product loop; quality improvements should be treated as refinements rather than core blocking work.
 - `membership-billing` is intentionally last. MVP should launch the free product first; monetization comes after the core feature loop and quota-bearing modules are stable in real code.
 
 ---

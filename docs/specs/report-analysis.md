@@ -1,10 +1,11 @@
 # Module Spec: Report Analysis
 
-> Status: APPROVED — 2026-02-22 | Self-reviewed: 2026-03-14 | Second-pass reviewed: 2026-03-14 | Implementation status: Planned
+> Status: PLANNED — first P1/Post-MVP feature after launch readiness as of 2026-05-20 | Self-reviewed: 2026-03-14 | Second-pass reviewed: 2026-03-14 | Implementation status: Requires fresh SOP v2.4 refresh before implementation
 > Module: report-analysis
 > Routes: `/reports`, `/reports/upload`, `/reports/[id]`
 > Branch: `feature/report-analysis`
 > SOP v2.4 status: Requires refresh before implementation; current-code facts and external storage claims must use line/source evidence.
+> Planning note — 2026-05-20: Report Analysis is desired immediately after MVP readiness, but it is not part of the current MVP acceptance baseline. Do not implement from this historical spec directly; reopen with fresh external evidence, privacy/upload/security review, provider-neutral public copy, and a dedicated branch.
 
 ---
 
@@ -26,12 +27,25 @@ This spec was re-checked against:
 - No `components/Reports/*` directory exists yet
 - There is a report-analysis test file, but the module itself is not present in the current branch
 
-### MVP Boundary
+### Historical MVP Boundary
 
-- This module covers single-image report upload, analysis, history, and deletion
+- Historical plan: this module covered single-image report upload, analysis, history, and deletion
 - It does not include multi-page batches in this pass
 - It does not include PDF uploads in this pass
 - It does not include report-to-chat follow-up or plan extraction in this pass
+
+Current decision: this boundary must be revalidated before implementation. In particular, image upload, report storage, AI processor disclosure, retention, user demand, and privacy disclosure all need a fresh review. Do not name specific AI model vendors in user-visible product copy, legal pages, API responses, or public documentation.
+
+### 0.1 Post-MVP Reopen Requirements
+
+Before implementation starts, create a fresh P1 plan that answers:
+
+- Upload boundary: authenticated users only; no guest upload; strict server-side file size limit; explicit allowed extensions; MIME check plus file signature sniffing; reject ambiguous or executable content.
+- Storage boundary: private Supabase Storage bucket only; store `storage_path`, never a public URL; generate short-lived signed URLs only after ownership checks; delete both storage object and DB row on user delete/report delete.
+- Privacy boundary: reports are sensitive child/family records; analytics must not store report titles, file names, OCR text, analysis text, diagnosis, medication, or uploaded file metadata.
+- AI boundary: disclose third-party AI processing generically in privacy copy; do not expose model/vendor names in frontend, public docs, user-visible errors, or API responses.
+- Safety boundary: report interpretation can summarize visible findings, explain terms, and suggest questions to ask clinicians; it must not diagnose, prescribe, change medication dosage, or replace a professional evaluation.
+- Abuse/cost boundary: enforce auth, quota, rate limit, payload limit, provider timeout, retry cap, and safe failure behavior before any external AI call.
 
 ### Execution Baseline
 
@@ -88,10 +102,10 @@ Users can view the original image and the AI-generated analysis side by side.
 
 | Tier | Max reports/month | Max image size |
 |------|-------------------|----------------|
-| Free | 1 | 5 MB |
-| Pro  | Unlimited | 20 MB |
+| Registered MVP/P1 | TBD in fresh P1 plan | TBD in fresh P1 plan |
+| Future paid tier | Future billing decision | Future billing decision |
 
-Quota enforcement happens server-side in `POST /api/reports/upload`. Count records for current calendar month and reject if over limit.
+Quota enforcement must happen server-side in `POST /api/reports/upload`. Do not rely on client-side counters.
 
 ### 1.6 Storage And Privacy Rule
 
@@ -99,6 +113,8 @@ Quota enforcement happens server-side in `POST /api/reports/upload`. Count recor
 - Files must be stored in a private Supabase Storage bucket
 - The database stores `storage_path`, not a public asset URL
 - API routes generate short-lived signed URLs when the UI needs to display an image
+- Upload API must validate size, extension, MIME type, and file signature server-side before storage
+- Delete paths must remove both DB rows and storage objects
 
 ### 1.7 Out of Scope for MVP
 
@@ -271,13 +287,13 @@ Note: The route does NOT trigger analysis automatically. The page calls `/api/re
 3. Fetch the report by `id`, confirm it belongs to this user (return 404 if not found or not owned)
 4. Update status to `analyzing`
 5. Create a short-lived signed URL for the private image object
-6. Check if `GLM_API_URL` and `GLM_API_KEY` env vars are set
+6. Check if `VISION_AI_API_URL` and `VISION_AI_API_KEY` env vars are set
    - If NOT set: set `analysis` to the placeholder string below, set `status = 'completed'`, save, return
-   - If set: call GLM-4.5V API (see section 5 below)
-7. On GLM success: save `analysis` text, set `status = 'completed'`
-8. On GLM error: set `status = 'failed'`, save, return the error response with status 200 (not 500) so the UI can display the failed state gracefully
+   - If set: call the configured vision AI provider (see section 5 below)
+7. On provider success: save `analysis` text, set `status = 'completed'`
+8. On provider error: set `status = 'failed'`, save, return the error response with status 200 (not 500) so the UI can display the failed state gracefully
 
-**Placeholder analysis (used when GLM_API_URL is not configured):**
+**Placeholder analysis (used when `VISION_AI_API_URL` is not configured):**
 ```
 AI analysis is not yet configured. Please check back later.
 ```
@@ -333,13 +349,13 @@ AI analysis is not yet configured. Please check back later.
 
 ---
 
-## 5. GLM-4.5V Integration
+## 5. Vision AI Integration
 
 ### Environment Variables
 
 ```
-GLM_API_URL=https://open.bigmodel.cn/api/paas/v4/chat/completions  # or similar
-GLM_API_KEY=your_key_here
+VISION_AI_API_URL=https://provider.example/v1/chat/completions
+VISION_AI_API_KEY=your_key_here
 ```
 
 ### Request Format
@@ -347,15 +363,15 @@ GLM_API_KEY=your_key_here
 Send the image using a short-lived signed URL generated server-side from the private bucket.
 
 ```ts
-const response = await fetch(process.env.GLM_API_URL!, {
+const response = await fetch(process.env.VISION_AI_API_URL!, {
   method: 'POST',
   headers: {
-    'Authorization': `Bearer ${process.env.GLM_API_KEY}`,
+    'Authorization': `Bearer ${process.env.VISION_AI_API_KEY}`,
     'Content-Type': 'application/json',
   },
   signal: AbortSignal.timeout(30000), // 30s timeout for vision model
   body: JSON.stringify({
-    model: 'glm-4v',
+    model: process.env.VISION_AI_MODEL,
     messages: [
       {
         role: 'user',
@@ -521,8 +537,8 @@ Fetch `GET /api/reports/[id]` on mount. If status is `analyzing`, poll every 3 s
 - [ ] Authenticated user can upload a JPG or PNG image
 - [ ] Image is stored in Supabase Storage under `{user_id}/{report_id}.{ext}`
 - [ ] Report record is created in `reports` table with correct status progression
-- [ ] Analysis endpoint works with placeholder response when `GLM_API_KEY` is not set
-- [ ] Analysis endpoint calls GLM-4.5V and stores result when API key is configured
+- [ ] Analysis endpoint works with placeholder response when `VISION_AI_API_KEY` is not set
+- [ ] Analysis endpoint calls the configured vision AI provider and stores result when API key is configured
 - [ ] Report list displays all user reports ordered by date
 - [ ] Single report view shows image + formatted analysis side by side
 - [ ] Delete removes both the DB row and the image from Supabase Storage
@@ -576,13 +592,13 @@ Each task is one file (or closely related pair of files). Execute in order.
 - **Verify**: `npx eslint pages/api/reports/upload.ts` passes, `npx tsc --noEmit` passes, `npm run build` passes.
 - **Commit**: `[T003] feat: add POST /api/reports/upload endpoint [NEEDS_DEPENDENCY: formidable]`
 
-### T004: Create POST /api/reports/analyze (GLM-4.5V or placeholder)
+### T004: Create POST /api/reports/analyze (vision AI or placeholder)
 - **File**: `pages/api/reports/analyze.ts`
-- **Do**: Handle `POST`. Accept `?id=uuid`. Auth check, fetch report, verify ownership, update status to `analyzing`, create a short-lived signed URL from the private bucket, call GLM-4.5V if env vars set (else use placeholder), save result, return updated report.
+- **Do**: Handle `POST`. Accept `?id=uuid`. Auth check, fetch report, verify ownership, update status to `analyzing`, create a short-lived signed URL from the private bucket, call the configured vision AI provider if env vars are set (else use placeholder), save result, return updated report.
 - **Prompt**: Use the exact prompt string from section 5 above.
-- **Error handling**: On GLM API failure, set `status = 'failed'` and return gracefully with status 200 (not 500).
+- **Error handling**: On vision AI provider failure, set `status = 'failed'` and return gracefully with status 200 (not 500).
 - **Verify**: `npx eslint pages/api/reports/analyze.ts` passes, `npx tsc --noEmit` passes, `npm run build` passes.
-- **Commit**: `[T004] feat: add POST /api/reports/analyze with GLM-4.5V and placeholder fallback`
+- **Commit**: `[T004] feat: add POST /api/reports/analyze with vision AI and placeholder fallback`
 
 ### T005: Create GET and DELETE /api/reports/[id]
 - **File**: `pages/api/reports/[id].ts`
@@ -631,6 +647,6 @@ Each task is one file (or closely related pair of files). Execute in order.
 
 ### T012: Add unit tests
 - **File**: `__tests__/report-analysis.test.ts`
-- **Do**: Test quota enforcement logic (free user at limit → reject, free user under limit → allow). Test file type validation (PDF → reject, JPG → allow). Test that placeholder analysis is returned when `GLM_API_KEY` is undefined.
+- **Do**: Test quota enforcement logic, file type validation, file signature validation, ownership checks, and placeholder analysis when `VISION_AI_API_KEY` is undefined.
 - **Verify**: add the test file together with the chosen test runner setup for this repo, then ensure `npx eslint`, `npx tsc --noEmit`, and `npm run build` still pass.
 - **Commit**: `[T012] test: add report analysis unit tests`

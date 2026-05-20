@@ -378,17 +378,17 @@ When the family-profile module is implemented, the migration endpoint must be up
 |----------------|-------|-----------|----------|
 | Landing page (`/`) | Full | Full | Full |
 | Blog (`/blog`) | Full | Full | Full |
-| Chat (`/chat`) | 5 messages | 20 msg/day | Unlimited |
+| Chat (`/chat`) | 10 messages lifetime | 50 msg/day | Future billing decision |
 | RAG research mode | No | 5 queries/day | Unlimited |
 | Paper Topics / Research Browser | No | No | No *(deferred; not in Web MVP)* |
 | ~~Mood tracking (`/mood`)~~ | ~~No~~ | ~~Full~~ | ~~Full~~ *(ARCHIVED)* |
 | Crisis calm (`/calm`) | Full | Full | Full |
 | Growth plan (`/plan`) | No | Full (max 5 items) | Full (unlimited) |
-| Report analysis (`/reports`) | No | 1 report/month | Unlimited |
+| Report analysis (`/reports`) | No | P1/Post-MVP, not in current MVP | Future billing decision |
 | Dashboard (`/dashboard`) | No | Full | Full |
 | Family profile (`/family`) | No | Full | Full |
 | Settings (`/settings`) | No | Full | Full |
-| File upload (reports) | No | 5MB limit | 20MB limit |
+| File upload (reports) | No | P1/Post-MVP, private storage only | Future billing decision |
 | Export PDF (growth plan) | No | No | Yes |
 
 ### Auth Enforcement Pattern
@@ -423,7 +423,7 @@ if (quota.messagesUsed >= quota.messagesLimit) {
 ### Special Cases
 
 - **Crisis calm** (`/calm`): No auth required — emergency tool must be accessible to everyone
-- **Chat guest mode**: 5-message limit enforced client-side (guestMessageCount) + should add server-side check
+- **Chat guest mode**: permanent 10-message trial allowance. The current client-side counter is only a UX control; production enforcement should add server-side quota/rate limiting for cost-bearing chat calls.
 - **Stripe subscription check**: Not implemented yet. Current schema has no `users.subscription_tier` column and no `GET /api/user/subscription` route. For now, all registered users are treated as Free tier. Pro features must not be treated as enforceable until the membership-billing module creates the billing schema/API.
 
 ---
@@ -461,5 +461,5 @@ These changes must be made by the maintainer to shared files before new module p
 | Caching | Default none, add only if needed | MVP stage, simplicity > performance |
 | Guest crisis access | Allowed (no auth) | Emergency support should have zero barriers |
 | Deployment model | Single Vercel app + Supabase | Mature MVP baseline with the lowest operational complexity |
-| Storage model | Supabase Storage for web uploads | Fits the existing stack and avoids adding another file service |
+| Storage model | Private Supabase Storage for future web uploads | Fits the existing stack and avoids adding another file service; sensitive uploads must use private buckets, short-lived signed URLs, strict type/size validation, deletion paths, and no public asset URLs |
 | Browser tab titles | Dynamic per page/conversation | Improves UX when user has multiple tabs. Standard practice (ChatGPT, Claude). (Added 2026-03-16) |

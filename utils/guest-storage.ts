@@ -35,8 +35,8 @@ export interface GuestData {
 const GUEST_KEY = 'qimi_guest_data';
 const GUEST_MIGRATION_KEY = 'qimi_guest_migration';
 const MIGRATION_LOCK_TTL_MS = 2 * 60 * 1000;
-// TODO: 测试阶段暂时禁用消息限制，上线前改回 5
-const MAX_GUEST_MESSAGES = 999;
+// MVP guest trial: permanent 10-message allowance before signup.
+const MAX_GUEST_MESSAGES = 10;
 
 function normalizeChatHistory(messages: Message[]): Message[] {
   const deduped = new Map<string, Message>();

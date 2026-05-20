@@ -39,7 +39,7 @@ This spec was written against:
 - Instrumented landing CTA, credentials auth success, guest onboarding step/dropoff, guest chat milestones, authenticated chat milestones/errors, memory extraction counts, growth-plan save prompt show/click, plan item save, and contact form submission.
 - Updated `/privacy` with the MVP analytics disclosure.
 - Added QQ SMTP internal weekly email report endpoint at `pages/api/analytics/cron/weekly-report.ts`, protected by `CRON_SECRET`, plus Vercel cron schedule `10 0 * * 1` (Monday 08:10 Asia/Shanghai).
-- The production deletion behavior for analytics rows remains a launch gate: final privacy/legal review must choose de-identified operational history (`ON DELETE SET NULL`) or full analytics deletion (`ON DELETE CASCADE`) before production rollout.
+- Analytics deletion posture is now decided for MVP: account deletion removes account-owned content and child/family data, while privacy-safe analytics rows remain with `user_id` nulled via `ON DELETE SET NULL`.
 
 ### New Document Justification
 
@@ -174,7 +174,7 @@ Every event row must include:
 | `utm_campaign` | text nullable | no | client | Landing attribution. |
 | `device_type` | text nullable | no | client | `desktop`, `mobile`, `tablet`, `unknown`. |
 | `environment` | text | yes | server | `local`, `staging`, `production`. |
-| `is_internal` | boolean | yes | server/helper | True for localhost, staging, configured internal emails/domains. |
+| `is_internal` | boolean | yes | server/helper | True for localhost, staging, configured internal emails, configured internal domains, `ADMIN_EMAIL`, or `FEEDBACK_TO`. |
 | `properties` | jsonb | yes | client/server | Event-specific allowlisted properties only. |
 
 Forbidden fields anywhere in analytics:
@@ -282,8 +282,8 @@ Retention:
 
 - Raw analytics rows: keep 180 days for MVP.
 - Aggregated weekly metrics: keep indefinitely if a later aggregation table is added.
-- Account deletion: `user_id` becomes null via `ON DELETE SET NULL`; event payload must not contain PII, so aggregate event history can remain. If counsel prefers stricter deletion, change FK to `ON DELETE CASCADE` before launch.
-- Launch gate: the final privacy/legal review must explicitly choose `ON DELETE SET NULL` with de-identified operational history or `ON DELETE CASCADE` with full analytics deletion. Do not ship this migration to production while that choice is unresolved.
+- Account deletion: `user_id` becomes null via `ON DELETE SET NULL`; event payload must not contain PII, so aggregate event history can remain after account-owned content and child/family data are deleted.
+- Launch gate: verify the implemented privacy copy, deletion API, and analytics event allowlist all match this decision before production rollout.
 
 ### 7.2 Write API
 
@@ -313,7 +313,7 @@ Rules:
 - Validate each event's property allowlist.
 - Derive `user_id` from session, never request body.
 - Derive `environment` server-side.
-- Derive `is_internal` from host, env, and optional internal email domain allowlist.
+- Derive `is_internal` from host, env, optional internal exact-email allowlist, existing operational email env vars, and optional internal email domain allowlist.
 - Reject payloads over 8 KB.
 - Return `{ success: true }` or `{ error: "..." }`.
 - Rate-limit public client writes by IP/session if a project-wide limiter exists by implementation time. If none exists, add minimal in-memory per-process limiter for this endpoint only.
@@ -384,7 +384,7 @@ Required additions:
 - Analytics events do not include chat message text, child names, contact message contents, plan text, memory fact values, emails, or raw IP addresses.
 - Analytics is stored in Qimi's Supabase database for MVP and is not sold or used for advertising.
 - Raw analytics retention target is 180 days unless changed by final policy.
-- If account deletion keeps anonymized aggregate event rows, disclose that de-identified/aggregated operational analytics may remain after account deletion. If counsel rejects this, switch to cascade deletion.
+- Account deletion keeps de-identified operational analytics rows only if they do not contain personal or sensitive content; account-owned content and child/family data must be deleted.
 
 ### Consent
 
