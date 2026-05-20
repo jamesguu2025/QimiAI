@@ -261,6 +261,20 @@ async function saveMessagesToDatabase(
 
     let convId = conversationId;
 
+    if (convId) {
+      const { data: ownedConversation, error: ownershipError } = await supabase
+        .from('conversations')
+        .select('id')
+        .eq('id', convId)
+        .eq('user_id', user.id)
+        .single();
+
+      if (ownershipError || !ownedConversation) {
+        console.warn('[chat/stream] Refusing to save to conversation not owned by user');
+        return null;
+      }
+    }
+
     // Create conversation if not provided
     if (!convId) {
       const title = userMessage.slice(0, 50) + (userMessage.length > 50 ? '...' : '');
@@ -313,7 +327,8 @@ async function saveMessagesToDatabase(
     const { error: updateError } = await supabase
       .from('conversations')
       .update({ updated_at: new Date().toISOString() })
-      .eq('id', convId);
+      .eq('id', convId)
+      .eq('user_id', user.id);
 
     if (updateError) {
       console.error('[chat/stream] Failed to update conversation timestamp:', updateError);
@@ -435,6 +450,7 @@ export default async function handler(
     // Enrich userProfile with memory context (familyNotes + extractedFacts)
     const supabaseMemory = getSupabaseAdmin();
     let enrichedProfile = userProfile as UserProfile | null;
+    let authenticatedUserId: string | null = null;
     if (session?.user?.email) {
       try {
         const { data: userData } = await supabaseMemory
@@ -444,6 +460,7 @@ export default async function handler(
           .single();
 
         if (userData) {
+          authenticatedUserId = userData.id;
           // Get profile summary
           const { data: summaryData } = await supabaseMemory
             .from('profile_summaries')
@@ -476,6 +493,23 @@ export default async function handler(
       } catch (memErr) {
         console.error('[chat/stream] Memory retrieval failed, skipping:', memErr);
         // Silent failure — memory errors must not block chat
+      }
+    }
+
+    if (conversationId) {
+      if (!session?.user?.email || !authenticatedUserId) {
+        return res.status(401).json({ error: 'Unauthorized' });
+      }
+
+      const { data: ownedConversation, error: ownershipError } = await supabaseMemory
+        .from('conversations')
+        .select('id')
+        .eq('id', conversationId)
+        .eq('user_id', authenticatedUserId)
+        .single();
+
+      if (ownershipError || !ownedConversation) {
+        return res.status(404).json({ error: 'Conversation not found' });
       }
     }
 
@@ -528,18 +562,12 @@ export default async function handler(
 
     if (session?.user?.email && !activeConversationId) {
       const supabase = getSupabaseAdmin();
-      const { data: user } = await supabase
-        .from('users')
-        .select('id')
-        .eq('email', session.user.email)
-        .single();
-
-      if (user) {
+      if (authenticatedUserId) {
         const title = userMessage.slice(0, 50) + (userMessage.length > 50 ? '...' : '');
         const { data: newConv } = await supabase
           .from('conversations')
           .insert({
-            user_id: user.id,
+            user_id: authenticatedUserId,
             title,
             folder_key: requestedFolderKey,
           })

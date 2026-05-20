@@ -406,6 +406,17 @@ export default async function handler(
       return res.status(404).json({ error: 'User not found' });
     }
 
+    const { data: conversation, error: conversationError } = await supabase
+      .from('conversations')
+      .select('id')
+      .eq('id', conversationId)
+      .eq('user_id', user.id)
+      .single();
+
+    if (conversationError || !conversation) {
+      return res.status(404).json({ error: 'Conversation not found' });
+    }
+
     // Load last 10 messages (all roles) — gate uses last 4, extraction uses user-only subset
     const { data: messages, error: msgError } = await supabase
       .from('messages')
