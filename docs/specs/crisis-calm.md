@@ -1,11 +1,12 @@
 # Module Spec: Crisis Calm
 
-> Status: APPROVED — 2026-02-22 | Self-reviewed: 2026-03-14 | Second-pass reviewed: 2026-03-14 | Implementation status: Planned
+> Status: ARCHIVED — 2026-05-20 | Self-reviewed: 2026-03-14 | Second-pass reviewed: 2026-03-14 | Implementation status: Archived / Deferred from MVP
 > Module: crisis-calm
 > Routes: `/calm`
 > Branch: `feature/crisis-calm`
 
 > SOP v2.4 status: Requires refresh before implementation; accessibility and crisis-support claims need source evidence, and current-code facts must use line evidence.
+> Archive note — 2026-05-20: User explicitly deferred Crisis Calm from the MVP roadmap. Do not implement from this historical spec unless the module is reopened and refreshed under the current SOP and compliance posture.
 
 ---
 

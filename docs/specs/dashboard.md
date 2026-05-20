@@ -9,7 +9,8 @@
 > Scope: Feature hub page with summary cards linking to Family Profile, Growth Plan, and Reports.
 > SOP v2.4 status: Historical implementation spec. Do not use for new execution until refreshed with Search Ledger and current-code line evidence.
 
-> Acceptance record — 2026-05-08: Technical acceptance passed on `sprint0-complete` with local Supabase, `npx tsc --noEmit`, `git diff --check`, and `npm run build`. Human acceptance passed for Dashboard page load, SmartDrawer layout, Family Profile navigation, mobile layout, and Coming Soon handling for unimplemented modules. Dashboard no longer links users into `/plan` or `/reports` until those modules exist.
+> Acceptance record — 2026-05-08: Technical acceptance passed on `sprint0-complete` with local Supabase, `npx tsc --noEmit`, `git diff --check`, and `npm run build`. Human acceptance passed for Dashboard page load, SmartDrawer layout, Family Profile navigation, mobile layout, and Coming Soon handling for unimplemented modules.
+> Update — 2026-05-20: Growth Plan now exists and the Dashboard Growth Plan card links to `/plan`. Reports remains disabled/Coming Soon until Report Analysis is implemented from a refreshed spec.
 
 ---
 
@@ -72,8 +73,8 @@ SmartDrawer + Content area
 - **Title**: "Growth Plan"
 - **Summary content** (fetched from `GET /api/plan/summary` — defined in growth-plan spec):
   - If items exist: "{itemCount} saved suggestions · {topCategory}"
-  - If no items: "Suggestions from your conversations will appear here"
-- **Action**: Disabled "Coming soon" card until `/plan` exists
+  - If no items: "Create strategies and check in on what works"
+- **Action**: Click card -> navigate to `/plan`
 - **Visual**: Same card style as Family Profile
 
 ### 1.4 Reports Card
@@ -90,7 +91,7 @@ SmartDrawer + Content area
 - Each card fetches its summary independently (parallel fetches)
 - Loading: show skeleton placeholder inside card
 - Error: show "Unable to load" with a retry link inside card
-- If a module's API doesn't exist yet (e.g., growth-plan not implemented), hard-code the empty-state text in the card — do NOT call a nonexistent API. When the module is later built, the executor for that module updates the Dashboard card to fetch real data. This is an intentional MVP simplification (internal design choice)
+- If a module's API doesn't exist yet (currently Reports), hard-code the empty-state text in the card — do NOT call a nonexistent API. When the module is later built, the executor for that module updates the Dashboard card to fetch real data. This is an intentional MVP simplification (internal design choice)
 
 ### 1.6 Auth & Access
 
@@ -171,7 +172,8 @@ Data flow:
 - [x] Family Profile card shows correct summary when child profile exists
 - [x] Cards show appropriate empty state text when no data exists
 - [x] Clicking the Family Profile card navigates to `/family`
-- [x] Planned module cards show Coming soon and do not navigate to nonexistent pages
+- [x] Growth Plan card navigates to `/plan`
+- [x] Reports card shows Coming soon and does not navigate to nonexistent pages
 - [x] Unauthenticated users are blocked from the page and prompted via the shared login modal
 - [x] Medical disclaimer is visible at the bottom
 - [x] SmartDrawer is visible and functional on Dashboard
@@ -194,7 +196,7 @@ Data flow:
 
 ### Dependency
 
-This module requires the AppLayout → SmartDrawer unification to be completed first. The Dashboard page also needs at least the family summary API to show real data. Growth Plan and Reports cards can show empty-state text until those modules are built.
+This module requires the AppLayout → SmartDrawer unification to be completed first. The Dashboard page also needs at least the family summary API to show real data. Growth Plan is now implemented and linked. Reports can show empty-state text until Report Analysis is built.
 
 ### T001: Create DashboardCard component
 
