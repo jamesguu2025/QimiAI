@@ -258,7 +258,7 @@ ${assistantContent}`;
   });
 
   if (!response.ok) {
-    throw new Error(`DeepSeek extraction failed: ${response.status}`);
+    throw new Error(`LLM extraction failed: ${response.status}`);
   }
 
   const data = await response.json();

@@ -134,7 +134,7 @@ async function generateTitle(userMessage: string, assistantMessage: string, retr
   });
 
   if (!response.ok) {
-    throw new Error(`DeepSeek title generation failed: ${response.status}`);
+    throw new Error(`LLM title generation failed: ${response.status}`);
   }
 
   const data = await response.json();

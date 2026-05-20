@@ -245,7 +245,7 @@ async function callDeepSeek(messages: Array<{ role: 'system' | 'user'; content: 
   });
 
   if (!llmResponse.ok) {
-    throw new Error(`DeepSeek API error: ${llmResponse.status}`);
+    throw new Error(`LLM API error: ${llmResponse.status}`);
   }
 
   const llmData = await llmResponse.json();
@@ -472,7 +472,7 @@ export default async function handler(
 
     const existing: ExistingFact[] = existingFacts || [];
 
-    // Call DeepSeek for extraction
+    // Call LLM for extraction
     const prompt = buildExtractionPrompt(existing, recentMessages);
 
     let responseText: string;
@@ -485,7 +485,7 @@ export default async function handler(
         2000
       );
     } catch (llmError) {
-      console.error('[memory/extract] DeepSeek extraction error:', llmError);
+      console.error('[memory/extract] LLM extraction error:', llmError instanceof Error ? llmError.message : llmError);
       return res.status(200).json({ success: true, added: 0, updated: 0, deleted: 0 });
     }
 
@@ -494,7 +494,7 @@ export default async function handler(
     try {
       parsed = JSON.parse(cleanJsonResponse(responseText));
     } catch (parseErr) {
-      console.error('[memory/extract] Failed to parse LLM response:', parseErr, responseText.slice(0, 500));
+      console.error('[memory/extract] Failed to parse LLM response:', parseErr instanceof Error ? parseErr.message : parseErr);
       return res.status(200).json({ success: true, added: 0, updated: 0, deleted: 0 });
     }
 

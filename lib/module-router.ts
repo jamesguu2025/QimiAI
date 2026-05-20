@@ -1,7 +1,7 @@
 /**
  * Module Router - LLM-based knowledge module identification
  *
- * Uses DeepSeek to intelligently identify which knowledge modules should be injected
+ * Uses an LLM to intelligently identify which knowledge modules should be injected
  * based on the user's message and conversation context.
  *
  * Completely removes keyword matching - uses pure semantic understanding.
@@ -16,14 +16,14 @@ const MODULE_LIST = [
   'intervention_behavior'     // Behavior training
 ];
 
-// DeepSeek API configuration
+// LLM API configuration
 const DEEPSEEK_API_KEY = process.env.DEEPSEEK_API_KEY;
 const DEEPSEEK_API_BASE = process.env.DEEPSEEK_API_BASE || 'https://api.deepseek.com';
 const DEEPSEEK_MODEL = process.env.DEEPSEEK_MODEL || 'deepseek-v4-flash';
 const DEEPSEEK_THINKING = { type: 'disabled' };
 
 /**
- * Call DeepSeek API for module identification
+ * Call the LLM API for module identification
  */
 async function callModuleRouter(prompt: string): Promise<string> {
   if (!DEEPSEEK_API_KEY) {
@@ -46,7 +46,7 @@ async function callModuleRouter(prompt: string): Promise<string> {
   });
 
   if (!response.ok) {
-    throw new Error(`DeepSeek API error: ${response.status}`);
+    throw new Error(`LLM API error: ${response.status}`);
   }
 
   const data = await response.json();
@@ -178,8 +178,7 @@ function parseModuleResponse(responseText: string): string[] {
       return modules.filter((module: string) => MODULE_LIST.includes(module));
     }
   } catch (error) {
-    console.error('[ModuleRouter] Failed to parse module response:', error);
-    console.error('[ModuleRouter] Raw response:', responseText.substring(0, 200));
+    console.error('[ModuleRouter] Failed to parse module response:', error instanceof Error ? error.message : error);
   }
 
   return [];

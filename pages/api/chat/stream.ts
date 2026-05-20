@@ -965,8 +965,8 @@ async function streamChatWithRAG(
       });
 
       if (!response.ok) {
-        const errorText = await response.text();
-        console.error(`[chat/stream] DeepSeek API error (round ${round}):`, response.status, errorText);
+        await response.arrayBuffer().catch(() => null);
+        console.error(`[chat/stream] LLM API error (round ${round}):`, response.status);
         res.write(`data: ${JSON.stringify({ type: 'error', error: 'API request failed' })}\n\n`);
         res.end();
         return { fullResponse, sources: collectedSources };

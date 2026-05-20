@@ -1,5 +1,5 @@
 // pages/api/chat/stop.ts - Stop Chat Generation API
-// For direct DeepSeek connection, stop is handled client-side via AbortController
+// For direct LLM connection, stop is handled client-side via AbortController
 // This endpoint simply acknowledges the stop request
 
 import type { NextApiRequest, NextApiResponse } from 'next';
@@ -12,10 +12,10 @@ export default async function handler(
     return res.status(405).json({ error: 'Method not allowed' });
   }
 
-  // For DeepSeek direct connection architecture:
+  // For direct LLM connection architecture:
   // - Client closes the SSE connection
   // - Server detects disconnect via socket close/error events
-  // - AbortController cancels the DeepSeek API fetch
+  // - AbortController cancels the LLM API fetch
   // - Partial response is saved to database
   //
   // This endpoint just acknowledges the stop request.

@@ -353,14 +353,14 @@ ${papersText}
     });
 
     if (!response.ok) {
-      throw new Error(`DeepSeek API error: ${response.status}`);
+      throw new Error(`LLM API error: ${response.status}`);
     }
 
     const data = await response.json();
     const summary = data.choices?.[0]?.message?.content;
 
     if (!summary) {
-      throw new Error('Empty response from DeepSeek');
+      throw new Error('Empty response from LLM');
     }
 
     const duration = Date.now() - startTime;

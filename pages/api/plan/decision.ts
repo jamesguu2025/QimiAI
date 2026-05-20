@@ -95,7 +95,7 @@ ${assistantContent}`;
   });
 
   if (!response.ok) {
-    throw new Error(`DeepSeek plan decision failed: ${response.status}`);
+    throw new Error(`LLM plan decision failed: ${response.status}`);
   }
 
   const data = await response.json();

@@ -171,6 +171,7 @@ Rationale:
 - `crisis-calm` is archived for MVP and should not be selected unless the user reopens it.
 - `memory-profile-summary` is now part of the accepted product loop; quality improvements should be treated as refinements rather than core blocking work.
 - `membership-billing` is intentionally last. MVP should launch the free product first; monetization comes after the core feature loop and quota-bearing modules are stable in real code.
+- Provider-neutral config aliases are optional hardening, not an MVP blocker: a future cleanup may add generic `LLM_*` env aliases with legacy provider-specific env fallback and no behavior change. Do not do a broad provider-name rewrite during MVP launch stabilization.
 
 ---
 
