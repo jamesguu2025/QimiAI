@@ -201,7 +201,7 @@ Forbidden fields anywhere in analytics:
 | `plan:save_prompt_click` | `prompt_source`, `category` | `conversation_id_hash` | save-plan CTA click | Client |
 | `plan:item_saved` | `save_source`, `category` | none | successful `POST /api/plan` | Server |
 | `contact:form_submitted` | `source`, `has_session` | none | successful `/api/contact` | Server |
-| `chat:error` | `error_stage`, `error_code`, `http_status`, `auth_state` | `provider`, `retryable`, `conversation_id_hash` | chat API/service error path | Server plus client fallback |
+| `chat:error` | `error_stage`, `error_code`, `http_status`, `auth_state` | `retryable`, `conversation_id_hash` | chat API/service error path | Server plus client fallback |
 
 ### 6.2 Milestones
 

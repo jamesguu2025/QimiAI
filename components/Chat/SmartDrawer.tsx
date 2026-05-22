@@ -406,6 +406,42 @@ interface ConversationItemProps {
   isPinned?: boolean;
 }
 
+interface GuestConversationItemProps {
+  title: string;
+  collapsed: boolean;
+  onClick: () => void;
+}
+
+const GuestConversationItem: React.FC<GuestConversationItemProps> = ({ title, collapsed, onClick }) => {
+  if (collapsed) {
+    return (
+      <button
+        onClick={onClick}
+        className="group relative flex h-10 w-10 items-center justify-center rounded-lg bg-primary-teal/10 transition-colors hover:bg-primary-teal/15"
+        title={title}
+      >
+        <MessageSquare size={18} className="text-primary-teal" />
+        <div className="pointer-events-none absolute left-full z-50 ml-2 max-w-[200px] truncate whitespace-nowrap rounded bg-slate-800 px-2 py-1 text-xs text-white opacity-0 transition-opacity group-hover:opacity-100">
+          {title}
+        </div>
+      </button>
+    );
+  }
+
+  return (
+    <button
+      onClick={onClick}
+      className="group flex w-full items-center gap-3 rounded-lg bg-primary-teal/10 px-3 py-2.5 text-left transition-colors hover:bg-primary-teal/15"
+      title={title}
+    >
+      <MessageSquare size={18} className="flex-shrink-0 text-primary-teal" />
+      <span className="min-w-0 flex-1 truncate text-sm font-medium text-primary-teal">
+        {title}
+      </span>
+    </button>
+  );
+};
+
 const ConversationItem: React.FC<ConversationItemProps> = ({
   conversation,
   onClick,
@@ -641,6 +677,11 @@ interface SmartDrawerProps {
   onNewChat: () => void;
   onSelectTopic: (folderKey: string) => void;
   onSelectConversation: (conversationId: string) => void;
+  guestRecentConversation?: {
+    title: string;
+    updatedAt: string;
+  } | null;
+  onSelectGuestConversation?: () => void;
   isGuest?: boolean; // If true, skip loading conversations from backend
 }
 
@@ -652,6 +693,8 @@ export const SmartDrawer: React.FC<SmartDrawerProps> = ({
   onNewChat,
   onSelectTopic,
   onSelectConversation,
+  guestRecentConversation,
+  onSelectGuestConversation,
   isGuest = false
 }) => {
   const router = useRouter();
@@ -953,7 +996,13 @@ export const SmartDrawer: React.FC<SmartDrawerProps> = ({
                     <Loader2 size={20} className="text-slate-400 animate-spin" />
                   </div>
                 )
-              ) : recentConversations.length > 0 ? (
+              ) : isGuest && guestRecentConversation ? (
+                <GuestConversationItem
+                  title={guestRecentConversation.title}
+                  collapsed={effectiveCollapsed}
+                  onClick={() => onSelectGuestConversation?.()}
+                />
+              ) : !isGuest && recentConversations.length > 0 ? (
                 recentConversations.map(conversation =>
                   renderConversationItem(conversation, 'recent')
                 )

@@ -107,8 +107,8 @@ export const authOptions: AuthOptions = {
     },
   },
 
-  // 调试模式（仅开发环境）
-  debug: process.env.NODE_ENV === 'development',
+  // Keep auth debug off by default: verbose OAuth logs can include sensitive data.
+  debug: process.env.NEXTAUTH_DEBUG === 'true',
 };
 
 export default NextAuth(authOptions);

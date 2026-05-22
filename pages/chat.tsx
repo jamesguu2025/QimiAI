@@ -79,6 +79,15 @@ export default function ChatPage() {
             if (!a.isPinned && b.isPinned) return 1;
             return new Date(b.updatedAt).getTime() - new Date(a.updatedAt).getTime();
         });
+    const guestRecentUserMessage = isGuest
+        ? messages.find(message => message.role === 'user' && message.content.trim())
+        : undefined;
+    const guestRecentConversation = guestRecentUserMessage
+        ? {
+            title: guestRecentUserMessage.content.trim(),
+            updatedAt: guestRecentUserMessage.timestamp,
+        }
+        : null;
 
     const isNearBottom = () => {
         const container = messagesContainerRef.current;
@@ -313,6 +322,22 @@ export default function ChatPage() {
         }
     };
 
+    const handleSelectGuestConversation = () => {
+        const guestData = guestStorage.get();
+        if (!guestData?.chatHistory?.length) return;
+
+        setMessages([
+            WELCOME_MESSAGE,
+            ...guestData.chatHistory.map(message => ({
+                id: message.id,
+                role: message.role,
+                content: message.content,
+                timestamp: message.timestamp || new Date().toISOString(),
+                sources: [],
+            })),
+        ]);
+    };
+
     const handleRenameConversation = async (conversationId: string, currentTitle: string) => {
         const newTitle = window.prompt('Rename conversation', currentTitle);
         if (!newTitle?.trim() || newTitle.trim() === currentTitle) return;
@@ -370,6 +395,8 @@ export default function ChatPage() {
             fullScreen
             onNewChat={handleNewChat}
             onSelectConversation={handleSelectConversation}
+            guestRecentConversation={guestRecentConversation}
+            onSelectGuestConversation={handleSelectGuestConversation}
             onSelectTopic={handleSelectTopic}
         >
             <Head><title>{pageTitle}</title></Head>

@@ -30,7 +30,7 @@ const EVENT_PROPERTY_ALLOWLIST: Record<AnalyticsEventName, readonly string[]> = 
   'plan:save_prompt_click': ['prompt_source', 'category', 'conversation_id_hash'],
   'plan:item_saved': ['save_source', 'category'],
   'contact:form_submitted': ['source', 'has_session'],
-  'chat:error': ['error_stage', 'error_code', 'http_status', 'auth_state', 'provider', 'retryable', 'conversation_id_hash'],
+  'chat:error': ['error_stage', 'error_code', 'http_status', 'auth_state', 'retryable', 'conversation_id_hash'],
 };
 
 const FORBIDDEN_PROPERTY_KEYS = new Set([

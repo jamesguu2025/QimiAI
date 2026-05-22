@@ -1,6 +1,7 @@
 // pages/api/user/delete-account.ts
-// Self-service account deletion — COPPA compliance
-// Deletes user row; CASCADE removes all related data
+// Self-service account deletion
+// Deletes user row; FK rules remove user content and child data while preserving
+// de-identified analytics with user_id set to null.
 
 import type { NextApiRequest, NextApiResponse } from 'next';
 import { getServerSession } from 'next-auth';
@@ -40,9 +41,9 @@ export default async function handler(
       return res.status(404).json({ error: 'User not found' });
     }
 
-    // Delete user row — CASCADE deletes all related data:
-    // conversations, messages, child_profiles, memory_items,
-    // profile_summaries, parental_consents
+    // Delete user row. FK rules remove conversations, messages, child_profiles,
+    // memory_items, profile_summaries, parental_consents, and plan_items.
+    // analytics_events is retained with user_id set to null.
     const { error: deleteError } = await supabase
       .from('users')
       .delete()

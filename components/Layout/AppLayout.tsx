@@ -11,6 +11,11 @@ interface AppLayoutProps {
     fullScreen?: boolean;
     onNewChat?: () => void;
     onSelectConversation?: (id: string) => void;
+    guestRecentConversation?: {
+        title: string;
+        updatedAt: string;
+    } | null;
+    onSelectGuestConversation?: () => void;
     onSelectTopic?: (key: string) => void;
 }
 
@@ -19,6 +24,8 @@ const AppLayout: React.FC<AppLayoutProps> = ({
     fullScreen = false,
     onNewChat,
     onSelectConversation,
+    guestRecentConversation,
+    onSelectGuestConversation,
     onSelectTopic
 }) => {
     const router = useRouter();
@@ -100,6 +107,8 @@ const AppLayout: React.FC<AppLayoutProps> = ({
                 onNewChat={onNewChat || (() => router.push('/chat'))}
                 onSelectTopic={onSelectTopic || ((folderKey) => router.push(`/chat?topic=${folderKey}`))}
                 onSelectConversation={onSelectConversation || ((id) => router.push(`/chat?conversation=${id}`))}
+                guestRecentConversation={guestRecentConversation}
+                onSelectGuestConversation={onSelectGuestConversation}
                 isGuest={isGuest}
             />
 

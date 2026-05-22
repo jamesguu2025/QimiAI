@@ -463,7 +463,7 @@ export default async function handler(
 
   // Validate API key is configured
   if (!DEEPSEEK_API_KEY) {
-    console.error('[chat/stream] DEEPSEEK_API_KEY not configured');
+    console.error('[chat/stream] LLM API key not configured');
     return res.status(500).json({ error: 'API key not configured' });
   }
 
@@ -797,7 +797,6 @@ export default async function handler(
     if (!res.headersSent) {
       return res.status(500).json({
         error: 'Internal server error',
-        message: error instanceof Error ? error.message : 'Unknown error',
       });
     }
   }

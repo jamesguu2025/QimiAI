@@ -144,7 +144,7 @@ export async function routeRagNeed(options: RouteRagNeedOptions): Promise<RagRou
   }
 
   if (!DEEPSEEK_API_KEY) {
-    console.warn('[RagRouter] DEEPSEEK_API_KEY not configured; skipping router');
+    console.warn('[RagRouter] LLM API key not configured; skipping router');
     return { shouldSearch: false, query: '', reason: 'router unavailable' };
   }
 
