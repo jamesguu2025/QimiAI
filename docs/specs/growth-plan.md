@@ -1,10 +1,10 @@
 # Module Spec: Growth Plan
 
-> Status: APPROVED — 2026-02-22 | Self-reviewed: 2026-03-14 | Second-pass reviewed: 2026-03-14 | Implementation status: Planned | Amended: 2026-05-11 (Chat Save addendum)
+> Status: APPROVED — 2026-02-22 | Self-reviewed: 2026-03-14 | Second-pass reviewed: 2026-03-14 | Implementation status: Implemented and human-accepted on current baseline | Amended: 2026-05-11 (Chat Save addendum) | Status aligned: 2026-05-22
 > Module: growth-plan
 > Routes: `/plan`
-> Branch: `feature/growth-plan`
-> SOP v2.4 status: Requires refresh before implementation; current-code facts must use line evidence.
+> Branch: historical source branch `feature/growth-plan`; accepted implementation now lives on the current baseline.
+> SOP v2.4 status: Current accepted baseline includes the manual plan flow and Chat Save addendum; future Growth Plan work must refresh current-code facts with line evidence.
 
 ---
 
@@ -20,10 +20,9 @@ This spec was re-checked against:
 
 ### Current Implementation Snapshot
 
-- Route `/plan` is not implemented yet
-- No `pages/api/plan/*` endpoints exist yet
-- No `components/GrowthPlan/*` directory exists yet
-- Shared growth-plan types already exist and must be treated as the contract baseline
+- Route `/plan` is implemented on the current accepted baseline.
+- `pages/api/plan/*` includes manual plan management plus chat decision/extract/save paths.
+- `components/GrowthPlan/*` and shared Growth Plan types are part of the current contract baseline.
 
 ### MVP Boundary
 

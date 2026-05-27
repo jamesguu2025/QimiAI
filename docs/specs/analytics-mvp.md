@@ -30,7 +30,7 @@ This spec was written against:
 | Memory extraction writes `memory_items` and returns added/updated/deleted counts. | `pages/api/memory/extract.ts:420-489` |
 | Growth Plan CRUD and check-in are implemented on `/plan`. | `pages/plan/index.tsx:46-131`, `pages/plan/index.tsx:133-215` |
 | Growth Plan table has user-owned RLS. | `supabase/migrations/20260509000100_growth_plan_tables.sql:3-57` |
-| Contact form posts to `/api/contact`, which currently only logs the submission. | `components/Landing/ContactModal.tsx:35-64`, `pages/api/contact.ts:3-27` |
+| Contact form posts to `/api/contact`, which sends an internal feedback email and emits sanitized operational metadata only. | `components/Landing/ContactModal.tsx:35-64`, `pages/api/contact.ts` |
 
 ### Implementation Pass Notes — 2026-05-19
 

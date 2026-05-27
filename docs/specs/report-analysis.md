@@ -1,557 +1,312 @@
 # Module Spec: Report Analysis
 
-> Status: PLANNED — first P1/Post-MVP feature after launch readiness as of 2026-05-20 | Self-reviewed: 2026-03-14 | Second-pass reviewed: 2026-03-14 | Implementation status: Requires fresh SOP v2.4 refresh before implementation
+> Status: PLANNED — Post-MVP P1, refreshed 2026-05-27
 > Module: report-analysis
 > Routes: `/reports`, `/reports/upload`, `/reports/[id]`
-> Branch: `feature/report-analysis`
-> SOP v2.4 status: Requires refresh before implementation; current-code facts and external storage claims must use line/source evidence.
-> Planning note — 2026-05-20: Report Analysis is desired immediately after MVP readiness, but it is not part of the current MVP acceptance baseline. Do not implement from this historical spec directly; reopen with fresh external evidence, privacy/upload/security review, provider-neutral public copy, and a dedicated branch.
+> Implementation status: Planned; not part of MVP launch acceptance
+> Branch: future dedicated `feature/report-analysis` or `codex/report-analysis-*`
+> SOP v2.4 status: Refreshed with external evidence, Search Ledger, ADR-lite, and AQS self-review. Do not implement from any older historical task list.
 
 ---
 
 ## 0. Planning Baseline
 
-This spec was re-checked against:
+### Current Repo Reality
 
-- The current repo structure and scripts in `/Users/jamesguu/qimi-ai-website/qimi-ai-website`
-- The canonical Layer 1 architecture in `/Users/jamesguu/qimi-ai-website/qimi-ai-website/docs/system-architecture.md`
-- The cross-platform blueprint in `/Users/jamesguu/WeChatProjects/adhdhelper-cursor/docs/项目技术蓝图.md`
-- Membership and billing are not implemented yet; there is no current `pages/api/user/subscription.ts` route and no `users.subscription_tier` column in the local initial schema.
-- Existing review notes in `/Users/jamesguu/qimi-ai-website/qimi-ai-website/docs/technical-decisions-for-review.md`
-- Official Supabase Storage guidance for private buckets and signed URLs
+- `docs/project-control.md` marks Report Analysis as `Planned` and outside the current MVP acceptance baseline.
+- `docs/project-control.md` places `report-analysis` after MVP launch readiness as the first P1/post-MVP feature.
+- `docs/system-architecture.md` reserves `/reports`, `/reports/upload`, and `/reports/[id]` for this module, all under the logged-in SmartDrawer/AppLayout shell.
+- The current branch has no `pages/reports/*`, no `pages/api/reports/*`, no `components/Reports/*`, and no versioned report-analysis migration.
+- The cross-platform mini-program blueprint remains reference-only. Its multi-page grouping, SSE, report chat, RAG, historical comparison, Redis batch state, and membership quota system must not be copied into the first web version.
 
-### Current Implementation Snapshot
+### Product Decision
 
-- Route `/reports` is not implemented yet
-- No `pages/api/reports/*` endpoints exist yet
-- No `components/Reports/*` directory exists yet
-- There is a report-analysis test file, but the module itself is not present in the current branch
+Report Analysis has a real user need, but it does not block MVP launch.
 
-### Historical MVP Boundary
+Qimi should build it as **post-MVP P1** after launch readiness and after a dedicated implementation branch is opened. The first version is a parent-facing explanation assistant for already-existing professional reports. It is not a diagnostic, treatment, medication, school-placement, or clinical decision tool.
 
-- Historical plan: this module covered single-image report upload, analysis, history, and deletion
-- It does not include multi-page batches in this pass
-- It does not include PDF uploads in this pass
-- It does not include report-to-chat follow-up or plan extraction in this pass
+### Key Distinctions
 
-Current decision: this boundary must be revalidated before implementation. In particular, image upload, report storage, AI processor disclosure, retention, user demand, and privacy disclosure all need a fresh review. Do not name specific AI model vendors in user-visible product copy, legal pages, API responses, or public documentation.
-
-### 0.1 Post-MVP Reopen Requirements
-
-Before implementation starts, create a fresh P1 plan that answers:
-
-- Upload boundary: authenticated users only; no guest upload; strict server-side file size limit; explicit allowed extensions; MIME check plus file signature sniffing; reject ambiguous or executable content.
-- Storage boundary: private Supabase Storage bucket only; store `storage_path`, never a public URL; generate short-lived signed URLs only after ownership checks; delete both storage object and DB row on user delete/report delete.
-- Privacy boundary: reports are sensitive child/family records; analytics must not store report titles, file names, OCR text, analysis text, diagnosis, medication, or uploaded file metadata.
-- AI boundary: disclose third-party AI processing generically in privacy copy; do not expose model/vendor names in frontend, public docs, user-visible errors, or API responses.
-- Safety boundary: report interpretation can summarize visible findings, explain terms, and suggest questions to ask clinicians; it must not diagnose, prescribe, change medication dosage, or replace a professional evaluation.
-- Abuse/cost boundary: enforce auth, quota, rate limit, payload limit, provider timeout, retry cap, and safe failure behavior before any external AI call.
-
-### Execution Baseline
-
-- This repo currently has `build`, but does not define `lint` or `test` npm scripts
-- Validation commands in the task list therefore use `npx eslint`, `npx tsc --noEmit`, and `npm run build`
-
-## 1. Feature Requirements
-
-### 1.1 Report Upload (`/reports/upload`)
-
-Users can upload a JPG or PNG image of a medical or psychological report.
-
-- Drag-and-drop or click-to-upload image input
-- Preview of selected image before submission
-- Client-side file size validation (free: 5MB max, pro: 20MB max)
-- File type validation (JPG/PNG only — no PDF for MVP)
-- Optional report title field (defaults to "Report — {date}" if left blank)
-- On submit: upload image to Supabase Storage, create report record with status `uploading`, then immediately trigger analysis
-- Show `AnalysisStatus` component to communicate progress to user
-- One image per report (no multi-page support for MVP)
-- Medical disclaimer displayed below the upload form
-
-### 1.2 Report History (`/reports`)
-
-Users can see all previously uploaded reports.
-
-- List of `ReportCard` components ordered by `created_at DESC`
-- Each card shows: report title, upload date, status badge
-- Click a card to navigate to `/reports/[id]`
-- Upload button in page header links to `/reports/upload`
-- Empty state when no reports exist yet
-- Free tier usage indicator (e.g., "1 of 1 reports used this month")
-- Medical disclaimer in page footer
-
-### 1.3 Report View (`/reports/[id]`)
-
-Users can view the original image and the AI-generated analysis side by side.
-
-- Left panel: `ReportImage` component (click to enlarge)
-- Right panel: `ReportAnalysis` component (structured text with sections and bullet points)
-- `AnalysisStatus` badge in the header (shows current status)
-- Delete button with confirmation prompt
-- Back link to `/reports`
-- Medical disclaimer prominently displayed above the analysis
-- If status is `analyzing`, poll `GET /api/reports/[id]` every 3 seconds until status changes
-
-### 1.4 Auth & Access
-
-- All three pages require login
-- Open the shared login modal if no session
-- Guest users cannot access report analysis
-
-### 1.5 Quota Rules
-
-| Tier | Max reports/month | Max image size |
-|------|-------------------|----------------|
-| Registered MVP/P1 | TBD in fresh P1 plan | TBD in fresh P1 plan |
-| Future paid tier | Future billing decision | Future billing decision |
-
-Quota enforcement must happen server-side in `POST /api/reports/upload`. Do not rely on client-side counters.
-
-### 1.6 Storage And Privacy Rule
-
-- Report files are treated as sensitive user medical or educational records
-- Files must be stored in a private Supabase Storage bucket
-- The database stores `storage_path`, not a public asset URL
-- API routes generate short-lived signed URLs when the UI needs to display an image
-- Upload API must validate size, extension, MIME type, and file signature server-side before storage
-- Delete paths must remove both DB rows and storage objects
-
-### 1.7 Out of Scope for MVP
-
-- No PDF upload (images only)
-- No multi-page reports (one image per report)
-- No report sharing or export
-- No automated follow-up action plan recommendations (Growth Plan module responsibility)
+1. **Professionals often explain reports.**
+   Clinical and school workflows commonly include feedback sessions or IEP/evaluation meetings where results are reviewed with the family.
+2. **Parents may still need a plain-language summary afterward.**
+   Evidence shows report language, structure, length, and jargon can still reduce comprehension and advocacy even when reports are formally provided.
+3. **Qimi should not build this now.**
+   Report upload introduces sensitive document storage, third-party AI processing, OCR/vision error risk, deletion obligations, and stronger legal copy requirements. Those are not needed to validate the MVP's main chat, Memory, Family Profile, Growth Plan, onboarding, analytics, and compliance loop.
 
 ---
 
-## 2. Database Schema
+## 1. Evidence And Search Ledger
 
-Migration source of truth: create a new versioned migration under `supabase/migrations/`.
+Accessed: 2026-05-27.
 
-Legacy draft name from older planning: `supabase/report-analysis_tables.sql` (do not use as the deployment source of truth).
+| ID | Query | Source | Result | Supported claim | Unsupported gap |
+|----|-------|--------|--------|-----------------|-----------------|
+| SL-1 | `parents difficulty understanding psychoeducational evaluation report plain language study` | Springer Nature, "Parent experiences with children's psychological evaluation reports" — https://link.springer.com/article/10.1186/s12982-026-01613-x | Found | Parents can struggle with traditional psychological/psychoeducational report language and structure; accessible plain-language reports can improve comprehension and engagement. | Does not prove Qimi specifically will convert users or that AI is the right delivery mechanism. |
+| SL-2 | `pediatric neuropsychological evaluation reports parent comprehension readability study` | The Clinical Neuropsychologist, "Impact of text difficulty and visual emphasis on pediatric neuropsychological evaluation reports" — https://www.tandfonline.com/doi/abs/10.1080/13854046.2024.2366018 | Found(partial) | Parent-facing neuropsychological reports are an active readability/comprehension research topic; text difficulty and visual emphasis affect perceived readability and utility. | Abstract-level access only in this pass; implementation still needs full-text review if used for detailed UI copy decisions. |
+| SL-3 | `plain language parents understanding health recommendations trial` | Journal of Clinical Epidemiology, plain-language parent trial — https://www.sciencedirect.com/science/article/pii/S0895435623001658 | Found(partial) | Plain-language child-health recommendations improved parent understanding and preference compared with standard wording. | It concerns health recommendations, not assessment reports, so it supports plain-language direction by analogy only. |
+| SL-4 | `neuropsychological assessment feedback practices survey` | PMC, "A Survey of Neuropsychological Assessment Feedback Practices Among Neuropsychologists" — https://pmc.ncbi.nlm.nih.gov/articles/PMC10784416/ | Found | Neuropsychologists commonly provide verbal feedback and may walk patients through reports or written summaries. | Does not show every family receives enough explanation or retains the information after the session. |
+| SL-5 | `autism assessment feedback session guideline recommendations family report` | PMC, "The Feedback Session of an Autism Assessment" — https://pmc.ncbi.nlm.nih.gov/articles/PMC8148412/ | Found | Assessment guidelines frequently recommend family feedback and report sharing. | Autism assessment guidance is adjacent to ADHD/neurodevelopmental reports, not identical to psychoeducational reports. |
+| SL-6 | `IEP evaluation results parents meeting review information after evaluation` | NYC Public Schools IEP Meeting — https://www.schools.nyc.gov/learning/special-education/the-iep-process/iep-meeting | Found | School workflows include a post-evaluation IEP meeting where the team reviews evaluation information with parents. | Local policy example; not all North American jurisdictions follow the same details. |
+| SL-7 | `IEP reports parents meaningful participation understandable progress reports` | Arizona Department of Education progress report FAQ — https://www.azed.gov/node/10288 | Found | Education agencies emphasize that parents need sufficient, meaningful information to participate in IEP decisions. | Progress reports are not the same as full psychoeducational assessment reports. |
+| SL-8 | `generative AI health risks hallucination privacy security` | NCBI Bookshelf, "Risks of Generative Artificial Intelligence in Health and Medicine" — https://www.ncbi.nlm.nih.gov/books/NBK615587/ | Found | GenAI health risks include privacy/security, bias, output limitations, brittleness, and hallucinations. | Does not evaluate Qimi's future implementation specifically. |
+| SL-9 | `FDA clinical decision support software FAQ medical device` | FDA CDS FAQ — https://www.fda.gov/medical-devices/software-medical-device-samd/clinical-decision-support-software-frequently-asked-questions-faqs | Found | Some CDS software remains a medical device and under FDA oversight depending on function and criteria. | Does not classify Qimi; classification depends on future intended use and claims. |
+| SL-10 | `FDA software interpret clinical implications medical image signal pattern` | FDA Digital Health Policy Tool step 6 — https://www.fda.gov/medical-devices/digital-health-center-excellence/step-6-software-function-intended-provide-clinical-decision-support | Found | Software that assesses or interprets clinical implications/relevance of medical signals, patterns, or medical images can fall outside non-device CDS criteria. | Psychoeducational reports may be educational/psychological documents rather than medical images, but clinical interpretation claims still raise intended-use risk. |
+| SL-11 | `FTC Health Breach Notification Rule health apps similar technologies` | FTC HBNR basics — https://www.ftc.gov/business-guidance/resources/health-breach-notification-rule-basics-business | Found | The FTC rule can apply to health apps and similar technologies handling identifying health information outside HIPAA. | Whether Qimi is covered requires product-specific legal review. |
+| SL-12 | `HHS HIPAA covered entity business associate health app` | HHS Covered Entities and Business Associates — https://www.hhs.gov/hipaa/for-professionals/covered-entities/index.html | Found | HIPAA applies to covered entities and business associates; entities outside those definitions do not comply with HIPAA Rules by default. | Does not remove FTC, state privacy, contract, or platform obligations. |
+| SL-13 | `Supabase Storage private bucket signed URL sensitive documents` | Supabase Storage buckets — https://supabase.com/docs/guides/storage/buckets/fundamentals | Found | Private buckets use RLS-controlled access; private downloads use authenticated download or time-limited signed URLs; sensitive documents are an example use case. | Does not design Qimi's RLS policies or deletion workflow. |
+| SL-14 | `Supabase Storage private buckets not accessible public URL signed URLs` | Supabase serving assets docs — https://supabase.com/docs/guides/storage/serving/downloads | Found | Non-public bucket assets are private and not accessible through public URLs; signed URLs are time-limited but remain valid until expiry. | Does not define the exact signed URL TTL Qimi should use. |
 
-```sql
--- ===========================================
--- Reports Table
--- ===========================================
-CREATE TABLE IF NOT EXISTS reports (
-  id            UUID    PRIMARY KEY DEFAULT gen_random_uuid(),
-  user_id       UUID    NOT NULL REFERENCES users(id) ON DELETE CASCADE,
-  title         TEXT    NOT NULL,
-  storage_path  TEXT    NOT NULL,
-  mime_type     TEXT    NOT NULL,
-  file_size     INTEGER NOT NULL,
-  analysis      TEXT,
-  status        TEXT    NOT NULL DEFAULT 'uploading'
-                  CHECK (status IN ('uploading', 'analyzing', 'completed', 'failed')),
-  created_at    TIMESTAMPTZ DEFAULT NOW(),
-  updated_at    TIMESTAMPTZ DEFAULT NOW()
-);
+### Evidence Layering
 
--- Indexes
-CREATE INDEX IF NOT EXISTS idx_reports_user_id
-  ON reports(user_id);
-
-CREATE INDEX IF NOT EXISTS idx_reports_user_created
-  ON reports(user_id, created_at DESC);
-
--- Enable RLS
-ALTER TABLE reports ENABLE ROW LEVEL SECURITY;
-
--- RLS Policies (auth enforced server-side via service_role key)
-CREATE POLICY "reports_select" ON reports FOR SELECT USING (auth.uid() = user_id);
-CREATE POLICY "reports_insert" ON reports FOR INSERT WITH CHECK (auth.uid() = user_id);
-CREATE POLICY "reports_update" ON reports FOR UPDATE USING (auth.uid() = user_id);
-CREATE POLICY "reports_delete" ON reports FOR DELETE USING (auth.uid() = user_id);
-
--- Auto-update trigger
-DROP TRIGGER IF EXISTS reports_updated_at ON reports;
-CREATE TRIGGER reports_updated_at
-  BEFORE UPDATE ON reports
-  FOR EACH ROW
-  EXECUTE FUNCTION update_updated_at();
-```
+| Claim | Source axis | Maturity | Basis |
+|-------|-------------|----------|-------|
+| Parents can need clearer explanations of psychological, psychoeducational, or neuropsychological reports. | External research supported | Stable | SL-1, SL-2, SL-3 |
+| Professional/school workflows often include feedback sessions or meetings where reports are explained. | External research/official workflow supported | Stable | SL-4, SL-5, SL-6 |
+| Qimi should help with plain-language understanding, not diagnosis or treatment. | External risk supported + internal product choice | Stable for post-MVP v1 | SL-8, SL-9, SL-10 plus compliance posture |
+| Report Analysis should be Post-MVP P1, not MVP. | Internal product sequencing choice | Stable for current roadmap | `docs/project-control.md` and current module status |
+| First web version should avoid mini-program multi-page/SSE/RAG/report-chat complexity. | Internal MVP scope choice | Stable for first post-MVP version | Cross-platform blueprint is reference-only; AQS anti-overengineering |
+| Private Supabase Storage with signed URLs is the correct storage boundary if uploads are built. | Official vendor supported | Stable | SL-13, SL-14 |
 
 ---
 
-## 3. Image Storage
+## 2. ADR-Lite
 
-- Supabase Storage bucket: `reports-private`
-- Path pattern: `{user_id}/{report_id}.{ext}` (ext = `jpg` or `png`)
-- All uploads go server-side via `getSupabaseAdmin()` — never direct from browser
-- Store `storage_path` in the `reports` table, not a public URL
-- The read API generates a short-lived signed URL for the current user when needed
-- On delete: remove the file from storage AND the database row
-
----
-
-## 4. API Routes
-
-All routes under `pages/api/reports/`.
-
-### 4.1 `GET /api/reports` — List reports
-
-**Response (200):**
-```json
-{
-  "reports": [
-    {
-      "id": "uuid",
-      "title": "Neuropsych Evaluation — 2026-02-22",
-      "status": "completed",
-      "createdAt": "2026-02-22T10:30:00Z"
-    }
-  ]
-}
-```
-
-**Logic:**
-1. Auth check (`getServerSession` → 401 if no email)
-2. Get-or-create user by email (follow `conversations/index.ts` pattern — PGRST116 handling)
-3. Query `reports` for this user ordered by `created_at DESC`
-4. Return array with `id`, `title`, `status`, `createdAt` (no image_url or analysis in list response)
+| Decision ID | Decision | Risk | External evidence | Local evidence | Supported claim | Unsupported gap | Status | Confirmation |
+|-------------|----------|------|-------------------|----------------|-----------------|-----------------|--------|--------------|
+| ADR-RA-1 | Keep Report Analysis out of MVP and mark it Post-MVP P1. | Normal | SL-1 to SL-3 support real need; SL-8 to SL-12 support added risk. | `docs/project-control.md` places Report Analysis after launch readiness. | Demand exists, but risk and effort justify post-MVP sequencing. | No Qimi production demand data yet. | Accepted | Revisit after MVP launch readiness closes. |
+| ADR-RA-2 | Scope first version as plain-language report understanding, not diagnosis/treatment. | High | SL-8 to SL-10. | Compliance spec already positions Qimi as education/support, not medical advice. | Health AI hallucination and FDA intended-use risk require strict output boundaries. | Does not guarantee non-device posture; counsel/product-copy review still needed before launch. | Accepted | Prompt regression tests must reject diagnostic/treatment/medication outputs. |
+| ADR-RA-3 | Store uploads only in private Supabase Storage with DB-owned `storage_path` and short-lived signed URLs. | High | SL-13, SL-14. | Current architecture uses Supabase as primary DB/storage platform. | Private buckets and signed URLs fit sensitive uploaded documents. | Exact bucket policy and TTL need implementation review. | Accepted | Local Supabase migration and ownership/delete tests required. |
+| ADR-RA-4 | Connect report findings to Growth Plan only through parent-reviewed candidate items. | Normal | SL-7 supports parent meaningful participation; SL-8 supports avoiding unreviewed AI action. | Growth Plan exists as the current accepted action loop. | AI-generated support ideas should be reviewed before becoming plan items. | No current report-to-plan schema exists. | Accepted | Integration tests must prove no automatic plan write. |
+| ADR-RA-5 | Do not copy mini-program report architecture into web v1. | Normal | AQS anti-overengineering; no external source needed for internal scope. | Cross-platform blueprint is reference-only under `docs/formal-basis-entry.md`. | Web v1 should avoid multi-page batch, SSE, RAG, report-chat, and historical comparison complexity. | Later usage may justify expanding scope. | Accepted | Keep v1 tasks linear and single-file upload only. |
 
 ---
 
-### 4.2 `POST /api/reports/upload` — Upload image and create report record
+## 3. Product Scope
 
-**Request:** `multipart/form-data`
-- `file` — image file (JPG or PNG)
-- `title` — optional string (default: `"Report — {YYYY-MM-DD}"`)
+### 3.1 In Scope For Post-MVP P1 v1
 
-**Response (201):**
-```json
-{
-  "report": {
-    "id": "uuid",
-    "title": "Neuropsych Evaluation — 2026-02-22",
-    "status": "uploading",
-    "createdAt": "2026-02-22T10:30:00Z"
-  }
-}
-```
+The first implementation should support a single uploaded report and produce a parent-facing explanation with:
 
-**Response (400):**
-```json
-{ "error": "File too large. Free plan limit is 5MB." }
-```
+1. **Plain-language summary**
+   - What this document appears to be.
+   - The main findings or sections in parent-friendly language.
+   - A clear uncertainty note when OCR/model confidence is limited.
+2. **Key points explained**
+   - Explain important terms, scores, headings, and recommendations already present in the report.
+   - Avoid inventing missing values or inferring hidden clinical meaning.
+3. **Questions to ask**
+   - Questions for the doctor, psychologist, evaluator, therapist, or school team.
+   - Questions should help parents prepare for a meeting, not replace the meeting.
+4. **Growth Plan candidates**
+   - Optional candidate support ideas derived from report recommendations.
+   - Must be shown as drafts requiring parent review, editing, and confirmation before becoming Growth Plan items.
 
-```json
-{ "error": "Report limit reached. Free plan allows 1 report per month." }
-```
+### 3.2 Explicitly Out Of Scope
 
-**Config (disable Next.js body parser):**
-```ts
-export const config = { api: { bodyParser: false } };
-```
+- No diagnosis, rediagnosis, severity classification, or "your child has/does not have ADHD" language.
+- No medication, dosage, supplement, treatment, crisis, legal, IEP eligibility, placement, or service entitlement advice.
+- No interpretation of medical images, lab values, EEG, genetic tests, or other clinical measurements as abnormal/normal beyond what the uploaded report itself explicitly states.
+- No replacing feedback from doctors, psychologists, school evaluators, or qualified clinicians.
+- No report sharing, public links, export, provider portal, school portal, or collaboration workflow.
+- No multi-page batch analysis, page grouping, SSE progress stream, report-chat, RAG citation layer, historical comparison, or membership quota system in v1.
+- No guest upload.
 
-**Logic:**
-1. Auth check
-2. Parse multipart form with `formidable` [NEEDS_DEPENDENCY: formidable]
-3. Validate file type: check MIME header AND magic bytes (first 4 bytes: JPEG = `FF D8 FF`, PNG = `89 50 4E 47`). Reject if either check fails.
-4. Get-or-create user by email
-5. Quota check: count reports in current calendar month for this user. Until membership-billing exists, all registered users are Free; reject if count >= 1.
-6. Validate file size against current entitlement (Free default: 5MB = 5,242,880 bytes; future Pro: 20MB = 20,971,520 bytes)
-7. Generate a new UUID for the report ID
-8. Upload image buffer to the private Supabase Storage bucket at `{user_id}/{report_id}.{ext}` using `supabaseAdmin.storage`
-9. Insert row into `reports` with `storage_path`, `mime_type`, `file_size`, and `status = 'uploading'`
-10. **Resource cleanup**: If DB insert fails after storage upload succeeded, delete the uploaded file from storage before returning error
-11. Return the report record (status 201)
+### 3.3 Product Copy Rules
 
-Note: The route does NOT trigger analysis automatically. The page calls `/api/reports/analyze` separately after receiving the 201 response. This keeps the upload fast and lets the UI show progress.
+User-visible copy must say:
+
+- Qimi helps parents understand and organize an existing report.
+- Qimi may be wrong or incomplete.
+- Parents should confirm results and next steps with the professional or school team that issued or reviewed the report.
+
+User-visible copy must not say:
+
+- Qimi diagnoses, detects, screens, treats, triages, or assesses ADHD or any condition.
+- Qimi can find abnormalities, determine eligibility, or recommend treatment.
+- Qimi replaces a clinician, psychologist, therapist, evaluator, school team, or legal advocate.
+- A specific AI vendor/model name.
 
 ---
 
-### 4.3 `POST /api/reports/analyze?id=uuid` — Trigger AI analysis
+## 4. User Experience
 
-**Response (200):**
-```json
-{
-  "report": {
-    "id": "uuid",
-    "status": "completed",
-    "analysis": "**Report Type:** Neuropsychological Evaluation\n\n**Key Findings:** ..."
-  }
-}
-```
+### 4.1 Routes
 
-**Response (404):**
-```json
-{ "error": "Report not found" }
-```
+| Route | Purpose | MVP status |
+|-------|---------|------------|
+| `/reports` | Report history and upload entry | Planned Post-MVP P1 |
+| `/reports/upload` | Single-report upload and consent/disclaimer flow | Planned Post-MVP P1 |
+| `/reports/[id]` | Parent-facing explanation result | Planned Post-MVP P1 |
 
-**Logic:**
-1. Auth check
-2. Get-or-create user by email
-3. Fetch the report by `id`, confirm it belongs to this user (return 404 if not found or not owned)
-4. Update status to `analyzing`
-5. Create a short-lived signed URL for the private image object
-6. Check if `VISION_AI_API_URL` and `VISION_AI_API_KEY` env vars are set
-   - If NOT set: set `analysis` to the placeholder string below, set `status = 'completed'`, save, return
-   - If set: call the configured vision AI provider (see section 5 below)
-7. On provider success: save `analysis` text, set `status = 'completed'`
-8. On provider error: set `status = 'failed'`, save, return the error response with status 200 (not 500) so the UI can display the failed state gracefully
+All routes require authentication and use the existing AppLayout/SmartDrawer pattern.
 
-**Placeholder analysis (used when `VISION_AI_API_URL` is not configured):**
-```
-AI analysis is not yet configured. Please check back later.
-```
+### 4.2 Upload Flow
 
----
+1. User opens `/reports/upload`.
+2. Page displays sensitive-upload notice, authorization confirmation, and disclaimer.
+3. User uploads one supported file.
+4. Server validates auth, size, extension, MIME, and file signature before storage.
+5. Server stores the file in private storage and inserts a report record.
+6. Analysis runs through a controlled server route with timeout, retry cap, and safe failure state.
+7. Result page displays summary, key points, questions, uncertainty, and optional Growth Plan candidates.
 
-### 4.4 `GET /api/reports/[id]` — Get single report
+### 4.3 Result Sections
 
-**Response (200):**
-```json
-{
-  "report": {
-    "id": "uuid",
-    "title": "Neuropsych Evaluation — 2026-02-22",
-    "imageUrl": "https://signed-url.example/...",
-    "analysis": "**Report Type:** ...",
-    "status": "completed",
-    "createdAt": "2026-02-22T10:30:00Z"
-  }
-}
-```
+Result page sections:
 
-**Response (404):**
-```json
-{ "error": "Report not found" }
-```
+- Report overview
+- Key points in plain language
+- Terms and scores explained
+- Questions for doctor/evaluator/school
+- Possible Growth Plan candidates
+- Uncertainties and what Qimi could not verify
+- Disclaimer
 
-**Logic:**
-1. Auth check
-2. Get-or-create user by email
-3. Query `reports` by `id`, confirm `user_id` matches (return 404 if not)
-4. Generate a short-lived signed URL from `storage_path`
-5. Return full report including signed `imageUrl` and `analysis`
+### 4.4 Empty And Failure States
+
+- Empty history: "No reports yet. Uploading reports will be available after this feature is launched."
+- Upload validation failure: generic user-safe messages; do not echo internal MIME/parser/provider errors.
+- Analysis failure: "Qimi could not summarize this report. Please try again later or discuss the report directly with the professional who issued it."
+- Low confidence: show uncertainty before any suggested candidate items.
 
 ---
 
-### 4.5 `DELETE /api/reports/[id]` — Delete report and image
+## 5. Growth Plan Connection
 
-**Response (204):** No body
+Report Analysis may produce `candidate_plan_items`, but it must not directly create Growth Plan records.
 
-**Response (404):**
-```json
-{ "error": "Report not found" }
-```
-
-**Logic:**
-1. Auth check
-2. Get-or-create user by email
-3. Fetch report, confirm ownership (return 404 if not found or not owned)
-4. Delete image from Supabase Storage using the stored `storage_path`
-5. Delete row from `reports`
-6. Return 204
-
----
-
-## 5. Vision AI Integration
-
-### Environment Variables
-
-```
-VISION_AI_API_URL=https://provider.example/v1/chat/completions
-VISION_AI_API_KEY=your_key_here
-```
-
-### Request Format
-
-Send the image using a short-lived signed URL generated server-side from the private bucket.
+Suggested contract:
 
 ```ts
-const response = await fetch(process.env.VISION_AI_API_URL!, {
-  method: 'POST',
-  headers: {
-    'Authorization': `Bearer ${process.env.VISION_AI_API_KEY}`,
-    'Content-Type': 'application/json',
-  },
-  signal: AbortSignal.timeout(30000), // 30s timeout for vision model
-  body: JSON.stringify({
-    model: process.env.VISION_AI_MODEL,
-    messages: [
-      {
-        role: 'user',
-        content: [
-          {
-            type: 'image_url',
-            image_url: { url: signedImageUrl },
-          },
-          {
-            type: 'text',
-            text: REPORT_ANALYSIS_PROMPT,
-          },
-        ],
-      },
-    ],
-    max_tokens: 1500,
-  }),
-});
+type ReportPlanCandidate = {
+  id: string;
+  reportId: string;
+  sourceExcerpt?: string;
+  plainLanguageReason: string;
+  suggestedSupportArea: 'school' | 'home' | 'routine' | 'emotion' | 'attention' | 'sensory' | 'sleep' | 'other';
+  questionForProfessional?: string;
+  draftAction: string;
+  safetyFlags: Array<'medical' | 'diagnosis' | 'medication' | 'school_eligibility' | 'legal' | 'crisis' | 'none'>;
+  requiresParentReview: true;
+};
 ```
 
-### Analysis Prompt
+Rules:
 
-```
-Analyze this medical or psychological report. Provide a structured summary with these four sections:
-
-1. Report Type — What kind of report is this (e.g., neuropsychological evaluation, blood panel, behavioral assessment)?
-2. Key Findings — What are the main results or scores noted in the report?
-3. Areas of Concern — Are there any results outside normal ranges or flagged items?
-4. Recommendations — What follow-up actions or next steps does the report suggest?
-
-Write in plain, friendly language that a parent can understand. Avoid medical jargon where possible, and briefly explain any terms you must use. End your response with this exact sentence: "This summary is not a substitute for professional medical advice. Please discuss these results with your child's healthcare provider."
-```
-
-Store the full text response from the model as the `analysis` field.
+- Parent must click "Review for Growth Plan" before any candidate enters the Growth Plan save flow.
+- The Growth Plan save endpoint must apply the same safety filters used for chat-saved plans.
+- Items with `medical`, `diagnosis`, `medication`, `school_eligibility`, `legal`, or `crisis` flags must be blocked from direct save and converted into "question to ask a professional" text instead.
+- Stored Growth Plan items should reference `source_report_id` only if the final schema includes a report relation; do not duplicate OCR text or full report excerpts into Growth Plan rows.
 
 ---
 
-## 6. Frontend Components
+## 6. Data, Upload, Privacy, And Compliance
 
-All under `components/Reports/`.
+### 6.1 Data Classification
 
-### 6.1 `ReportUploader.tsx`
+Report files, extracted text, summaries, and candidate items are sensitive child/family records. They may include health, education, disability, school, medication, or evaluation information.
 
-Drag-and-drop or click-to-upload file input. Props: `onUpload(file: File, title: string) => void`, `isLoading: boolean`, `userTier: 'free' | 'pro'`.
+### 6.2 Upload Requirements
 
-- Dashed border drop zone with upload icon and "Drop image here or click to browse" text
-- Shows file preview (thumbnail) after file is selected, before submit
-- File type check: accept only `.jpg`, `.jpeg`, `.png`
-- Client-side size validation before submit (free: 5MB, pro: 20MB) — display error inline
-- Title input field above the drop zone (placeholder: "Report title (optional)")
-- Submit button disabled while `isLoading` is true
-- Tailwind only. Teal (#00D4AA) primary, dashed border on drop zone
+- Authenticated users only.
+- One file per report in v1.
+- Server-side size limit.
+- Explicit extension allowlist.
+- MIME check plus file signature sniffing.
+- Reject archives, scripts, executables, ambiguous content, and files with mismatched type/signature.
+- Do not log file names, report titles, OCR text, extracted findings, or model output.
+- Do not include report data in analytics event properties.
 
-### 6.2 `ReportCard.tsx`
+Initial file support should be decided in implementation planning. Conservative default:
 
-Card for the report list. Props: `id: string`, `title: string`, `status: string`, `createdAt: string`.
+- v1a: JPG/PNG only.
+- PDF only after text extraction, page limits, malware scanning approach, and deletion behavior are reviewed.
 
-- Displays report title, formatted date (`toLocaleDateString()`), and `AnalysisStatus` badge
-- Entire card is clickable, navigates to `/reports/{id}`
-- Hover state: slight shadow elevation
-- Tailwind card styling consistent with existing landing/chat cards
+### 6.3 Storage Requirements
 
-### 6.3 `ReportAnalysis.tsx`
+- Use a private Supabase Storage bucket.
+- Store `storage_path`, not public URLs.
+- Generate signed URLs only after server-side ownership checks.
+- Keep signed URL TTL short and never persist signed URLs in the database.
+- Delete storage objects when deleting a report or account.
+- Use versioned migrations under `supabase/migrations/`; no standalone SQL snippets as deployment source of truth.
 
-Displays the AI-generated analysis text. Props: `analysis: string | null`, `status: string`.
+### 6.4 Database Shape
 
-- If `status` is `analyzing`: show a pulsing "Analyzing your report..." placeholder with a spinner
-- If `status` is `failed`: show "Analysis failed. Please try again." with a retry button (calls `/api/reports/analyze`)
-- If `analysis` is populated: render the text with the existing `react-markdown` dependency
-- Medical disclaimer line at the bottom styled in muted text (`text-gray-500 text-sm italic`)
+Final schema must be designed during implementation. Minimum conceptual entities:
 
-### 6.4 `ReportImage.tsx`
+- `reports`
+  - owner, title, storage path, mime type, size, status, created/updated timestamps
+- `report_analysis_outputs`
+  - report owner, summary JSON, uncertainty JSON, model/provider metadata safe for internal debugging, status/error code
+- `report_plan_candidates`
+  - report owner, candidate fields, safety flags, parent-review state
 
-Displays the report image. Props: `imageUrl: string`, `title: string`.
+RLS policies must enforce ownership with `auth.uid() = user_id` or equivalent ownership joins. Server routes may use admin access only after session ownership checks.
 
-- `<img>` tag with `object-contain` styling, max height `400px` in default view
-- Click to enlarge: clicking image opens a full-screen overlay (fixed position, dark backdrop)
-- Overlay has a close button (X) and shows the image at up to `90vw` / `90vh`
-- No external lightbox library — implement overlay with Tailwind + React state
+### 6.5 Privacy And Legal Copy Requirements
 
-### 6.5 `AnalysisStatus.tsx`
+Before launch, Privacy Policy and Terms must explicitly cover:
 
-Status badge. Props: `status: string`.
-
-| Status | Color | Label |
-|--------|-------|-------|
-| `uploading` | yellow | Uploading |
-| `analyzing` | blue (pulse animation) | Analyzing |
-| `completed` | green | Complete |
-| `failed` | red | Failed |
-
-- Small pill badge with dot indicator
-- Pulse animation on `analyzing` using Tailwind `animate-pulse`
-
----
-
-## 7. Pages
-
-### 7.1 `pages/reports/index.tsx` — Report list
-
-```
-AppLayout
-├── Head: "My Reports - Qimi AI"
-├── Page header: "My Reports" + Upload button (→ /reports/upload)
-├── Free tier usage notice (if free user): "1 of 1 reports used this month"
-├── Report list: map over reports → ReportCard
-├── Empty state (if no reports): "No reports yet. Upload your first report."
-└── Medical disclaimer (footer)
-```
-
-Auth pattern: `useSession()` → loading skeleton → redirect if no session → render content.
-Fetch `GET /api/reports` on mount.
-
-### 7.2 `pages/reports/upload.tsx` — Upload page
-
-```
-AppLayout
-├── Head: "Upload Report - Qimi AI"
-├── Page header: "Upload a Report" + back link (← My Reports)
-├── Medical disclaimer (above the form, prominent)
-├── ReportUploader
-└── AnalysisStatus (shown after upload begins, while analyzing)
-```
-
-Auth pattern: same as above.
-
-**Upload flow:**
-1. User selects file and (optional) title, clicks submit
-2. POST to `/api/reports/upload` — on success, store `report.id` in local state, set status to `uploading`
-3. POST to `/api/reports/analyze?id={report.id}` — show `analyzing` status
-4. On analysis complete: `router.push('/reports/{report.id}')`
-5. On any error: show inline error message, allow retry
-
-### 7.3 `pages/reports/[id].tsx` — Single report view
-
-```
-AppLayout
-├── Head: "{report.title} - Qimi AI"
-├── Page header: report title + AnalysisStatus badge + Delete button
-├── Back link: ← My Reports
-├── Medical disclaimer (above analysis panel, prominent)
-├── Two-column layout (stacks on mobile):
-│   ├── Left: ReportImage
-│   └── Right: ReportAnalysis
-└── (no footer needed — disclaimer is inline)
-```
-
-Auth pattern: same as above.
-
-Fetch `GET /api/reports/[id]` on mount. If status is `analyzing`, poll every 3 seconds until status changes (clear interval on component unmount). On delete: call `DELETE /api/reports/[id]`, then `router.push('/reports')`.
+- Report upload and storage.
+- Third-party AI/OCR/vision processing in generic provider-neutral terms.
+- The fact that Qimi deletes data from Qimi-controlled systems on account/report deletion, but cannot guarantee deletion of data already processed by third-party AI providers except as available under provider terms and law.
+- User responsibility to upload only documents they are authorized to share.
+- Qimi's education/support positioning and non-diagnosis/non-treatment boundary.
+- FTC Health Breach Notification Rule revisit trigger for report uploads and any security incident involving report data.
+- HIPAA revisit trigger before provider, clinic, school-district, EHR, or covered-entity partnerships.
+- COPPA/adult-directed scope revisit before child accounts or child-directed report workflows.
 
 ---
 
-## 7.4 Error Boundary & Accessibility
+## 7. AI Output Contract
 
-- **Error Boundary**: Use AppLayout's built-in error handling. Analysis polling should gracefully handle network errors without crashing the page.
-- **Accessibility**: `ReportImage` must have `alt={title}` on the `<img>` tag. Upload drop zone must be keyboard-accessible with `role="button"` and `aria-label="Upload report image"`. Status badges should use `aria-label` to convey status to screen readers.
+### 7.1 Allowed Output
+
+- "This report appears to describe..."
+- "The report states..."
+- "This term usually means..."
+- "You may want to ask the evaluator..."
+- "A possible family support idea to discuss is..."
+- "Qimi could not verify..."
+
+### 7.2 Prohibited Output
+
+- "Your child has ADHD/autism/anxiety/dyslexia..."
+- "This score means your child is severe/mild/normal/abnormal" unless the uploaded report itself explicitly says so, and then only as "the report labels this..."
+- "Start/stop/change medication..."
+- "The school must provide..."
+- "You should pursue legal action..."
+- "This report proves..."
+- "No need to talk to a doctor/school/evaluator..."
+
+### 7.3 Required Disclaimer
+
+Every completed analysis must include:
+
+> Qimi AI is not a doctor, psychologist, school evaluator, or legal advisor. This explanation may be incomplete or wrong and is not a substitute for professional medical, psychological, educational, or legal advice. Please discuss the report with the professional or school team that issued or reviewed it.
 
 ---
 
 ## 8. Acceptance Criteria
 
-- [ ] Authenticated user can upload a JPG or PNG image
-- [ ] Image is stored in Supabase Storage under `{user_id}/{report_id}.{ext}`
-- [ ] Report record is created in `reports` table with correct status progression
-- [ ] Analysis endpoint works with placeholder response when `VISION_AI_API_KEY` is not set
-- [ ] Analysis endpoint calls the configured vision AI provider and stores result when API key is configured
-- [ ] Report list displays all user reports ordered by date
-- [ ] Single report view shows image + formatted analysis side by side
-- [ ] Delete removes both the DB row and the image from Supabase Storage
-- [ ] Free tier quota (1 report/month) is enforced server-side
-- [ ] File size limits enforced both client-side and server-side
-- [ ] Medical disclaimer appears on every page and at the end of every analysis
-- [ ] `AnalysisStatus` badge reflects correct state at all times
-- [ ] Polling stops when status reaches `completed` or `failed`
-- [ ] Unauthenticated users are blocked from protected report pages and prompted via the shared login modal
-- [ ] Mobile responsive (two-column view collapses to single column on small screens)
-- [ ] `npx eslint` passes for touched files
-- [ ] `npx tsc --noEmit` passes
-- [ ] `npm run build` passes
+- [ ] Report Analysis remains outside MVP launch acceptance and is marked Post-MVP P1.
+- [ ] Authenticated user can upload one supported report file after explicit authorization/disclaimer acknowledgment.
+- [ ] Guest users cannot upload or view reports.
+- [ ] Upload API validates auth, size, extension, MIME type, and file signature server-side.
+- [ ] Files are stored in private Supabase Storage; DB stores `storage_path`, not public URLs.
+- [ ] Signed URLs are generated only after ownership checks and are not stored.
+- [ ] Report list shows only the current user's reports.
+- [ ] Result page shows summary, key points, questions, uncertainty, disclaimer, and optional Growth Plan candidates.
+- [ ] AI output never diagnoses, prescribes, changes medication, determines eligibility, gives legal advice, or replaces professionals.
+- [ ] Growth Plan candidates require parent review and do not auto-create plan items.
+- [ ] Deleting a report removes analysis rows, candidate rows, and the storage object.
+- [ ] Account deletion removes report records and storage objects or has an explicit verified cleanup job.
+- [ ] Privacy Policy and Terms are updated before feature launch.
+- [ ] Analytics/logs do not include report text, file names, titles, OCR text, or analysis content.
+- [ ] Local Supabase reset passes with versioned migrations.
+- [ ] `npx tsc --noEmit`, `git diff --check`, and `npm run build` pass before human acceptance.
 
 ---
 
@@ -560,93 +315,100 @@ Fetch `GET /api/reports/[id]` on mount. If status is `analyzing`, poll every 3 s
 ### Task Execution Metadata
 
 - Implementation mode: `linear`
-- Acceptance mode: `single-item gate`
+- Acceptance mode: `single-item gate` for schema/storage/API safety tasks; `batch gate` only for pure UI components after API contracts are frozen
 - Machine gate:
-  - required checks: `npx eslint`, `npx tsc --noEmit`, `npm run build`
-  - smoke test: upload, analyze, view, and delete flows must work manually for the affected slice
-  - contract consistency check: route, storage model, quota logic, and response shape must remain aligned with `/docs/system-architecture.md` and this spec
-- Human gate: allowed only after machine gate passes and P0/P1 review findings are zero
+  - `npx tsc --noEmit`
+  - `git diff --check`
+  - `npm run build`
+  - local Supabase reset for schema/storage tasks
+  - local smoke test for upload, analyze, view, candidate review, delete
+- Human gate: allowed only after machine gates pass and P0/P1 review findings are zero
 
-Each task is one file (or closely related pair of files). Execute in order.
+### P1-RA-001: Final implementation preflight
 
-### T001: Create database migration
-- **File**: new `supabase/migrations/{timestamp}_report_analysis_tables.sql`
-- **Do**: Copy the SQL from section 2 above. Save the file.
-- **Verify**: File exists with correct SQL including RLS policies and indexes.
-- **Commit**: `[T001] feat: add reports table migration`
+- Update Search Ledger if sources or laws changed.
+- Confirm Privacy/Terms text for report uploads.
+- Decide v1 file types and limits.
+- Confirm no current MVP route or prompt claims reports are already available.
 
-### T002: Create GET /api/reports (list)
-- **File**: `pages/api/reports/index.ts`
-- **Do**: Handle `GET` only. Auth check, get-or-create user, query `reports` ordered by `created_at DESC`, return `{ reports: [...] }` with `id`, `title`, `status`, `createdAt` fields.
-- **Reference**: Follow `pages/api/conversations/index.ts` pattern exactly (auth, get-or-create user with PGRST116 handling, camelCase response, error logging with `[reports]` prefix).
-- **Verify**: `npx eslint pages/api/reports/index.ts` passes, `npx tsc --noEmit` passes, `npm run build` passes.
-- **Commit**: `[T002] feat: add GET /api/reports list endpoint`
+### P1-RA-002: Schema and storage migration
 
-### T003: Create POST /api/reports/upload (file upload)
-- **File**: `pages/api/reports/upload.ts`
-- **Do**: Handle `POST` with `multipart/form-data`. Parse with `formidable`. Validate file type and size. Enforce quota. Upload to Supabase Storage. Insert report row. Return 201 with report record.
-- **Config**: Export `export const config = { api: { bodyParser: false } };` at top of file.
-- **Dependency check**: Check `package.json` for `formidable`. If missing, add `[NEEDS_DEPENDENCY: npm install formidable @types/formidable]` to commit message and install it before coding.
-- **Quota logic**: Count rows in `reports` where `user_id = {user_id}` and `created_at >= start of current month`. Until membership-billing exists, treat all registered users as Free and reject at >= 1.
-- **Storage rule**: Upload to the private `reports-private` bucket and save `storage_path` instead of a public URL.
-- **Verify**: `npx eslint pages/api/reports/upload.ts` passes, `npx tsc --noEmit` passes, `npm run build` passes.
-- **Commit**: `[T003] feat: add POST /api/reports/upload endpoint [NEEDS_DEPENDENCY: formidable]`
+- Add versioned migration for report records, analysis outputs, and candidate items.
+- Add RLS ownership policies.
+- Create private storage bucket configuration or documented setup.
+- Add account deletion cleanup path for report storage.
 
-### T004: Create POST /api/reports/analyze (vision AI or placeholder)
-- **File**: `pages/api/reports/analyze.ts`
-- **Do**: Handle `POST`. Accept `?id=uuid`. Auth check, fetch report, verify ownership, update status to `analyzing`, create a short-lived signed URL from the private bucket, call the configured vision AI provider if env vars are set (else use placeholder), save result, return updated report.
-- **Prompt**: Use the exact prompt string from section 5 above.
-- **Error handling**: On vision AI provider failure, set `status = 'failed'` and return gracefully with status 200 (not 500).
-- **Verify**: `npx eslint pages/api/reports/analyze.ts` passes, `npx tsc --noEmit` passes, `npm run build` passes.
-- **Commit**: `[T004] feat: add POST /api/reports/analyze with vision AI and placeholder fallback`
+### P1-RA-003: Upload API
 
-### T005: Create GET and DELETE /api/reports/[id]
-- **File**: `pages/api/reports/[id].ts`
-- **Do**: Handle `GET` (return full report plus short-lived signed image URL) and `DELETE` (remove image from storage + delete row). Return 204 on delete. Return 404 if report not found or not owned by session user.
-- **Storage delete**: Use the stored `storage_path` directly instead of reconstructing it from a public URL.
-- **Verify**: `npx eslint pages/api/reports/[id].ts` passes, `npx tsc --noEmit` passes, `npm run build` passes.
-- **Commit**: `[T005] feat: add GET and DELETE /api/reports/[id] endpoints`
+- Implement authenticated upload endpoint.
+- Validate size, extension, MIME, and signature.
+- Store file privately.
+- Insert report record.
+- Clean up storage object if DB insert fails.
 
-### T006: Create AnalysisStatus and ReportUploader components
-- **Files**: `components/Reports/AnalysisStatus.tsx`, `components/Reports/ReportUploader.tsx`
-- **Do**: `AnalysisStatus` — colored pill badge with dot + label per status table in section 6.5. `ReportUploader` — drag-and-drop zone, file preview, title input, client-side validation, submit button.
-- **Styling**: Tailwind only. Teal (#00D4AA) primary.
-- **Verify**: `npx eslint components/Reports/AnalysisStatus.tsx components/Reports/ReportUploader.tsx` passes, `npx tsc --noEmit` passes, `npm run build` passes.
-- **Commit**: `[T006] feat: add AnalysisStatus and ReportUploader components`
+### P1-RA-004: Analysis API
 
-### T007: Create ReportCard and ReportImage components
-- **Files**: `components/Reports/ReportCard.tsx`, `components/Reports/ReportImage.tsx`
-- **Do**: `ReportCard` — clickable card with title, formatted date, status badge. `ReportImage` — image display with click-to-enlarge full-screen overlay (React state, no external library).
-- **Verify**: `npx eslint components/Reports/ReportCard.tsx components/Reports/ReportImage.tsx` passes, `npx tsc --noEmit` passes, `npm run build` passes.
-- **Commit**: `[T007] feat: add ReportCard and ReportImage components`
+- Implement controlled analysis route.
+- Use provider-neutral environment variable names.
+- Add timeout, retry cap, safe error mapping, and no-sensitive-log handling.
+- Return structured JSON with summary, key points, questions, uncertainty, and candidates.
 
-### T008: Create ReportAnalysis component
-- **File**: `components/Reports/ReportAnalysis.tsx`
-- **Do**: Render analysis text with the existing `react-markdown` dependency. Handle `analyzing` spinner state, `failed` state with retry button, and `completed` state with formatted text. Medical disclaimer at bottom.
-- **Verify**: `npx eslint components/Reports/ReportAnalysis.tsx` passes, `npx tsc --noEmit` passes, `npm run build` passes.
-- **Commit**: `[T008] feat: add ReportAnalysis component`
+### P1-RA-005: Report pages
 
-### T009: Create /reports page (list)
-- **File**: `pages/reports/index.tsx`
-- **Do**: Auth check with `useSession()`. Fetch `GET /api/reports` on mount. Render list of `ReportCard`. Show empty state and free tier usage notice. Medical disclaimer in footer.
-- **Reference**: Auth pattern from CLAUDE.md. `AppLayout` from `components/Layout/AppLayout`.
-- **Verify**: `npx eslint pages/reports/index.tsx` passes, `npx tsc --noEmit` passes, `npm run build` passes.
-- **Commit**: `[T009] feat: add /reports list page`
+- Implement `/reports`, `/reports/upload`, and `/reports/[id]` using AppLayout.
+- Include authorization confirmation, disclaimer, failure states, and accessible controls.
+- Keep Dashboard Reports card disabled until these routes exist.
 
-### T010: Create /reports/upload page
-- **File**: `pages/reports/upload.tsx`
-- **Do**: Auth check. Render `ReportUploader`. On submit: call upload API, then analyze API, then redirect to `/reports/{id}` on success. Show `AnalysisStatus` while in progress. Show inline error on failure. Medical disclaimer above form.
-- **Verify**: `npx eslint pages/reports/upload.tsx` passes, `npx tsc --noEmit` passes, `npm run build` passes.
-- **Commit**: `[T010] feat: add /reports/upload page`
+### P1-RA-006: Growth Plan candidate review
 
-### T011: Create /reports/[id] page (report view)
-- **File**: `pages/reports/[id].tsx`
-- **Do**: Auth check. Fetch `GET /api/reports/[id]` on mount. If status is `analyzing`, poll every 3 seconds (clear interval on unmount). Render two-column layout: `ReportImage` (left) + `ReportAnalysis` (right), stacked on mobile. Delete button with confirmation. Medical disclaimer above analysis panel.
-- **Verify**: `npx eslint pages/reports/[id].tsx` passes, `npx tsc --noEmit` passes, `npm run build` passes.
-- **Commit**: `[T011] feat: add /reports/[id] report view page`
+- Add candidate review UI.
+- Reuse Growth Plan safety filters.
+- Save only parent-confirmed safe items.
+- Convert blocked candidates to questions for professionals.
 
-### T012: Add unit tests
-- **File**: `__tests__/report-analysis.test.ts`
-- **Do**: Test quota enforcement logic, file type validation, file signature validation, ownership checks, and placeholder analysis when `VISION_AI_API_KEY` is undefined.
-- **Verify**: add the test file together with the chosen test runner setup for this repo, then ensure `npx eslint`, `npx tsc --noEmit`, and `npm run build` still pass.
-- **Commit**: `[T012] test: add report analysis unit tests`
+### P1-RA-007: Tests and acceptance
+
+- Add tests for ownership, validation, deletion cleanup, prohibited-output guardrails, and no automatic Growth Plan writes.
+- Run local Supabase reset and smoke tests.
+- Prepare technical and functional acceptance plan before human acceptance.
+
+---
+
+## 10. AQS Self-Review
+
+### Security
+
+- [PASS] Authentication: report routes require login; guest upload is out of scope.
+- [PASS] Authorization: future schema requires owner-scoped RLS and server-side ownership checks.
+- [PASS] Input validation: upload validation chain is explicitly required.
+- [PASS] Sensitive data: report text/file names/OCR/model output are excluded from logs and analytics.
+- [PASS] Resource cleanup: report deletion and failed-upload cleanup are required acceptance items.
+
+### Architecture
+
+- [PASS] Routes align with system architecture.
+- [PASS] AppLayout/SmartDrawer remains the shell.
+- [PASS] Web v1 avoids mini-program multi-page/SSE/report-chat complexity.
+- [PASS] Growth Plan connection is review-based and does not cross-write automatically.
+
+### Engineering Quality
+
+- [PASS] Evidence is recorded with Search Ledger and ADR-lite.
+- [PASS] Task metadata defines implementation and gate mode.
+- [PASS] Machine gates are aligned with current repo scripts.
+- [PASS] High-risk areas require tests before human gate.
+
+### Technical Stack
+
+- [PASS] Supabase private storage and signed URL usage is grounded in official docs.
+- [PASS] Versioned migrations remain the schema source of truth.
+- [PASS] Provider-neutral public copy and env direction is recorded.
+
+### Reverse Check
+
+- [PASS] MVP boundary: not a launch blocker.
+- [PASS] Anti-overengineering: v1 is single-report understanding only.
+- [PASS] MVD: this refresh updates the existing canonical spec; the new review record is justified because planning rules require review output under `docs/reviews/`.
+- [PASS] No implementation is implied by this planning refresh.
+
+Status: PASS for planning. Implementation remains blocked until a dedicated post-MVP branch starts from this refreshed spec.

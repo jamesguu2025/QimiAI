@@ -121,10 +121,10 @@ Current baseline:
 - AppLayout → SmartDrawer unification: `Implemented` (code reality: `components/Layout/AppLayout.tsx:5-54` imports and renders SmartDrawer)
 - Dashboard (feature hub): `Implemented` and human-accepted in current working branch
 - Family Profile (was User Profile): `Implemented` and human-accepted in current working branch
-- **Compliance (MVP launch gate)**: `Partially implemented` (delete-account/settings pieces exist; privacy/terms/consent pages and high-risk EBG record still pending)
+- **Compliance (MVP launch gate)**: `Implemented` for the current MVP launch baseline (privacy/terms/consent surfaces, adult-user confirmation, delete-account/settings path, and EBG review record exist; legal launch details remain checklist items rather than missing product surfaces)
 - Settings (account): `Implemented` and human-accepted in current working branch
 - Growth Plan: `Implemented` and human-accepted in current working branch (manual plan management and chat save-to-plan path implemented; post-MVP export/reminder refinements remain separate)
-- Report Analysis: `Planned` (valuable, but moved out of the current MVP acceptance baseline; requires a dedicated refreshed spec and branch before implementation)
+- Report Analysis: `Planned` (valuable, but moved out of the current MVP acceptance baseline; post-MVP P1 spec refreshed on 2026-05-27; requires a dedicated implementation branch before coding)
 - Crisis Calm: `Archived` (explicitly deferred from MVP by user decision on 2026-05-20)
 - Memory Profile Summary: `Implemented` and human-accepted in current working branch (conversation extraction, profile display, and profile summary path are active; future quality tuning is non-blocking)
 - Membership & Billing: `Planned` (post-MVP monetization module, spec: `docs/specs/membership-billing.md`)
@@ -140,7 +140,8 @@ The project must move forward in this order unless the user explicitly overrides
 > Amended 2026-03-17: Added compliance module as launch gate. Can execute in parallel with feature modules.
 > Amended 2026-05-06: Before new feature implementation, refresh the active spec to SOP v2.4 if it contains current-code facts, external claims, or high-risk compliance/security decisions.
 > Amended 2026-05-07: Added SmartDrawer topic folder behavior closure before Family/Profile acceptance after manual QA found topic-started conversations were not persisted under the selected topic.
-> Amended 2026-05-20: Growth Plan, memory/profile learning, onboarding, analytics MVP, compliance copy, and Dashboard entry behavior have been implemented on the current baseline. Crisis Calm is archived. Report Analysis remains a separate P1/post-MVP candidate that requires refreshed planning before implementation.
+> Amended 2026-05-20: Growth Plan, memory/profile learning, onboarding, analytics MVP, compliance copy, and Dashboard entry behavior have been implemented on the current baseline. Crisis Calm is archived. Report Analysis remains a separate P1/post-MVP candidate.
+> Amended 2026-05-27: Report Analysis spec was refreshed with SOP v2.4 evidence, Search Ledger, ADR-lite, post-MVP minimum scope, upload/privacy/security boundaries, and Growth Plan handoff rules. Implementation still requires a dedicated branch and normal technical/functional/human acceptance gates.
 
 1. Stabilize and freeze shared chat infrastructure
 2. Finish only the minimum follow-up reminder closure needed to keep the current branch coherent
@@ -153,8 +154,8 @@ The project must move forward in this order unless the user explicitly overrides
 9. **Growth Plan acceptance closure** — completed on current baseline; only carry forward non-blocking refinements
 10. **Memory Profile Summary acceptance closure** — completed on current baseline; only carry forward extraction quality tuning
 11. **Analytics MVP launch hygiene** — event correctness, internal-user filtering, and weekly report verification
-12. **Security and abuse-prevention pass** — rate limits for LLM/cost-bearing endpoints, logging minimization, ownership checks, upload boundaries, provider-neutral public errors/log labels, and public API review
-13. `report-analysis` refreshed spec + dedicated implementation branch as first P1/post-MVP feature after launch readiness is closed
+12. ~~**Security and abuse-prevention pass**~~ — completed on the current MVP baseline for rate limits on cost-bearing endpoints, logging minimization, ownership checks, upload boundaries, provider-neutral public errors/log labels, and public API review; carry forward only newly discovered launch blockers
+13. `report-analysis` dedicated implementation branch as first P1/post-MVP feature after launch readiness is closed
 14. `membership-billing` (post-MVP monetization; Stripe checkout, billing portal, entitlement sync)
 15. Return to deeper follow-up reminder iteration only after the higher-frequency product paths above are stable
 
@@ -167,7 +168,7 @@ Rationale:
 - `family-profile` is the first module card on Dashboard and the simplest to validate.
 - `settings` is low-urgency (name editing works in UserMenu already) but needed for completeness. A minimal version (account deletion only) is created as part of compliance.
 - `growth-plan` is now part of the accepted product loop.
-- `report-analysis` is the first desired P1/post-MVP feature, but should not be implemented from the stale historical spec; it needs a fresh plan, upload/privacy/security review, provider-neutral user-visible copy, and a dedicated branch.
+- `report-analysis` is the first desired P1/post-MVP feature. Its refreshed spec now defines the post-MVP minimum scope, upload/privacy/security review, provider-neutral user-visible copy, and Growth Plan handoff rules; implementation still needs a dedicated branch.
 - `crisis-calm` is archived for MVP and should not be selected unless the user reopens it.
 - `memory-profile-summary` is now part of the accepted product loop; quality improvements should be treated as refinements rather than core blocking work.
 - `membership-billing` is intentionally last. MVP should launch the free product first; monetization comes after the core feature loop and quota-bearing modules are stable in real code.

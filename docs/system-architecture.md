@@ -139,16 +139,16 @@ The SmartDrawer sidebar unification is implemented in `AppLayout`. `components/L
 | `/login` | Login / Sign up | auth | No | Standalone | Superseded by modal auth; no current `pages/login.tsx` |
 | `/chat` | AI Chat (main app) | core | No (guest mode) | SmartDrawer + Chat UI | Implemented |
 | `/followup/[id]` | Follow-up landing page | followup-reminder | Yes | SmartDrawer + Content | Implemented |
-| `/dashboard` | Feature hub (summary cards) | dashboard | Yes | SmartDrawer + Content | Implemented, not yet human-accepted |
-| `/family` | Family profile (child info, challenges) | family-profile | Yes | SmartDrawer + Content | Implemented, not yet human-accepted |
-| `/plan` | Growth plan dashboard | growth-plan | Yes | SmartDrawer + Content | Planned |
+| `/dashboard` | Feature hub (summary cards) | dashboard | Yes | SmartDrawer + Content | Implemented |
+| `/family` | Family profile (child info, challenges) | family-profile | Yes | SmartDrawer + Content | Implemented |
+| `/plan` | Growth plan dashboard | growth-plan | Yes | SmartDrawer + Content | Implemented |
 | `/reports` | Report history | report-analysis | Yes | SmartDrawer + Content | Planned |
 | `/reports/upload` | Upload new report | report-analysis | Yes | SmartDrawer + Content | Planned |
 | `/reports/[id]` | View report analysis | report-analysis | Yes | SmartDrawer + Content | Planned |
-| `/settings` | Account settings (name, email, subscription placeholder, delete account) | settings | Yes | SmartDrawer + Content | Implemented, not yet human-accepted |
-| `/calm` | Crisis calm session | crisis-calm | No (guest ok) | Fullscreen (no nav) | Planned |
-| `/privacy` | Privacy policy | legal | No | LandingLayout | Planned |
-| `/terms` | Terms of service | legal | No | LandingLayout | Planned |
+| `/settings` | Account settings (name, email, subscription placeholder, delete account) | settings | Yes | SmartDrawer + Content | Implemented |
+| `/calm` | Crisis calm session | crisis-calm | No (guest ok) | Fullscreen (no nav) | Archived |
+| `/privacy` | Privacy policy | legal | No | LandingLayout | Implemented |
+| `/terms` | Terms of service | legal | No | LandingLayout | Implemented |
 | ~~`/profile`~~ | ~~User + child profile~~ | ~~user-profile~~ | — | — | **Split** into `/family` + `/settings` (2026-03-16) |
 | ~~`/mood`~~ | ~~Mood tracking~~ | ~~mood-tracking~~ | — | — | Archived (2026-02-27) |
 
