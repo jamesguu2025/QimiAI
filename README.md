@@ -1,4 +1,4 @@
-# Qimi AI - ADHD Family Support Platform
+# Qimi AI - ADHD Family Support Platform (Web Version)
 
 > **Empowering Every ADHD Family Through Intelligent Intervention**
 
@@ -7,6 +7,53 @@ A modern, compassionate web platform designed to support ADHD families with prac
 ## 🌟 Project Overview
 
 Qimi AI is a pioneering platform built by parents, for parents, combining James Guu's personal journey as an ADHD adult, experienced educator, and serial entrepreneur with cutting-edge AI technology. Our mission is to transform challenges into triumphs, offering tailored guidance that covers emotional well-being, learning strategies, nutrition, and daily routines.
+
+**Related Projects:**
+- **WeChat Mini-Program** (Production): Full-featured version for China market
+- **Web Version** (This repo): International version under development
+
+---
+
+## 📊 Current Development Status
+
+### ✅ Completed Features
+
+| Feature | Status | Description |
+|---------|--------|-------------|
+| **Landing Page** | ✅ Complete | Hero, founder letter, waitlist signup |
+| **Authentication** | ✅ Complete | NextAuth.js with Google/Facebook OAuth |
+| **Guest Mode** | ✅ Complete | Try-before-signup experience (localStorage) |
+| **Chat Interface** | ✅ Complete | ChatGPT-style UI with streaming support |
+| **File Upload** | ✅ Complete | Drag & drop, multi-file (images, PDFs, docs) |
+| **Responsive Layout** | ✅ Complete | Mobile-first with sidebar navigation |
+| **Guest Onboarding** | ✅ Complete | Child age + concerns collection |
+| **Login Wall** | ✅ Complete | Soft gate after 5 free messages |
+
+### 🚧 In Development
+
+| Feature | Priority | Status |
+|---------|----------|--------|
+| **Backend API Integration** | P0 | Planned |
+| **Smart Drawer (8 Topic Modules)** | P0 | Planned |
+| **Chat History Persistence** | P0 | Planned |
+| **RAG Knowledge Base UI** | P1 | Planned |
+| **Growth Plan System** | P1 | Planned |
+| **PDF Export** | P2 | Planned |
+| **Family Profile Memory** | P2 | Planned |
+
+### 📋 Feature Parity with Mini-Program
+
+The WeChat mini-program has the following production features that need to be ported:
+
+1. **Smart Drawer System** - 8 topic modules (Emotion, Learning, Exercise, Nutrition, Social, Sleep, School Communication, Supplements)
+2. **RAG v3.0** - Function Calling architecture with LLM-driven retrieval
+3. **Growth Plan Extraction** - AI suggestions saved as structured intervention plans
+4. **Multi-Image Upload** - Up to 6 images with auto-compression
+5. **Cloud Storage** - Redis-based chat history persistence
+6. **Token Management** - 180K token limit with pre-check
+7. **Smart Title Generation** - LLM-based conversation titles
+
+---
 
 ## 🎨 Design Philosophy & Style
 
@@ -86,21 +133,50 @@ Background: rgba(255,255,255,0.95)
 ## 🛠 Technical Stack
 
 ### **Frontend**
-- **Next.js 13+** with TypeScript
-- **NextAuth.js** for social authentication
+- **Next.js 14** with TypeScript (App Router ready)
+- **NextAuth.js** for social authentication (Google, Facebook)
 - **Tailwind CSS** for utility-first styling
-- **Custom CSS** for brand-specific design system
+- **Lucide React** for consistent iconography
+- **React Markdown** for AI response rendering
 
 ### **Backend Integration**
 - **Mailchimp API** for email list management
 - **Vercel** for deployment and hosting
 - **Environment Variables** for secure configuration
+- **Future: Node.js API** (port from mini-program backend)
+
+### **Key Components**
+
+```
+components/
+├── Chat/
+│   ├── ChatInput.tsx       # Message input with file upload
+│   ├── ChatMessage.tsx     # Message bubbles (user/AI)
+│   ├── GuestOnboarding.tsx # First-time user flow
+│   ├── LoginWall.tsx       # Soft login gate
+│   └── RAGSources.tsx      # Citation display (planned)
+├── Layout/
+│   ├── AppLayout.tsx       # Main app shell
+│   └── Sidebar.tsx         # Navigation sidebar
+└── ui/                     # Reusable UI primitives
+
+utils/
+└── guest-storage.ts        # localStorage guest data management
+
+pages/
+├── index.tsx               # Landing page
+├── chat.tsx                # Main chat interface
+└── api/
+    ├── auth/[...nextauth].ts
+    ├── subscribe.ts
+    └── waitlist-count.ts
+```
 
 ### **Design System**
 - **Component-based architecture**
-- **Consistent spacing scale**
-- **Responsive breakpoints**: 768px, 480px
-- **CSS Custom Properties** for maintainable theming
+- **Consistent spacing scale** (Tailwind defaults)
+- **Responsive breakpoints**: sm (640px), md (768px), lg (1024px)
+- **Brand Colors**: Primary Teal (#00D4AA), Secondary Purple (#8B5CF6)
 
 ## 📱 Responsive Design Strategy
 
@@ -200,16 +276,57 @@ styles/
 - **SSL certificates** automatic setup
 
 ### **Environment Setup**
+
+Create a `.env.local` file in the project root:
+
 ```bash
-# Required Environment Variables
-NEXTAUTH_SECRET=your_secret_key
+# ===========================================
+# Authentication (NextAuth.js)
+# ===========================================
+NEXTAUTH_URL=http://localhost:3000
+NEXTAUTH_SECRET=your_secret_key_here
+
+# Google OAuth
 GOOGLE_CLIENT_ID=your_google_client_id
 GOOGLE_CLIENT_SECRET=your_google_client_secret
+
+# Facebook OAuth
 FACEBOOK_CLIENT_ID=your_facebook_client_id
 FACEBOOK_CLIENT_SECRET=your_facebook_client_secret
+
+# ===========================================
+# Email Marketing (Mailchimp)
+# ===========================================
 MAILCHIMP_API_KEY=your_mailchimp_api_key
 MAILCHIMP_AUDIENCE_ID=your_audience_id
-MAILCHIMP_SERVER_PREFIX=your_server_prefix
+MAILCHIMP_SERVER_PREFIX=us1  # e.g., us1, us2, etc.
+
+# ===========================================
+# AI Backend (Future - port from mini-program)
+# ===========================================
+# QIMI_API_URL=https://api.xingbanai.cn
+# QIMI_API_KEY=your_api_key
+
+# ===========================================
+# Database (Future - for chat persistence)
+# ===========================================
+# REDIS_URL=redis://localhost:6379
+```
+
+### **Development**
+
+```bash
+# Install dependencies
+npm install
+
+# Run development server
+npm run dev
+
+# Build for production
+npm run build
+
+# Start production server
+npm start
 ```
 
 ## 🎨 Design Inspiration & Philosophy

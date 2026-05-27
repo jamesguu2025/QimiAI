@@ -1,29 +1,136 @@
 import React from 'react';
 import ReactMarkdown from 'react-markdown';
+import { RAGSources } from './RAGSources';
+import { RAGSource } from '../../types/api';
+import { FileText, Image as ImageIcon, File } from 'lucide-react';
+import remarkGfm from 'remark-gfm';
+import { parseChatContent } from '../../utils/chat-message-format';
+import { linkifyResearchCitations } from '../../utils/research-citations';
+
+// 附件类型
+export interface Attachment {
+  id: string;
+  name: string;
+  type: string;
+  size: number;
+  url?: string; // 图片预览 URL
+}
 
 interface ChatMessageProps {
   role: 'user' | 'assistant';
   content: string;
+  sources?: RAGSource[];
+  statusMessage?: string;
+  attachments?: Attachment[];
+  isStreaming?: boolean;
 }
 
-export const ChatMessage: React.FC<ChatMessageProps> = ({ role, content }) => {
+// 格式化文件大小
+const formatFileSize = (bytes: number): string => {
+  if (bytes < 1024) return `${bytes} B`;
+  if (bytes < 1024 * 1024) return `${(bytes / 1024).toFixed(1)} KB`;
+  return `${(bytes / (1024 * 1024)).toFixed(1)} MB`;
+};
+
+// 获取文件图标
+const getFileIcon = (type: string) => {
+  if (type.startsWith('image/')) {
+    return <ImageIcon size={16} className="text-blue-500" />;
+  }
+  if (type === 'application/pdf') {
+    return <FileText size={16} className="text-red-500" />;
+  }
+  if (type.includes('word') || type.includes('document')) {
+    return <FileText size={16} className="text-blue-600" />;
+  }
+  return <File size={16} className="text-slate-500" />;
+};
+
+const markdownComponents = {
+  a: ({ href, children, ...props }: React.AnchorHTMLAttributes<HTMLAnchorElement>) => (
+    <a href={href} target="_blank" rel="noopener noreferrer" {...props}>
+      {children}
+    </a>
+  ),
+};
+
+export const ChatMessage: React.FC<ChatMessageProps> = ({ role, content, sources, statusMessage, attachments, isStreaming }) => {
   const isUser = role === 'user';
+  const { displayContent } = isUser ? { displayContent: content } : parseChatContent(content);
+  const markdownContent = isUser ? displayContent : linkifyResearchCitations(displayContent, sources);
 
   return (
-    <div className={`flex w-full ${isUser ? 'justify-end' : 'justify-start'} mb-6`}>
-      <div
-        className={`max-w-[85%] md:max-w-[75%] rounded-2xl px-6 py-4 shadow-sm ${
-          isUser
-            ? 'bg-gradient-to-r from-[#00D4AA] to-[#00C49A] text-white rounded-br-none'
-            : 'bg-white border border-gray-100 text-gray-800 rounded-bl-none'
-        }`}
-      >
-        {isUser ? (
-          <p className="text-base leading-relaxed">{content}</p>
-        ) : (
-          <div className="prose prose-slate prose-p:leading-relaxed prose-headings:text-gray-800 prose-a:text-[#00D4AA] max-w-none">
-            <ReactMarkdown>{content}</ReactMarkdown>
+    <div className={`flex w-full mb-6 group ${isUser ? 'justify-end' : 'justify-start'}`}>
+      <div className={`flex flex-col max-w-[90%] md:max-w-[85%] ${isUser ? 'items-end' : 'items-start'}`}>
+
+        {/* 附件预览（用户消息） */}
+        {isUser && attachments && attachments.length > 0 && (
+          <div className="flex flex-wrap gap-2 mb-2 justify-end">
+            {attachments.map((attachment) => (
+              <div key={attachment.id}>
+                {attachment.type.startsWith('image/') && attachment.url ? (
+                  // 图片预览
+                  <div className="relative group/img">
+                    <img
+                      src={attachment.url}
+                      alt={attachment.name}
+                      className="max-w-[200px] max-h-[150px] rounded-lg object-cover border border-slate-200 shadow-sm"
+                    />
+                    <div className="absolute bottom-0 left-0 right-0 bg-black/50 text-white text-xs px-2 py-1 rounded-b-lg truncate opacity-0 group-hover/img:opacity-100 transition-opacity">
+                      {attachment.name}
+                    </div>
+                  </div>
+                ) : (
+                  // 文件预览
+                  <div className="flex items-center gap-2 px-3 py-2 bg-slate-100 rounded-lg border border-slate-200">
+                    {getFileIcon(attachment.type)}
+                    <div className="flex flex-col">
+                      <span className="text-sm font-medium text-slate-700 truncate max-w-[150px]">
+                        {attachment.name}
+                      </span>
+                      <span className="text-xs text-slate-500">
+                        {formatFileSize(attachment.size)}
+                      </span>
+                    </div>
+                  </div>
+                )}
+              </div>
+            ))}
           </div>
+        )}
+
+        {/* Message Content - 使用 Sidebar 同款字体风格 */}
+        <div className={`
+          text-[15px] leading-relaxed font-medium
+          ${isUser
+            ? 'text-slate-700 bg-slate-50/80 px-5 py-3 rounded-2xl rounded-tr-sm border border-slate-200/60 shadow-sm'
+            : 'text-slate-600'}
+        `}>
+          {isUser ? (
+            <p className="whitespace-pre-wrap">{displayContent}</p>
+          ) : (
+            <div className="prose prose-slate max-w-none prose-p:text-[15px] prose-p:leading-relaxed prose-p:text-slate-600 prose-p:font-medium prose-headings:font-semibold prose-headings:text-slate-800 prose-a:text-primary-teal prose-strong:text-slate-700 prose-strong:font-semibold prose-ul:my-2 prose-li:my-0.5 prose-li:text-[15px] prose-li:text-slate-600 prose-table:block prose-table:w-full prose-table:overflow-x-auto prose-table:border-collapse prose-th:border prose-th:border-slate-300 prose-th:bg-slate-50 prose-th:px-3 prose-th:py-2 prose-th:text-left prose-th:text-sm prose-td:border prose-td:border-slate-200 prose-td:px-3 prose-td:py-2 prose-td:text-sm">
+              <ReactMarkdown remarkPlugins={[remarkGfm]} components={markdownComponents}>
+                {markdownContent}
+              </ReactMarkdown>
+            </div>
+          )}
+        </div>
+
+        {/* Status Message (RAG search indicator) */}
+        {!isUser && statusMessage && (
+          <div className="mt-2 flex items-center gap-2 text-sm text-gray-500 italic">
+            <svg className="animate-spin h-4 w-4" xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24">
+              <circle className="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="4"></circle>
+              <path className="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4zm2 5.291A7.962 7.962 0 014 12H0c0 3.042 1.135 5.824 3 7.938l3-2.647z"></path>
+            </svg>
+            <span>{statusMessage}</span>
+          </div>
+        )}
+
+        {/* RAG Sources (Only for Assistant) */}
+        {!isUser && sources && sources.length > 0 && (
+          <RAGSources sources={sources} />
         )}
       </div>
     </div>

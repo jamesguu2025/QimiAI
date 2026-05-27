@@ -9,6 +9,9 @@
 # next.js
 /.next/
 /out/
+/next-env.d.ts
+*.tsbuildinfo
+qimi-ai-website/
 
 # production
 /build
@@ -27,3 +30,6 @@ ts-debug.log*
 
 # vercel
 .vercel
+
+# local tool temps
+supabase/.temp/

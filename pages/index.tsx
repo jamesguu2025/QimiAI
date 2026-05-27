@@ -1,56 +1,159 @@
 import Head from 'next/head';
-import { signIn, useSession } from 'next-auth/react';
-import { useEffect, useState } from 'react';
+import { useSession } from 'next-auth/react';
+import { useRouter } from 'next/router';
+import { useEffect, useState, useRef } from 'react';
+import Hero from '../components/Landing/Hero';
+import { PricingCard } from '../components/Landing/PricingCard';
+import { ArticleCard } from '../components/Landing/ArticleCard';
+import LoginModal from '../components/Auth/LoginModal';
+import ContactModal from '../components/Landing/ContactModal';
+import UserMenu from '@/components/UI/UserMenu';
+import { trackClientEvent } from '@/lib/client-analytics';
+
+import { HowItWorks } from '../components/Landing/HowItWorks';
+import { FAQ } from '../components/Landing/FAQ';
+import {
+  ArrowRight,
+  ChevronDown,
+  Users,
+  User,
+  Menu,
+  X
+} from 'lucide-react';
+
+// Dropdown component
+interface DropdownItem {
+  label: string;
+  description: string;
+  href: string;
+  icon: React.ReactNode;
+}
+
+interface NavDropdownProps {
+  label: string;
+  items: DropdownItem[];
+  isOpen: boolean;
+  onToggle: () => void;
+  onClose: () => void;
+}
+
+const NavDropdown = ({ label, items, isOpen, onToggle, onClose }: NavDropdownProps) => {
+  const dropdownRef = useRef<HTMLDivElement>(null);
+
+  useEffect(() => {
+    const handleClickOutside = (event: MouseEvent) => {
+      if (dropdownRef.current && !dropdownRef.current.contains(event.target as Node)) {
+        onClose();
+      }
+    };
+    if (isOpen) {
+      document.addEventListener('mousedown', handleClickOutside);
+    }
+    return () => document.removeEventListener('mousedown', handleClickOutside);
+  }, [isOpen, onClose]);
+
+  return (
+    <div className="relative" ref={dropdownRef}>
+      <button
+        onClick={onToggle}
+        className="flex items-center gap-1 text-sm font-medium text-slate-600 hover:text-slate-900 transition-colors"
+      >
+        {label}
+        <ChevronDown size={16} className={`transition-transform ${isOpen ? 'rotate-180' : ''}`} />
+      </button>
+
+      {isOpen && (
+        <div className="absolute top-full left-0 mt-2 w-72 bg-white rounded-xl shadow-xl border border-slate-100 py-2 z-50">
+          {items.map((item, index) => (
+            <a
+              key={index}
+              href={item.href}
+              className="flex items-start gap-3 px-4 py-3 hover:bg-slate-50 transition-colors"
+              onClick={onClose}
+            >
+              <div className="flex-shrink-0 w-10 h-10 rounded-lg bg-gradient-to-br from-primary-teal/10 to-primary-purple/10 flex items-center justify-center text-primary-purple">
+                {item.icon}
+              </div>
+              <div>
+                <div className="font-medium text-slate-900 text-sm">{item.label}</div>
+                <div className="text-xs text-slate-500 mt-0.5">{item.description}</div>
+              </div>
+            </a>
+          ))}
+        </div>
+      )}
+    </div>
+  );
+};
 
 export default function Home() {
-  const { data: session, status } = useSession();
+  const router = useRouter();
+  const { data: session } = useSession();
   const [waitlistCount, setWaitlistCount] = useState(0);
   const [paperCount, setPaperCount] = useState(0);
+  const [openDropdown, setOpenDropdown] = useState<string | null>(null);
+  const [mobileMenuOpen, setMobileMenuOpen] = useState(false);
+  const [loginModalOpen, setLoginModalOpen] = useState(false);
+  const [loginModalTab, setLoginModalTab] = useState<'login' | 'signup'>('login');
+  const [contactModalOpen, setContactModalOpen] = useState(false);
 
-  // 获取等待列表数量
-  const fetchWaitlistCount = async () => {
+  const aboutItems: DropdownItem[] = [
+    { label: 'Our Story', description: 'Why we built Qimi AI', href: '/about', icon: <Users size={20} /> },
+    { label: "Founder's Letter", description: 'A personal message from James', href: '/founder', icon: <User size={20} /> },
+  ];
+
+  const openAuthModal = (tab: 'login' | 'signup') => {
+    setLoginModalTab(tab);
+    setLoginModalOpen(true);
+  };
+
+  const handleStart = () => {
+    trackClientEvent('landing:cta_click', {
+      cta_id: 'start',
+      cta_location: 'landing',
+      destination: session ? '/dashboard' : 'signup_modal',
+      auth_state: session ? 'authenticated' : 'guest',
+    });
+
+    if (session) {
+      router.push('/dashboard');
+      return;
+    }
+
+    openAuthModal('signup');
+  };
+
+  const fetchUserStats = async () => {
     try {
-      const response = await fetch('/api/waitlist-count');
-      const data = await response.json();
-      if (data.success) {
-        setWaitlistCount(data.count);
+      const [userRes, paperRes] = await Promise.all([
+        fetch('/api/user-stats'),
+        fetch('/api/rag/stats')
+      ]);
+      const userData = await userRes.json();
+      const paperData = await paperRes.json();
+      if (userData.success) {
+        setWaitlistCount(userData.count);
+      }
+      if (paperData.success) {
+        setPaperCount(paperData.totalPapers);
       }
     } catch (error) {
-      console.error('Failed to fetch waitlist count:', error);
+      console.error('Failed to fetch stats:', error);
     }
   };
 
-  // 获取论文数量
-  const fetchPaperCount = async () => {
-    try {
-      const response = await fetch('/api/rag/stats');
-      const data = await response.json();
-      if (data.success && data.totalPapers) {
-        setPaperCount(data.totalPapers);
-      }
-    } catch (error) {
-      console.error('Failed to fetch paper count:', error);
-    }
-  };
-
-  // 页面加载时获取数量
   useEffect(() => {
-    fetchWaitlistCount();
-    fetchPaperCount();
+    fetchUserStats();
   }, []);
 
-  // 处理登录后的自动订阅
   useEffect(() => {
     const urlParams = new URLSearchParams(window.location.search);
     const subscribed = urlParams.get('subscribed');
-    
+
     if (subscribed === 'true' && session?.user?.email) {
-      // 自动订阅到邮件列表
       fetch('/api/subscribe', {
         method: 'POST',
-        headers: {
-          'Content-Type': 'application/json',
-        },
+        headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({
           email: session.user.email,
           name: session.user.name || '',
@@ -60,314 +163,315 @@ export default function Home() {
         .then(data => {
           if (data.success) {
             alert('Welcome! You\'ve been added to our waitlist.');
-            // 刷新等待列表数量
-            fetchWaitlistCount();
+            fetchUserStats();
           }
         })
-        .catch(error => {
-          console.error('Auto-subscription error:', error);
-        });
-      
-      // 清理 URL 参数
+        .catch(error => console.error('Auto-subscription error:', error));
+
       window.history.replaceState({}, document.title, window.location.pathname);
     }
   }, [session]);
 
-  const handleEmailSubmit = async () => {
-    const nameInput = document.getElementById('nameInput') as HTMLInputElement;
-    const emailInput = document.getElementById('emailInput') as HTMLInputElement;
-    const name = nameInput.value.trim();
-    const email = emailInput.value.trim();
-
-    if (!email || !email.includes('@')) {
-      alert('Please enter a valid email address.');
-      return;
-    }
-
-    try {
-      const response = await fetch('/api/subscribe', {
-        method: 'POST',
-        headers: {
-          'Content-Type': 'application/json',
-        },
-        body: JSON.stringify({
-          email: email,
-          name: name,
-          source: 'email_form',
-        }),
-      });
-
-      const data = await response.json();
-
-      if (data.success) {
-        alert(data.message);
-        nameInput.value = '';
-        emailInput.value = '';
-        // 刷新等待列表数量
-        fetchWaitlistCount();
-      } else {
-        alert(data.message || 'Something went wrong. Please try again.');
-      }
-    } catch (error) {
-      console.error('Subscription error:', error);
-      alert('Something went wrong. Please try again.');
-    }
-  };
-
   return (
-    <>
+    <div className="min-h-screen bg-slate-50 font-sans selection:bg-primary-teal/20">
       <Head>
-        <title>Qimi AI - to Empower Every ADHD Family</title>
-        <meta name="description" content="Qimi AI provides emotional support for ADHD parents and comprehensive action plans for children. Founded by James Guu, an experienced educator and serial entrepreneur." />
-        <meta name="keywords" content="ADHD support, ADHD families, ADHD parents, ADHD children, family intervention, emotional support, ADHD education, ADHD therapy, ADHD management" />
-        <meta name="author" content="James Guu" />
-        <meta name="robots" content="index, follow" />
-        <meta name="language" content="English" />
-        <meta name="revisit-after" content="7 days" />
-        
-        {/* Open Graph / Facebook */}
-        <meta property="og:type" content="website" />
-        <meta property="og:url" content="https://www.qimiai.to/" />
-        <meta property="og:title" content="Qimi AI - to Empower Every ADHD Family" />
-        <meta property="og:description" content="Qimi AI provides emotional support for ADHD parents and comprehensive action plans for children. Founded by James Guu, an experienced educator and serial entrepreneur." />
-        <meta property="og:image" content="https://www.qimiai.to/logo.png" />
-        <meta property="og:site_name" content="Qimi AI" />
-        
-        {/* Twitter */}
-        <meta property="twitter:card" content="summary_large_image" />
-        <meta property="twitter:url" content="https://www.qimiai.to/" />
-        <meta property="twitter:title" content="Qimi AI - to Empower Every ADHD Family" />
-        <meta property="twitter:description" content="Qimi AI provides emotional support for ADHD parents and comprehensive action plans for children. Founded by James Guu, an experienced educator and serial entrepreneur." />
-        <meta property="twitter:image" content="https://www.qimiai.to/logo.png" />
-        
-        {/* Additional SEO */}
-        <meta name="theme-color" content="#00D4AA" />
-        <meta name="msapplication-TileColor" content="#00D4AA" />
-        <link rel="canonical" href="https://www.qimiai.to/" />
-        <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no" />
-        <link rel="icon" type="image/svg+xml" href="/favicon.svg" />
-        <link rel="icon" type="image/png" sizes="48x48" href="/favicon-48x48.png" />
-        <link rel="apple-touch-icon" sizes="180x180" href="/apple-touch-icon.png" />
-        <script async src="https://www.googletagmanager.com/gtag/js?id=G-3T1NP7EG91"></script>
-        <script
-          dangerouslySetInnerHTML={{
-            __html: `window.dataLayer=window.dataLayer||[];function gtag(){dataLayer.push(arguments);}gtag('js',new Date());gtag('config','G-3T1NP7EG91');`
-          }}
-        />
-        <script
-          type="application/ld+json"
-          dangerouslySetInnerHTML={{
-            __html: JSON.stringify({
-              "@context": "https://schema.org",
-              "@type": "WebSite",
-              "name": "Qimi AI",
-              "url": "https://www.qimiai.to"
-            })
-          }}
-        />
-        <script
-          type="application/ld+json"
-          dangerouslySetInnerHTML={{
-            __html: JSON.stringify({
-              "@context": "https://schema.org",
-              "@type": "Organization",
-              "name": "Qimi AI",
-              "url": "https://www.qimiai.to",
-              "logo": "https://www.qimiai.to/logo.png",
-              "description": "Qimi AI provides emotional support for ADHD parents and comprehensive action plans for children",
-              "founder": {
-                "@type": "Person",
-                "name": "James Guu",
-                "description": "36-year-old ADHD adult, experienced educator, and serial entrepreneur"
-              },
-              "sameAs": [
-                "https://www.qimiai.to"
-              ],
-              "contactPoint": {
-                "@type": "ContactPoint",
-                "contactType": "customer service",
-                "url": "https://www.qimiai.to"
-              }
-            })
-          }}
-        />
+        <title>Qimi AI - Empowering Every ADHD Family</title>
+        <meta name="description" content="Your 24/7 AI copilot for IEPs, routines, and emotional regulation." />
       </Head>
-      <nav className="navbar">
-        <div className="nav-container">
-          <div className="nav-logo">
-            <img src="/logo.svg" alt="Qimi AI" />
+
+      {/* Navbar - xingbanai.cn style with navigation preserved */}
+      <nav className="fixed top-0 left-0 right-0 z-50" style={{ background: 'rgba(255, 255, 255, 0.8)', backdropFilter: 'blur(12px)', WebkitBackdropFilter: 'blur(12px)', borderBottom: '1px solid #f1f5f9' }}>
+        <div className="max-w-[1200px] mx-auto px-6 h-16 flex items-center justify-between">
+          {/* Left: Logo with gradient text */}
+          <div className="flex items-center gap-2">
+            <button
+              onClick={() => setMobileMenuOpen(!mobileMenuOpen)}
+              className="md:hidden p-2 rounded-lg hover:bg-slate-100 transition-colors mr-1"
+            >
+              {mobileMenuOpen ? <X size={24} className="text-slate-600" /> : <Menu size={24} className="text-slate-600" />}
+            </button>
+            <a href="/" className="flex items-center">
+              <span className="font-outfit text-xl font-semibold tracking-[-0.02em] text-transparent bg-clip-text bg-gradient-to-r from-primary-teal to-primary-purple">
+                Qimi AI
+              </span>
+            </a>
           </div>
-          <div className="nav-links">
-            <a href="/about" className="nav-link">About</a>
-            <a href="/founder" className="nav-link">Founder</a>
-            <a href="#waitlist" className="nav-link">Join Waitlist</a>
+
+          {/* Center: Nav links (desktop) */}
+          <div className="hidden md:flex items-center gap-6">
+            <a href={session ? '/dashboard' : '/chat'} className="text-sm font-medium text-slate-600 hover:text-slate-900 transition-colors">
+              AI Parenting Assistant
+            </a>
+            <a href="/blog" className="text-sm font-medium text-slate-600 hover:text-slate-900 transition-colors">
+              ADHD Insights
+            </a>
+            <a href="#pricing" className="text-sm font-medium text-slate-600 hover:text-slate-900 transition-colors">
+              Pricing
+            </a>
+            <NavDropdown
+              label="About"
+              items={aboutItems}
+              isOpen={openDropdown === 'about'}
+              onToggle={() => setOpenDropdown(openDropdown === 'about' ? null : 'about')}
+              onClose={() => setOpenDropdown(null)}
+            />
+          </div>
+
+          {/* Right: Auth + Contact */}
+          <div className="flex items-center gap-3">
+            {session ? (
+              <UserMenu />
+            ) : (
+              <>
+                <button
+                  onClick={() => {
+                    trackClientEvent('landing:cta_click', {
+                      cta_id: 'nav_login',
+                      cta_location: 'navbar',
+                      destination: 'login_modal',
+                      auth_state: 'guest',
+                    });
+                    openAuthModal('login');
+                  }}
+                  className="hidden md:block text-sm font-medium text-slate-600 hover:text-slate-900 transition-colors"
+                >
+                  Log in
+                </button>
+                <button
+                  onClick={() => {
+                    trackClientEvent('landing:cta_click', {
+                      cta_id: 'nav_signup',
+                      cta_location: 'navbar',
+                      destination: 'signup_modal',
+                      auth_state: 'guest',
+                    });
+                    openAuthModal('signup');
+                  }}
+                  className="hidden md:block text-sm font-medium text-slate-600 hover:text-slate-900 transition-colors"
+                >
+                  Sign up
+                </button>
+              </>
+            )}
+            <button
+              onClick={() => {
+                trackClientEvent('landing:cta_click', {
+                  cta_id: 'nav_contact',
+                  cta_location: 'navbar',
+                  destination: 'contact_modal',
+                  auth_state: session ? 'authenticated' : 'guest',
+                });
+                setContactModalOpen(true);
+              }}
+              className="hidden md:inline-flex px-5 py-2.5 text-sm font-semibold text-white bg-slate-900 rounded-full transition-all duration-200 hover:bg-slate-800 hover:-translate-y-px hover:shadow-[0_4px_12px_rgba(0,0,0,0.15)]"
+            >
+              Contact Us
+            </button>
+            <button
+              onClick={handleStart}
+              className="md:hidden px-5 py-2.5 text-sm font-semibold text-white bg-slate-900 rounded-full transition-all duration-200 hover:bg-slate-800"
+            >
+              Start
+            </button>
           </div>
         </div>
-        <div style={{
-          position: 'absolute',
-          top: '100%',
-          left: '0',
-          right: '0',
-          width: '100%',
-          background: 'linear-gradient(135deg, #00D4AA, #8B5CF6)',
-          color: 'white',
-          textAlign: 'center',
-          padding: '12px 0',
-          fontSize: '16px',
-          fontWeight: '600',
-          zIndex: 1001,
-          display: 'block',
-          visibility: 'visible',
-          opacity: '1',
-          margin: '0',
-          border: 'none',
-          boxShadow: '0 4px 20px rgba(0,212,170,0.3)'
-        }}>🚀 Coming Soon - Our AI-powered features are being built with care</div>
       </nav>
 
-      <main className="hero">
-        <div className="hero-container">
-          <div className="hero-split">
-            {/* Left: Headline + Subtitle + Features */}
-            <div className="hero-left">
-              <h1 className="hero-headline">
-                <span className="hero-headline-gradient">Empowering Every</span>
-                <br />
-                <span className="hero-headline-dark">ADHD Family</span>
-              </h1>
-              <p className="hero-subtitle">Your AI parenting companion</p>
+      {/* Mobile menu drawer */}
+      {mobileMenuOpen && (
+        <div className="fixed inset-0 z-40 md:hidden">
+          <div className="fixed inset-0 bg-black/50" onClick={() => setMobileMenuOpen(false)} />
+          <div className="fixed top-16 left-0 right-0 bg-white border-b border-slate-100 shadow-lg">
+            <div className="px-4 py-4 space-y-1">
+              <a href="/" className="block px-3 py-3 text-base font-medium text-slate-700 hover:bg-slate-50 rounded-lg" onClick={() => setMobileMenuOpen(false)}>
+                Home
+              </a>
+              <a href={session ? '/dashboard' : '/chat'} className="block px-3 py-3 text-base font-medium text-slate-700 hover:bg-slate-50 rounded-lg" onClick={() => setMobileMenuOpen(false)}>
+                AI Parenting Assistant
+              </a>
+              <a href="/blog" className="block px-3 py-3 text-base font-medium text-slate-700 hover:bg-slate-50 rounded-lg" onClick={() => setMobileMenuOpen(false)}>
+                ADHD Insights
+              </a>
+              <a href="#pricing" className="block px-3 py-3 text-base font-medium text-slate-700 hover:bg-slate-50 rounded-lg" onClick={() => setMobileMenuOpen(false)}>
+                Pricing
+              </a>
+              <a href="/about" className="block px-3 py-3 text-base font-medium text-slate-700 hover:bg-slate-50 rounded-lg" onClick={() => setMobileMenuOpen(false)}>
+                About Us
+              </a>
+              <a href="/founder" className="block px-3 py-3 text-base font-medium text-slate-700 hover:bg-slate-50 rounded-lg" onClick={() => setMobileMenuOpen(false)}>
+                Founder&apos;s Letter
+              </a>
 
-              <div className="hero-features">
-                <div className="hero-feature">
-                  <div className="hero-feature-icon" style={{background: 'rgba(59,130,246,0.1)', color: '#3B82F6'}}>&#9201;</div>
-                  <div className="hero-feature-text">
-                    <span className="hero-feature-title">24/7 Parenting Coach</span>
-                    <p>Late-night anxiety, sudden meltdowns — expert support whenever you need it.</p>
-                  </div>
-                </div>
-                <div className="hero-feature">
-                  <div className="hero-feature-icon" style={{background: 'rgba(139,92,246,0.1)', color: '#8B5CF6'}}>&#128214;</div>
-                  <div className="hero-feature-text">
-                    <div className="hero-feature-title-row">
-                      <span className="hero-feature-title">Expert Knowledge Base</span>
-                      <span className="hero-feature-badge">{paperCount > 0 ? `${paperCount.toLocaleString()} Studies & Still Growing` : '-- Studies & Still Growing'}</span>
-                    </div>
-                    <p>Every recommendation backed by peer-reviewed ADHD research.</p>
-                  </div>
-                </div>
-                <div className="hero-feature">
-                  <div className="hero-feature-icon" style={{background: 'rgba(0,212,170,0.1)', color: '#00D4AA'}}>&#128101;</div>
-                  <div className="hero-feature-text">
-                    <span className="hero-feature-title">Personalized Plans</span>
-                    <p>A growth plan unique to your family, precisely matched to your child.</p>
-                  </div>
-                </div>
-                <div className="hero-feature">
-                  <div className="hero-feature-icon" style={{background: 'rgba(249,115,22,0.1)', color: '#F97316'}}>&#128161;</div>
-                  <div className="hero-feature-text">
-                    <span className="hero-feature-title">Adaptive Intelligence</span>
-                    <p>The more you use it, the smarter it gets — every suggestion more precise.</p>
-                  </div>
-                </div>
-                <div className="hero-feature">
-                  <div className="hero-feature-icon" style={{background: 'rgba(236,72,153,0.1)', color: '#EC4899'}}>&#128196;</div>
-                  <div className="hero-feature-text">
-                    <span className="hero-feature-title">Progress Tracking</span>
-                    <p>Upload reports, AI extracts structured insights — data at a glance.</p>
-                  </div>
-                </div>
-              </div>
-            </div>
-
-            {/* Right: Signup Card */}
-            <div className="hero-right">
-              <div className="hero-signup-card">
-                <h2 className="hero-signup-title">Get Early Access</h2>
-                <p className="hero-signup-desc">Be the first to know when we launch</p>
-
-                <div className="hero-waitlist-stats">
-                  <div className="hero-waitlist-number">{waitlistCount.toLocaleString()}</div>
-                  <div className="hero-waitlist-label">
-                    <span className="hero-stats-dot" />
-                    families on the waitlist
-                  </div>
-                </div>
-
-                <div className="social-login">
-                  <button className="social-btn google-btn" onClick={() => signIn('google', { callbackUrl: 'https://www.qimiai.to?subscribed=true' })} aria-label="Continue with Google">
-                    <img src="/google.svg" alt="Google" />
-                    <span>Continue with Google</span>
-                  </button>
-                </div>
-                <div className="divider"><span>or</span></div>
-                <div className="email-form">
-                  <input type="text" placeholder="Your name (optional)" className="name-input" id="nameInput" />
-                  <input type="email" placeholder="Enter your email address" className="email-input" id="emailInput" />
-                  <button className="join-btn" onClick={handleEmailSubmit}>Join Waitlist</button>
-                </div>
-                <p className="hero-signup-note">Free to join, no credit card required</p>
+              <div className="pt-4 border-t border-slate-100 mt-4 space-y-2">
+                {session ? (
+                  <a href="/chat" className="block px-4 py-3 text-base font-medium text-slate-700 hover:bg-slate-50 rounded-lg" onClick={() => setMobileMenuOpen(false)}>
+                    Go to Chat
+                    </a>
+                ) : (
+                  <>
+                    <button
+                      onClick={() => { setMobileMenuOpen(false); openAuthModal('login'); }}
+                      className="w-full px-4 py-3 text-base font-medium text-slate-700 hover:bg-slate-50 rounded-lg text-left"
+                    >
+                      Log in
+                    </button>
+                    <button
+                      onClick={() => { setMobileMenuOpen(false); openAuthModal('signup'); }}
+                      className="w-full px-4 py-3 rounded-lg bg-slate-900 text-white text-base font-bold hover:bg-slate-800 transition-colors"
+                    >
+                      Start
+                    </button>
+                  </>
+                )}
+                <button
+                  onClick={() => { setMobileMenuOpen(false); setContactModalOpen(true); }}
+                  className="w-full px-4 py-3 text-base font-medium text-slate-700 hover:bg-slate-50 rounded-lg text-left"
+                >
+                  Contact Us
+                </button>
               </div>
             </div>
           </div>
         </div>
+      )}
+
+      <main>
+        {/* Hero Section */}
+        <Hero session={session} userCount={waitlistCount} paperCount={paperCount} />
+
+        {/* How It Works */}
+        <div id="how-it-works">
+          <HowItWorks />
+        </div>
+
+        {/* Resources Section */}
+        <section id="resources" className="py-24 bg-white">
+          <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
+            <div className="flex items-center justify-between mb-12">
+              <div>
+                <h2 className="text-3xl font-bold text-slate-900 mb-2">Latest from the Library</h2>
+                <p className="text-slate-600">Expert insights and practical guides.</p>
+              </div>
+              <a href="#" className="hidden md:flex items-center font-bold text-primary-purple hover:text-primary-teal transition-colors">
+                View all resources <ArrowRight size={20} className="ml-2" />
+              </a>
+            </div>
+
+            <div className="grid grid-cols-1 md:grid-cols-3 gap-8">
+              <ArticleCard
+                category="Education"
+                title="5 Signs Your Child Needs an IEP Update"
+                excerpt="How to spot when current accommodations aren't working and what to do about it."
+                readTime="5 min read"
+                imageGradient="bg-gradient-to-br from-blue-100 to-cyan-50"
+              />
+              <ArticleCard
+                category="Lifestyle"
+                title="The Dopamine Menu: A Guide"
+                excerpt="Creating healthy stimulation sources for the ADHD brain to prevent boredom-seeking behaviors."
+                readTime="8 min read"
+                imageGradient="bg-gradient-to-br from-purple-100 to-pink-50"
+              />
+              <ArticleCard
+                category="Science"
+                title="Sleep & Executive Function"
+                excerpt="Why rest is the foundation of focus, and realistic strategies to improve it."
+                readTime="6 min read"
+                imageGradient="bg-gradient-to-br from-teal-100 to-emerald-50"
+              />
+            </div>
+          </div>
+        </section>
+
+        {/* Pricing Section */}
+        <section id="pricing" className="py-24 bg-slate-50 overflow-hidden">
+          <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
+            <div className="text-center mb-16">
+              <h2 className="text-3xl md:text-4xl font-bold text-slate-900 mb-4">Simple, transparent pricing</h2>
+              <p className="text-lg text-slate-600">Start for free, upgrade when you need more power.</p>
+            </div>
+
+            <div className="grid grid-cols-1 md:grid-cols-2 gap-8 max-w-4xl mx-auto">
+              <PricingCard
+                title="Free Starter"
+                price="$0"
+                period="/month"
+                features={[
+                  "Basic Chat Support",
+                  "Access to Community Library",
+                  "3 Routine Templates",
+                  "Weekly Newsletter"
+                ]}
+                ctaText="Get Started Free"
+                onCtaClick={handleStart}
+              />
+              <PricingCard
+                title="Family Pro"
+                price="$19"
+                period="/month"
+                isPopular={true}
+                features={[
+                  "Unlimited AI Chat",
+                  "Advanced IEP Generator",
+                  "Custom Visual Schedules",
+                  "Priority Support",
+                  "Parent Coaching Modules"
+                ]}
+                ctaText="Start 14-Day Trial"
+                onCtaClick={handleStart}
+              />
+            </div>
+          </div>
+        </section>
+
+        {/* FAQ */}
+        <FAQ />
+
+        {/* Footer - xingbanai.cn simplified style */}
+        <footer className="bg-slate-900 text-slate-400" style={{ padding: '48px 24px 24px' }}>
+          <div className="max-w-[1200px] mx-auto">
+            {/* Top: Brand + Contact */}
+            <div className="flex flex-wrap justify-between items-start gap-8 pb-8 border-b border-slate-800">
+              <div className="max-w-[300px]">
+                <div className="flex items-center mb-3">
+                  <span className="font-outfit text-lg font-bold text-transparent bg-clip-text bg-gradient-to-r from-primary-teal to-primary-purple">Qimi AI</span>
+                </div>
+                <p className="text-sm leading-relaxed">
+                  Empowering ADHD families with intelligent tools, emotional support, and a path forward.
+                </p>
+              </div>
+              <div>
+                <h4 className="text-sm font-semibold text-white mb-3">Contact</h4>
+                <p className="text-sm">
+                  Email: <a href="mailto:support@qimiai.com" className="text-primary-teal hover:text-primary-teal/80 transition-colors">support@qimiai.com</a>
+                </p>
+              </div>
+            </div>
+
+            {/* Bottom: Legal + Copyright */}
+            <div className="pt-6 flex flex-wrap justify-between items-center gap-4 text-[13px]">
+              <div className="flex flex-wrap gap-4">
+                <a href="/privacy" className="text-slate-400 hover:text-white transition-colors">Privacy Policy</a>
+                <a href="/terms" className="text-slate-400 hover:text-white transition-colors">Terms of Service</a>
+              </div>
+              <span>&copy; 2025 Qimi AI. All rights reserved.</span>
+            </div>
+          </div>
+        </footer>
       </main>
 
-      {/* Letter Section - standalone */}
-      <section className="letter-standalone">
-        <div className="letter-container">
-          <div className="letter-content">
-            <h2 className="letter-title">A Letter from James</h2>
-            <div className="letter-text">
-              <p>Dear fellow parent,</p>
+      {/* Login Modal */}
+      <LoginModal
+        isOpen={loginModalOpen}
+        onClose={() => setLoginModalOpen(false)}
+        defaultTab={loginModalTab}
+      />
 
-              <p>This is James Guu. I grew up as a kid with ADHD—always being told to focus, to sit still, to behave. But no one ever told me how. I felt lost, misunderstood, and exhausted.</p>
-
-              <p>Years later, when my son began showing the same signs, I made a promise: he wouldn't have to go through this alone like I did.</p>
-
-              <p>That's why I created Qimi AI—not as a tech product, but as a parent's tool.</p>
-
-              <p>I've been a teacher, an entrepreneur, and now a self-taught AI developer. I spent years connecting ancient Chinese medicine, modern science, and practical daily routines—then built a system that could actually support families like ours.</p>
-
-              <p>Qimi AI is here to help. It's not perfect, but it's honest. And it comes from someone who truly understands what you're going through.</p>
-
-              <p>From my family to yours,<br/>
-              Warmly,<br/><br/>
-              <strong>James Guu</strong><br/>
-              Founder of Qimi AI</p>
-            </div>
-          </div>
-        </div>
-      </section>
-
-
-
-      <section id="waitlist" className="waitlist">
-        <div className="waitlist-container">
-          <h2 className="section-title">Why Join Our Waitlist?</h2>
-          <div className="waitlist-grid">
-            <div className="waitlist-item"><div className="waitlist-icon">🎯</div><h3>First Access</h3><p>Be among the first to experience Qimi AI when we launch. Early users get exclusive access to beta features and special pricing.</p></div>
-            <div className="waitlist-item"><div className="waitlist-icon">💡</div><h3>Shape the Product</h3><p>Your feedback matters! Help us build the perfect solution for ADHD families by sharing your needs and preferences.</p></div>
-            <div className="waitlist-item"><div className="waitlist-icon">🎁</div><h3>Exclusive Benefits</h3><p>Waitlist members receive special discounts, priority support, and access to exclusive resources and content.</p></div>
-          </div>
-        </div>
-      </section>
-
-
-      <footer className="footer">
-        <div className="footer-container">
-          <div className="footer-content">
-            <div className="footer-logo"><h3>Qimi AI</h3><p>Empowering ADHD families through intelligent intervention</p></div>
-            <div className="footer-links">
-              <a href="/about" className="footer-link">About</a>
-              <a href="/founder" className="footer-link">Founder</a>
-              <a href="#waitlist" className="footer-link">Join Waitlist</a>
-              <a href="/privacy.html" className="footer-link">Privacy Policy</a>
-              <a href="/terms.html" className="footer-link">Terms of Service</a>
-            </div>
-          </div>
-          <div className="footer-bottom"><p>© 2025 Qimi AI. All rights reserved.</p></div>
-        </div>
-      </footer>
-    </>
+      {/* Contact Modal */}
+      <ContactModal
+        isOpen={contactModalOpen}
+        onClose={() => setContactModalOpen(false)}
+      />
+    </div>
   );
 }

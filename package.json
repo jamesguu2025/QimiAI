@@ -3,24 +3,42 @@
   "private": true,
   "version": "0.1.0",
   "scripts": {
-    "dev": "next dev",
+    "dev": "next dev --webpack -p 4000",
+    "dev:local": "npm run env:local && next dev --webpack -p 4000",
+    "env:local": "node scripts/switch-env.mjs local",
+    "env:staging": "node scripts/switch-env.mjs staging",
+    "env:production": "node scripts/switch-env.mjs production",
+    "supabase:start": "supabase start",
+    "supabase:stop": "supabase stop",
+    "supabase:reset": "supabase db reset",
+    "verify:mvp-cleanup": "node scripts/verify-mvp-cleanup.mjs",
     "build": "next build",
-    "start": "next start"
+    "start": "next start -p 4000"
   },
   "dependencies": {
-    "next": "14.2.5",
-    "next-auth": "4.24.7",
+    "@supabase/supabase-js": "^2.93.2",
+    "bcryptjs": "^3.0.3",
+    "lucide-react": "^0.554.0",
+    "nodemailer": "^8.0.7",
     "react": "18.2.0",
     "react-dom": "18.2.0",
-    "react-markdown": "^10.1.0"
+    "react-markdown": "^10.1.0",
+    "remark-gfm": "^4.0.1",
+    "zustand": "^5.0.10"
   },
   "devDependencies": {
+    "@tailwindcss/typography": "^0.5.19",
+    "@types/bcryptjs": "^2.4.6",
     "@types/node": "20.11.30",
+    "@types/nodemailer": "^8.0.0",
     "@types/react": "18.2.66",
-    "next": "14.2.5",
-    "next-auth": "4.24.7",
-    "react": "18.2.0",
-    "react-dom": "18.2.0",
+    "@types/react-dom": "^19.2.3",
+    "autoprefixer": "^10.4.22",
+    "next": "^16.1.1",
+    "next-auth": "^4.24.13",
+    "postcss": "^8.5.6",
+    "supabase": "^2.98.2",
+    "tailwindcss": "^3.4.1",
     "typescript": "5.4.5"
   },
   "optionalDependencies": {
