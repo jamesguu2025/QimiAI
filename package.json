@@ -11,6 +11,7 @@
     "supabase:start": "supabase start",
     "supabase:stop": "supabase stop",
     "supabase:reset": "supabase db reset",
+    "verify:mvp-cleanup": "node scripts/verify-mvp-cleanup.mjs",
     "build": "next build",
     "start": "next start -p 4000"
   },
