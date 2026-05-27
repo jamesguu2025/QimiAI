@@ -1,6 +1,6 @@
 # Module Spec: Compliance — MVP Launch Gate
 
-> Status: PARTIALLY IMPLEMENTED — 2026-05-08 gate refresh, with 2026-05-20 MVP product decisions. Original approval was 2026-03-17. MVP launch posture is parent/adult-directed: Qimi is designed for parents, legal guardians, and adults supporting a family, not as a child-directed service or a tool for children to manage their own care independently.
+> Status: IMPLEMENTED FOR CURRENT MVP BASELINE — 2026-05-27 alignment. Original approval was 2026-03-17; gate refresh was 2026-05-08, with 2026-05-20 MVP product decisions. MVP launch posture is parent/adult-directed: Qimi is designed for parents, legal guardians, and adults supporting a family, not as a child-directed service or a tool for children to manage their own care independently.
 > Module: compliance (cross-cutting)
 > Routes: `/privacy`, `/terms`, `/settings`, `/consent`
 > API routes: `pages/api/user/delete-account.ts`, `pages/api/compliance/consent.ts`, `pages/api/compliance/consent-status.ts`
@@ -33,7 +33,7 @@ This is a high-risk compliance spec. Before any public launch decision, create o
 - EDPB GDPR territorial-scope guidance requires revisit if Qimi offers goods/services to people in the EU or monitors their behavior there: https://www.edpb.europa.eu/our-work-tools/our-documents/guidelines/guidelines-32018-territorial-scope-gdpr-article-3-version_en
 - Standardized launch gate and Search Ledger are recorded in `docs/reviews/compliance-mvp-launch-gate-2026-05-08.md`.
 - Current code evidence after the 2026-05-08 implementation pass: shared modal signup includes adult account-holder confirmation; global `AppLayout` checks consent status for logged-in app pages; account deletion API exists in `pages/api/user/delete-account.ts`; `/privacy`, `/terms`, `/consent`, `pages/api/compliance/consent.ts`, and `pages/api/compliance/consent-status.ts` exist; `supabase/migrations/20260508000100_compliance_consent_and_rls.sql` adds `parental_consents` and replaces active broad RLS policies with `auth.uid()` ownership checks.
-- Current remaining launch requirements: preserve parent/adult-directed scope, complete human acceptance, keep contact details current, and revisit COPPA/FTC Health Breach if Qimi adds child-directed account flows, school/clinic child-user deployments, health-record imports, device imports, or provider integrations.
+- Current remaining launch requirements: preserve parent/adult-directed scope, keep contact details current, and revisit COPPA/FTC Health Breach if Qimi adds child-directed account flows, school/clinic child-user deployments, health-record imports, device imports, provider integrations, or active report/image/document interpretation.
 
 ### Regulatory Scope (MVP only)
 
@@ -366,7 +366,7 @@ CREATE POLICY "messages_insert" ON messages FOR INSERT
   3. Layout: same pattern as `pages/dashboard.tsx` (SmartDrawer + content area)
   4. Content: heading "Account Settings" + `DeleteAccountSection` component
   5. No medical disclaimer on this page — it's an account management page, not an AI/health content page
-  6. Future sections (profile editing, notifications, subscription) will be added later
+  6. Future sections may be added by their owning specs. Do not add notifications or billing/subscription behavior from the compliance module.
 - **Verify**: `npx tsc --noEmit`, `npm run build` pass
 - **Commit**: `[T006] feat: create minimal /settings page with account deletion`
 

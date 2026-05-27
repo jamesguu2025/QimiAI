@@ -1,10 +1,10 @@
 # Module Spec: Memory And Profile Summary
 
-> Status: REVISED — 2026-03-17 | Self-reviewed: 2026-03-17 | Cross-reviewed: 2026-03-17, 2 P0 + 5 P1 fixed | Amended: 2026-05-14 (Memory Gate addendum) | Implementation status: Partially implemented
+> Status: ACCEPTED FOR CURRENT MVP BASELINE — 2026-05-27 alignment | Self-reviewed: 2026-03-17 | Cross-reviewed: 2026-03-17, 2 P0 + 5 P1 fixed | Amended: 2026-05-14 (Memory Gate addendum) | Implementation status: Implemented and human-accepted; future extraction quality tuning is non-blocking
 > Module: memory-profile-summary
 > Routes: `pages/api/memory/`
 > Scope: Conversation-derived memory extraction (A.U.D.N.) + editable family summary + prompt injection
-> SOP v2.4 status: Requires refresh before prompt/chat integration; current-code facts must use line evidence.
+> SOP v2.4 status: Current MVP baseline is implemented; future memory quality, retrieval, or prompt-integration changes must refresh current-code facts with line evidence.
 
 ---
 
@@ -46,7 +46,7 @@
 - Memory API routes exist under `pages/api/memory/`; extraction starts in `pages/api/memory/extract.ts:L1-L18`, and relevant retrieval starts in `pages/api/memory/relevant.ts:L1-L53`
 - Chat stream handler triggers server-side extraction after stream completion in `pages/api/chat/stream.ts:L363-L378`.
 - 2026-05-08 quality update: extraction prompt must normalize profile facts instead of storing raw first-person user phrasing.
-- **Known defect (2026-05-14)**: `stream.ts:L363` and `extract.ts:L376` use `mentionsFamilyOrChildSituation()` — a regex keyword gate in `utils/lightweight-content-gates.ts`. This causes false negatives (e.g. "he does have white and yellow patterns on one of his footnails" is silently skipped). The keyword gate is being replaced by the AI Memory Gate described in § 3.1 below.
+- 2026-05-27 alignment: the earlier regex keyword gate defect has been resolved in the current baseline. `pages/api/memory/extract.ts` now uses the AI Memory Gate described in § 3.1; remaining work is quality monitoring/tuning, not an MVP blocker.
 
 ### Execution Baseline
 

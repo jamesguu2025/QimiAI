@@ -1,6 +1,6 @@
 # Project Control — Qimi Web
 
-> Created: 2026-03-15 | Amended: 2026-03-16 (route restructure, module rename, execution order update) | Amended: 2026-05-06 (SOP v2.4 + local Supabase acceptance + current code reality) | Amended: 2026-05-20 (Growth Plan accepted, Crisis Calm archived, Report Analysis moved to dedicated post-MVP planning)
+> Created: 2026-03-15 | Amended: 2026-03-16 (route restructure, module rename, execution order update) | Amended: 2026-05-06 (SOP v2.4 + local Supabase acceptance + current code reality) | Amended: 2026-05-20 (Growth Plan accepted, Crisis Calm archived, Report Analysis moved to dedicated post-MVP planning) | Amended: 2026-05-27 (MVP scope/document alignment)
 > Purpose: Freeze the execution order, document priority, branch acceptance policy, and current implementation/acceptance baseline so future work does not drift.
 > Status: ACTIVE
 
@@ -127,8 +127,14 @@ Current baseline:
 - Report Analysis: `Planned` (valuable, but moved out of the current MVP acceptance baseline; post-MVP P1 spec refreshed on 2026-05-27; requires a dedicated implementation branch before coding)
 - Crisis Calm: `Archived` (explicitly deferred from MVP by user decision on 2026-05-20)
 - Memory Profile Summary: `Implemented` and human-accepted in current working branch (conversation extraction, profile display, and profile summary path are active; future quality tuning is non-blocking)
-- Membership & Billing: `Planned` (post-MVP monetization module, spec: `docs/specs/membership-billing.md`)
+- Membership & Billing: `Planned` (post-MVP required monetization module, spec: `docs/specs/membership-billing.md`)
 - ~~User Profile~~: `Superseded` — split into Family Profile + Settings (2026-03-16)
+
+Explicit non-module decisions for the current MVP baseline:
+
+- Feedback Ticket/Admin workflow: not planned for MVP; Contact Us is sufficient for launch.
+- Paper Topics / Research Browser: not planned due copyright/licensing and redistribution risk. Keep research-backed citations limited to answer-time support in chat.
+- Chat file/image upload: UI affordance may remain as a coming-soon signal, but no report/image/document interpretation is active in the MVP until a dedicated upload/report feature is implemented and accepted.
 
 ---
 
@@ -156,7 +162,7 @@ The project must move forward in this order unless the user explicitly overrides
 11. **Analytics MVP launch hygiene** — event correctness, internal-user filtering, and weekly report verification
 12. ~~**Security and abuse-prevention pass**~~ — completed on the current MVP baseline for rate limits on cost-bearing endpoints, logging minimization, ownership checks, upload boundaries, provider-neutral public errors/log labels, and public API review; carry forward only newly discovered launch blockers
 13. `report-analysis` dedicated implementation branch as first P1/post-MVP feature after launch readiness is closed
-14. `membership-billing` (post-MVP monetization; Stripe checkout, billing portal, entitlement sync)
+14. `membership-billing` (post-MVP required monetization; Stripe checkout, billing portal, entitlement sync)
 15. Return to deeper follow-up reminder iteration only after the higher-frequency product paths above are stable
 
 Rationale:
@@ -171,7 +177,7 @@ Rationale:
 - `report-analysis` is the first desired P1/post-MVP feature. Its refreshed spec now defines the post-MVP minimum scope, upload/privacy/security review, provider-neutral user-visible copy, and Growth Plan handoff rules; implementation still needs a dedicated branch.
 - `crisis-calm` is archived for MVP and should not be selected unless the user reopens it.
 - `memory-profile-summary` is now part of the accepted product loop; quality improvements should be treated as refinements rather than core blocking work.
-- `membership-billing` is intentionally last. MVP should launch the free product first; monetization comes after the core feature loop and quota-bearing modules are stable in real code.
+- `membership-billing` is intentionally after launch readiness, but it is a required post-MVP business module, not an optional cleanup item. MVP should launch the free product first; monetization comes after the core feature loop and quota-bearing modules are stable in real code.
 - Provider-neutral config aliases are optional hardening, not an MVP blocker: a future cleanup may add generic `LLM_*` env aliases with legacy provider-specific env fallback and no behavior change. Do not do a broad provider-name rewrite during MVP launch stabilization.
 - Provider confidentiality for MVP launch means user-visible surfaces and ordinary telemetry/log output must not name the underlying model vendor. Source-only provider-specific environment variable names may remain temporarily because changing them is a larger config/runtime migration. If renamed later, do it as a dedicated compatibility change with legacy env fallback and full local build/API verification.
 

@@ -1,6 +1,6 @@
 # Module Spec: Analytics MVP
 
-> Status: IMPLEMENTED, PENDING TECHNICAL ACCEPTANCE — 2026-05-19
+> Status: IMPLEMENTED FOR CURRENT MVP BASELINE; LAUNCH HYGIENE PENDING — 2026-05-27 alignment
 > Module: analytics-mvp
 > Routes: no user-facing route
 > API routes: `pages/api/analytics/event.ts`, `pages/api/analytics/summary.ts` (optional internal read endpoint)
@@ -40,6 +40,7 @@ This spec was written against:
 - Updated `/privacy` with the MVP analytics disclosure.
 - Added QQ SMTP internal weekly email report endpoint at `pages/api/analytics/cron/weekly-report.ts`, protected by `CRON_SECRET`, plus Vercel cron schedule `10 0 * * 1` (Monday 08:10 Asia/Shanghai).
 - Analytics deletion posture is now decided for MVP: account deletion removes account-owned content and child/family data, while privacy-safe analytics rows remain with `user_id` nulled via `ON DELETE SET NULL`.
+- 2026-05-27 status alignment: implementation exists in the current baseline; remaining work is launch hygiene such as event correctness spot checks, internal-user filtering, and weekly report verification.
 
 ### New Document Justification
 

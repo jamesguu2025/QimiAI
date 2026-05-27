@@ -80,10 +80,10 @@ SmartDrawer + Content area
 ### 1.4 Reports Card
 
 - **Title**: "Reports"
-- **Summary content** (fetched from `GET /api/reports/summary` — defined in report-analysis spec):
+- **Summary content** (future `GET /api/reports/summary` — defined in report-analysis spec after implementation):
   - If reports exist: "{reportCount} reports uploaded"
-  - If no reports: "Upload assessment reports for AI analysis"
-- **Action**: Disabled "Coming soon" card until `/reports` exists
+  - Current MVP placeholder: "Report explanations are coming later"
+- **Action**: Disabled "Coming soon" card until the post-MVP Report Analysis module is implemented
 - **Visual**: Same card style
 
 ### 1.5 Card Loading and Error States
@@ -109,7 +109,7 @@ Same as family-profile spec: static banner at page bottom.
 
 ### 2.1 `GET /api/dashboard/summary` (optional optimization)
 
-If needed for performance, a single endpoint that returns all card summaries in one call. However, the MVP implementation should use individual module summary APIs (`/api/family/summary`, `/api/plan/summary`, `/api/reports/summary`) to avoid coupling.
+If needed for performance, a single endpoint that returns all card summaries in one call. However, the MVP implementation should use individual implemented module summary APIs and must not call `/api/reports/summary` until Report Analysis exists.
 
 This endpoint is **deferred** — only implement if the multi-fetch pattern causes noticeable latency.
 

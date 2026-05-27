@@ -1,6 +1,6 @@
 # System Architecture Design — Qimi AI English Web Version
 
-> Status: APPROVED — 2026-02-21 | Amended: 2026-02-27 (mood-tracking archived) | Amended: 2026-03-16 (unified sidebar, Dashboard hub, route restructure) | Amended: 2026-05-06 (current route/layout/migration reality + SOP v2.4 note) | Self-reviewed: 2026-03-16 | Second-pass reviewed: 2026-03-16 (P0: 0, P1: 0 after fixes)
+> Status: APPROVED — 2026-02-21 | Amended: 2026-02-27 (mood-tracking archived) | Amended: 2026-03-16 (unified sidebar, Dashboard hub, route restructure) | Amended: 2026-05-06 (current route/layout/migration reality + SOP v2.4 note) | Amended: 2026-05-27 (MVP/post-MVP route and module status alignment) | Self-reviewed: 2026-03-16 | Second-pass reviewed: 2026-03-16 (P0: 0, P1: 0 after fixes)
 > Created: 2026-02-21
 > Context: Phase 1 Layer 1 of Agent Development SOP
 > Scope: Canonical Layer 1 architecture for the web app. All module specs must follow this document unless it is explicitly amended.
@@ -23,10 +23,15 @@ This document was re-checked against:
 - Prefer API routes plus server-side Supabase admin access for mutations
 - Avoid new services, registries, or abstractions unless the first 5,000 users truly need them
 - Keep RAG research as answer-time support in chat. Web MVP does not ship a public Paper Topics / Research Browser, does not add a `/paper-topics` route, and does not expose browsable abstracts, full text, or bulk paper lists.
+- Keep Report Analysis as a post-MVP P1 planned module. Do not imply report upload or report interpretation is active in the MVP.
+- Keep Crisis Calm archived/deferred from MVP, but retain its historical spec and prototype for a possible future reopen.
+- Keep Membership/Billing as a required post-MVP business module. It is not implemented in the MVP.
+- Do not introduce a Feedback Ticket/Admin workflow for MVP; Contact Us remains the support path.
+- Chat file/image upload UI may remain as a coming-soon affordance, but file, image, and report interpretation are not active MVP capabilities.
 
 ### Current Implementation Notes
 
-- Some routes below are approved future routes, not already implemented pages
+- Some routes below are reserved future routes, not already implemented pages
 - Follow-up reminders already rely on Vercel Cron via `vercel.json`
 - The current repo already implements `/followup/[id]` plus the supporting follow-up API routes, even though follow-up is not a primary navigation module
 - As of 2026-03-16, the navigation scheme has been unified to use SmartDrawer globally (see Section 2)
@@ -67,7 +72,7 @@ This document was re-checked against:
 
 The app uses **one** sidebar for all logged-in pages:
 
-- **SmartDrawer** (`components/Chat/SmartDrawer.tsx`) — visible on `/chat`, `/dashboard`, `/family`, `/plan`, `/reports`, `/settings`
+- **SmartDrawer** (`components/Chat/SmartDrawer.tsx`) — visible on current logged-in pages `/chat`, `/dashboard`, `/family`, `/plan`, and `/settings`; future post-MVP module pages such as `/reports` should also use it when implemented.
 - **Sidebar** (`components/Layout/Sidebar.tsx`) — ~~used by AppLayout~~ **DEPRECATED**. Retained only as legacy code; new pages must not use it.
 - **AppLayout** uses SmartDrawer instead of Sidebar, so all logged-in pages share the same navigation.
 
@@ -92,7 +97,7 @@ The **UserMenu** (`components/UI/UserMenu.tsx`) stays in the top-right corner of
 | Menu Item | Route | Description |
 |-----------|-------|-------------|
 | Dashboard | `/dashboard` | Feature hub (already present in current UserMenu implementation) |
-| Settings | `/settings` | Account settings (name, email, avatar, notifications, subscription) |
+| Settings | `/settings` | Account settings (name, email, avatar, delete account, current plan placeholder) |
 | Sign Out | — | Ends session |
 
 ### Browser Tab Title
@@ -106,14 +111,14 @@ Browser tab titles must be dynamic and reflect the current page context:
 | `/dashboard` | "Dashboard - Qimi AI" |
 | `/family` | "Family Profile - Qimi AI" |
 | `/plan` | "Growth Plan - Qimi AI" |
-| `/reports` | "Reports - Qimi AI" |
+| `/reports` | "Reports - Qimi AI" *(reserved post-MVP P1)* |
 | `/settings` | "Settings - Qimi AI" |
 
 Implementation: use `<Head><title>...</title></Head>` in each page component.
 
 > ~~Mood (Heart, `/mood`, mood-tracking)~~ — ARCHIVED, feature cancelled 2026-02-27
 
-**Crisis Calm**: Not a sidebar or menu item. Accessed via a floating button injected through the shared layout (visible on all logged-in pages). Rationale: crisis calm is an emergency tool, not a daily navigation target. It should be 1 tap away when needed, not buried in a nav list.
+**Crisis Calm**: archived/deferred from the current MVP. Do not add a sidebar item, floating button, route, or launch-blocking task unless the module is explicitly reopened and refreshed. The historical spec and prototype may remain for future consideration.
 
 ### Mobile Behavior
 - SmartDrawer becomes a slide-in drawer (toggled via hamburger icon or left-edge swipe gesture — existing chat behavior)
@@ -142,11 +147,11 @@ The SmartDrawer sidebar unification is implemented in `AppLayout`. `components/L
 | `/dashboard` | Feature hub (summary cards) | dashboard | Yes | SmartDrawer + Content | Implemented |
 | `/family` | Family profile (child info, challenges) | family-profile | Yes | SmartDrawer + Content | Implemented |
 | `/plan` | Growth plan dashboard | growth-plan | Yes | SmartDrawer + Content | Implemented |
-| `/reports` | Report history | report-analysis | Yes | SmartDrawer + Content | Planned |
-| `/reports/upload` | Upload new report | report-analysis | Yes | SmartDrawer + Content | Planned |
-| `/reports/[id]` | View report analysis | report-analysis | Yes | SmartDrawer + Content | Planned |
-| `/settings` | Account settings (name, email, subscription placeholder, delete account) | settings | Yes | SmartDrawer + Content | Implemented |
-| `/calm` | Crisis calm session | crisis-calm | No (guest ok) | Fullscreen (no nav) | Archived |
+| `/reports` | Report history | report-analysis | Yes | SmartDrawer + Content | Reserved — post-MVP P1 |
+| `/reports/upload` | Upload new report | report-analysis | Yes | SmartDrawer + Content | Reserved — post-MVP P1 |
+| `/reports/[id]` | View report analysis | report-analysis | Yes | SmartDrawer + Content | Reserved — post-MVP P1 |
+| `/settings` | Account settings (name, email, current plan placeholder, delete account) | settings | Yes | SmartDrawer + Content | Implemented |
+| `/calm` | Crisis calm session | crisis-calm | No (guest ok if reopened) | Fullscreen (no nav) | Archived / deferred |
 | `/privacy` | Privacy policy | legal | No | LandingLayout | Implemented |
 | `/terms` | Terms of service | legal | No | LandingLayout | Implemented |
 | ~~`/profile`~~ | ~~User + child profile~~ | ~~user-profile~~ | — | — | **Split** into `/family` + `/settings` (2026-03-16) |
@@ -178,19 +183,19 @@ _app.tsx (SessionProvider + font)
 │   ├── Navbar (logo, nav links, login/signup buttons)
 │   └── Footer (links, copyright)
 │
-├── SmartDrawer + Content — All logged-in pages
-│   │                       (/chat, /dashboard, /family, /plan, /reports, /settings, /followup/[id])
+├── SmartDrawer + Content — Current logged-in pages
+│   │                       (/chat, /dashboard, /family, /plan, /settings, /followup/[id])
 │   ├── SmartDrawer (topic cards, conversation list, Dashboard button)
 │   ├── Top bar (Logo, page-specific controls, UserMenu)
 │   └── Main content area (responsive, scrollable)
 │
-└── Fullscreen     — Crisis calm (/calm)
+└── Future fullscreen reserve — Crisis calm (/calm, archived/deferred)
     └── Full viewport, no nav, exit button only
 ```
 
 ### Logged-in Page Usage Pattern (for new module pages)
 
-AppLayout now wraps SmartDrawer. New module pages should use AppLayout unless the module explicitly owns a fullscreen experience such as `/calm`.
+AppLayout now wraps SmartDrawer. New module pages should use AppLayout unless the module explicitly owns a refreshed fullscreen experience. `/calm` is archived/deferred and must not be treated as active MVP work.
 
 ```tsx
 import AppLayout from '@/components/Layout/AppLayout';
@@ -351,14 +356,8 @@ When a guest user registers or logs in, all temporary data collected during the 
 
 **Current implementation** (`pages/api/user/migrate-guest-data.ts`):
 - Chat history → `conversations` + `messages` tables (implemented, working)
-- `childBirthday` + `challenges` → written to `users.child_birthday` and `users.challenges` columns (implemented, but these are **legacy columns** that will be superseded by `child_profiles` table)
-
-**Migration update required** (internal design choice):
-When the family-profile module is implemented, the migration endpoint must be updated to write birthday and challenges into `child_profiles` instead of `users`:
-1. Keep chat history migration as-is (already correct)
-2. Change child data migration: `childBirthday` + `challenges` → call `POST /api/family/child` to upsert into `child_profiles` table
-3. The `users.child_birthday` and `users.challenges` columns become legacy and should not be read by new code
-4. The `/family` page reads from `child_profiles` only
+- `childName`, `childBirthday`, `gender`, and `challenges` → upserted into `child_profiles` (implemented)
+- The `/family` page reads from `child_profiles`; new code must not reintroduce legacy `users.child_birthday` or `users.challenges` ownership.
 
 **Important**: The user should not be asked to re-enter information they already provided during onboarding. If a child profile already exists (from migration), the `/family` page shows the existing data for review and editing.
 
@@ -382,14 +381,14 @@ When the family-profile module is implemented, the migration endpoint must be up
 | RAG research mode | No | 5 queries/day | Unlimited |
 | Paper Topics / Research Browser | No | No | No *(deferred; not in Web MVP)* |
 | ~~Mood tracking (`/mood`)~~ | ~~No~~ | ~~Full~~ | ~~Full~~ *(ARCHIVED)* |
-| Crisis calm (`/calm`) | Full | Full | Full |
+| Crisis calm (`/calm`) | Archived/deferred | Archived/deferred | Archived/deferred |
 | Growth plan (`/plan`) | No | Full (max 5 items) | Full (unlimited) |
 | Report analysis (`/reports`) | No | P1/Post-MVP, not in current MVP | Future billing decision |
 | Dashboard (`/dashboard`) | No | Full | Full |
 | Family profile (`/family`) | No | Full | Full |
 | Settings (`/settings`) | No | Full | Full |
 | File upload (reports) | No | P1/Post-MVP, private storage only | Future billing decision |
-| Export PDF (growth plan) | No | No | Yes |
+| Export PDF (growth plan) | No | Post-MVP | Future billing decision |
 
 ### Auth Enforcement Pattern
 
@@ -422,7 +421,7 @@ if (quota.messagesUsed >= quota.messagesLimit) {
 
 ### Special Cases
 
-- **Crisis calm** (`/calm`): No auth required — emergency tool must be accessible to everyone
+- **Crisis calm** (`/calm`): archived/deferred. If reopened later, the access model should be refreshed before implementation.
 - **Chat guest mode**: permanent 10-message trial allowance. The current client-side counter is only a UX control; production enforcement should add server-side quota/rate limiting for cost-bearing chat calls.
 - **Stripe subscription check**: Not implemented yet. Current schema has no `users.subscription_tier` column and no `GET /api/user/subscription` route. For now, all registered users are treated as Free tier. Pro features must not be treated as enforceable until the membership-billing module creates the billing schema/API.
 
@@ -439,9 +438,9 @@ These changes must be made by the maintainer to shared files before new module p
 | Unify AppLayout to use SmartDrawer | `components/Layout/AppLayout.tsx` | Implemented. Verify in acceptance rather than rebuilding. | Done |
 | Add Dashboard button behavior | `components/Chat/SmartDrawer.tsx` | Dashboard button already exists. Ensure it links to `/dashboard` and is visually active when on non-chat pages. | Verify |
 | Guest data migration (challenges + birthday) | `pages/api/user/migrate-guest-data.ts` | Implemented to write `birth_year`, `birth_month`, and `challenges` into `child_profiles` (`pages/api/user/migrate-guest-data.ts:118-141`). | Verify |
-| Add crisis entry affordance | `components/Layout/AppLayout.tsx` | Floating button visible on all logged-in pages (only if crisis module proceeds) | P2 |
+| Add crisis entry affordance | `components/Layout/AppLayout.tsx` | Deferred. Only revisit if Crisis Calm is reopened and refreshed. | Archived |
 
-**Current conclusion:** AppLayout → SmartDrawer unification is no longer the critical blocker. The current blockers are SOP v2.4 planning refresh for active specs, compliance launch-gate closure, and technical/human acceptance for already implemented pages.
+**Current conclusion:** AppLayout → SmartDrawer unification is no longer the critical blocker. Current launch-readiness work should focus on analytics launch hygiene, final copy/status consistency, and any newly discovered blockers. Report Analysis, Membership/Billing, and any reopened Crisis Calm work must start from their dedicated specs and normal acceptance gates.
 
 ## 10. Architecture Decision Record
 
@@ -453,13 +452,13 @@ These changes must be made by the maintainer to shared files before new module p
 | Module page entry | Via Dashboard cards + UserMenu, not sidebar nav items | SmartDrawer stays focused on conversations. Feature pages are accessed from Dashboard hub or UserMenu dropdown. (Added 2026-03-16) |
 | Guest data migration | Auto-migrate to Supabase on registration | User should never re-enter onboarding data. Challenges + birthday flow into child_profiles automatically. (Added 2026-03-16) |
 | Follow-up entry | Email deep link, not sidebar item | Return-path feature, not a primary daily navigation target |
-| Crisis access | Floating button, not nav item | Emergency tool = must be instantly visible, not buried |
-| Crisis layout | Fullscreen, no nav | Calming experience, no distractions |
+| Crisis access | Archived/deferred from MVP | Reopen only with a refreshed spec and compliance/accessibility review |
+| Crisis layout | Historical fullscreen reserve | Retain the spec/prototype, but do not implement in current MVP |
 | State management | Separate stores per module | Namespace isolation per CLAUDE.md concurrency rules |
 | Module communication | Via API / read-only from userStore | No direct store-to-store coupling |
 | Auth approach | Per-route, no middleware | Existing pattern, keep consistent |
 | Caching | Default none, add only if needed | MVP stage, simplicity > performance |
-| Guest crisis access | Allowed (no auth) | Emergency support should have zero barriers |
+| Guest crisis access | Deferred | Decide access model only if Crisis Calm is reopened |
 | Deployment model | Single Vercel app + Supabase | Mature MVP baseline with the lowest operational complexity |
 | Storage model | Private Supabase Storage for future web uploads | Fits the existing stack and avoids adding another file service; sensitive uploads must use private buckets, short-lived signed URLs, strict type/size validation, deletion paths, and no public asset URLs |
 | Browser tab titles | Dynamic per page/conversation | Improves UX when user has multiple tabs. Standard practice (ChatGPT, Claude). (Added 2026-03-16) |

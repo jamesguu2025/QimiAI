@@ -26,8 +26,8 @@ This spec was re-checked against:
 
 ### MVP Boundary
 
-- This module covers manual CRUD plus daily check-in for plan items
-- It does not include chat-derived extraction in this pass
+- This module covers manual CRUD plus daily check-in for plan items.
+- The accepted MVP baseline also includes Chat Save to Growth Plan through the addendum in Section 9.
 - It does not include PDF export in this pass
 - It does not introduce a dedicated Zustand store; local page state is sufficient for MVP
 
@@ -106,7 +106,7 @@ Users can update any field of an existing item.
 
 The following are explicitly NOT part of this module:
 
-- "Generate from chat" (requires modifying chat API — out of scope for this branch)
+- Automatic background plan generation from every chat message. The explicit user-confirmed Chat Save path is in scope and governed by Section 9.
 - PDF export (P2 feature)
 - Weekly schedule / check-in calendar
 - Progress tracking or check-in streaks over time
