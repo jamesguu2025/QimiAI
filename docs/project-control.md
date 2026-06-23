@@ -1,6 +1,6 @@
 # Project Control — Qimi Web
 
-> Created: 2026-03-15 | Amended: 2026-03-16 (route restructure, module rename, execution order update) | Amended: 2026-05-06 (SOP v2.4 + local Supabase acceptance + current code reality) | Amended: 2026-05-20 (Growth Plan accepted, Crisis Calm archived, Report Analysis moved to dedicated post-MVP planning) | Amended: 2026-05-27 (MVP scope/document alignment)
+> Created: 2026-03-15 | Amended: 2026-03-16 (route restructure, module rename, execution order update) | Amended: 2026-05-06 (SOP v2.4 + local Supabase acceptance + current code reality) | Amended: 2026-05-20 (Growth Plan accepted, Crisis Calm archived, Report Analysis moved to dedicated post-MVP planning) | Amended: 2026-05-27 (MVP scope/document alignment) | Amended: 2026-06-10 (Chat RAG Answer Quality launch hardening)
 > Purpose: Freeze the execution order, document priority, branch acceptance policy, and current implementation/acceptance baseline so future work does not drift.
 > Status: ACTIVE
 
@@ -117,6 +117,7 @@ Use these labels only:
 Current baseline:
 
 - Chat infrastructure: `Implemented` and human-accepted in current working branch
+- Chat RAG Answer Quality: `Planned` as MVP launch hardening P0 (same-topic RAG context reuse, citation/source consistency, prompt anti-sycophancy, and RAG process-leak filtering; spec: `docs/specs/chat-rag-answer-quality.md`)
 - Follow-up reminder module: `Partially implemented`
 - AppLayout → SmartDrawer unification: `Implemented` (code reality: `components/Layout/AppLayout.tsx:5-54` imports and renders SmartDrawer)
 - Dashboard (feature hub): `Implemented` and human-accepted in current working branch
@@ -148,6 +149,7 @@ The project must move forward in this order unless the user explicitly overrides
 > Amended 2026-05-07: Added SmartDrawer topic folder behavior closure before Family/Profile acceptance after manual QA found topic-started conversations were not persisted under the selected topic.
 > Amended 2026-05-20: Growth Plan, memory/profile learning, onboarding, analytics MVP, compliance copy, and Dashboard entry behavior have been implemented on the current baseline. Crisis Calm is archived. Report Analysis remains a separate P1/post-MVP candidate.
 > Amended 2026-05-27: Report Analysis spec was refreshed with SOP v2.4 evidence, Search Ledger, ADR-lite, post-MVP minimum scope, upload/privacy/security boundaries, and Growth Plan handoff rules. Implementation still requires a dedicated branch and normal technical/functional/human acceptance gates.
+> Amended 2026-06-10: Added Chat RAG Answer Quality as MVP launch hardening P0. This is shared chat infrastructure stabilization, not a new product module. See `docs/specs/chat-rag-answer-quality.md`.
 
 1. Stabilize and freeze shared chat infrastructure
 2. Finish only the minimum follow-up reminder closure needed to keep the current branch coherent
@@ -161,9 +163,10 @@ The project must move forward in this order unless the user explicitly overrides
 10. **Memory Profile Summary acceptance closure** — completed on current baseline; only carry forward extraction quality tuning
 11. **Analytics MVP launch hygiene** — event correctness, internal-user filtering, and weekly report verification
 12. ~~**Security and abuse-prevention pass**~~ — completed on the current MVP baseline for rate limits on cost-bearing endpoints, logging minimization, ownership checks, upload boundaries, provider-neutral public errors/log labels, and public API review; carry forward only newly discovered launch blockers
-13. `report-analysis` dedicated implementation branch as first P1/post-MVP feature after launch readiness is closed
-14. `membership-billing` (post-MVP required monetization; Stripe checkout, billing portal, entitlement sync)
-15. Return to deeper follow-up reminder iteration only after the higher-frequency product paths above are stable
+13. **Chat RAG Answer Quality launch hardening** — complete before public MVP launch if current replay/manual tests still show citation mismatch, over-agreeing, or same-topic RAG context drift. This work is scoped by `docs/specs/chat-rag-answer-quality.md` and must not expand into Paper Topics, Report Analysis, or new services.
+14. `report-analysis` dedicated implementation branch as first P1/post-MVP feature after launch readiness is closed
+15. `membership-billing` (post-MVP required monetization; Stripe checkout, billing portal, entitlement sync)
+16. Return to deeper follow-up reminder iteration only after the higher-frequency product paths above are stable
 
 Rationale:
 
@@ -180,6 +183,7 @@ Rationale:
 - `membership-billing` is intentionally after launch readiness, but it is a required post-MVP business module, not an optional cleanup item. MVP should launch the free product first; monetization comes after the core feature loop and quota-bearing modules are stable in real code.
 - Provider-neutral config aliases are optional hardening, not an MVP blocker: a future cleanup may add generic `LLM_*` env aliases with legacy provider-specific env fallback and no behavior change. Do not do a broad provider-name rewrite during MVP launch stabilization.
 - Provider confidentiality for MVP launch means user-visible surfaces and ordinary telemetry/log output must not name the underlying model vendor. Source-only provider-specific environment variable names may remain temporarily because changing them is a larger config/runtime migration. If renamed later, do it as a dedicated compatibility change with legacy env fallback and full local build/API verification.
+- Chat RAG Answer Quality is the active shared-chat hardening slice if answer replay still shows drift or citation/source inconsistency. It should improve the current RAG path without changing the public product surface.
 
 ---
 

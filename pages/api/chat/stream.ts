@@ -6,6 +6,7 @@ import { getServerSession } from 'next-auth';
 import { authOptions } from '../auth/[...nextauth]';
 import { buildSystemMessage, UserProfile } from '../../../lib/prompts';
 import {
+  buildRagCitationRule,
   executeRAGWithSmartSummary,
 } from '../../../services/rag-service';
 import { getSupabaseAdmin } from '../../../lib/supabase';
@@ -14,6 +15,27 @@ import { routeRagNeed } from '../../../lib/rag-router';
 import { trackServerEvent } from '../../../lib/analytics';
 import { getClientIp, getPayloadSizeBytes, rejectIfRateLimited } from '../../../lib/rate-limit';
 import { createHmac, randomUUID, timingSafeEqual } from 'crypto';
+import {
+  getLatestRagContext,
+  saveRagContext,
+  formatRagContextForPrompt,
+  buildQuestionAnchor,
+  type RAGContextPaper,
+} from '../../../lib/rag-context-store';
+import {
+  createRagProcessLeakFilter,
+  feedRagProcessLeakFilter,
+  filterRagProcessLeak,
+  flushRagProcessLeakFilter,
+} from '../../../utils/rag-output-filter';
+import {
+  createNamedStudyRefFilter,
+  feedNamedStudyRefFilter,
+  flushNamedStudyRefFilter,
+  linkMatchedPlainAuthorYearRefs,
+  reconcileSources,
+  sanitizeUnmatchedNamedStudyRefs,
+} from '../../../utils/source-reconciliation';
 
 type ChatSource = {
   title: string;
@@ -22,6 +44,15 @@ type ChatSource = {
   year?: number | string;
   journal?: string;
   authors?: string[];
+  authors_detailed?: Array<{
+    name?: string;
+    lastname?: string;
+    firstname?: string;
+    initials?: string;
+    affiliation?: string;
+    affiliations?: string[];
+  }> | null;
+  journal_country?: string | null;
   doi?: string;
   pmid?: string;
 };
@@ -50,6 +81,18 @@ function stripDsml(text: string): string {
     .replace(/<\/\|+DSML\|+[A-Za-z_]\w*>/g, '')                         // orphaned close tags
     .replace(/<\|+DSML\|+[A-Za-z_]\w*[^>]*>/g, '')                      // orphaned open tags
     .replace(/<\|+DSML\|*[\s\S]*$/, '')                                 // trailing partial
+    .replace(/\n{3,}/g, '\n\n')
+    .trim();
+}
+
+function stripHistoricCitationsForPrompt(text: string): string {
+  const clean = stripDsml(text);
+  return clean
+    .replace(/\[([^\]]+)\]\((?:https?:\/\/|doi:|10\.)[^)]+\)/g, '$1')
+    .replace(/https?:\/\/[^\s)\]>"']+/g, '')
+    .replace(/\bPMID[:\s]*\d+\b/gi, '')
+    .replace(/\b[A-Z][a-zA-Z-]{3,}(?:\s+(?:et\s+al\.?|and\s+[A-Z][a-zA-Z-]{3,}|&\s+[A-Z][a-zA-Z-]{3,}))?[,\s]*(?:\(|,)?\s*(?:20\d{2}|19\d{2})\)?/g, 'earlier evidence we discussed')
+    .replace(/\b(the\s+)?[A-Z][a-zA-Z-]{3,}\s+(study|pilot study|review|meta-analysis)\b/g, 'earlier evidence we discussed')
     .replace(/\n{3,}/g, '\n\n')
     .trim();
 }
@@ -197,6 +240,8 @@ function getRecentHistorySources(conversationHistory: unknown): ChatSource[] {
         year: source.year,
         journal: source.journal,
         authors: source.authors,
+        authors_detailed: source.authors_detailed,
+        journal_country: source.journal_country,
         doi: source.doi,
         pmid: source.pmid,
       });
@@ -213,11 +258,42 @@ function formatSourceLinksForPrompt(sources: ChatSource[]): string {
       const meta = [
         source.year,
         source.journal,
+        source.journal_country,
         Array.isArray(source.authors) && source.authors.length > 0 ? `${source.authors[0]}${source.authors.length > 1 ? ' et al.' : ''}` : null,
+        Array.isArray(source.authors_detailed) && source.authors_detailed.length > 0
+          ? `Affiliations: ${source.authors_detailed
+              .map((author) => {
+                const name = author.name || [author.firstname, author.lastname].filter(Boolean).join(' ');
+                const affiliations = Array.isArray(author.affiliations) && author.affiliations.length > 0
+                  ? author.affiliations
+                  : author.affiliation
+                    ? [author.affiliation]
+                    : [];
+                return name && affiliations.length > 0 ? `${name}: ${affiliations.join(' | ')}` : '';
+              })
+              .filter(Boolean)
+              .join('; ')}`
+          : null,
       ].filter(Boolean).join(' | ');
       return `${index + 1}. [${source.title}](${source.url})${meta ? ` — ${meta}` : ''}`;
     })
     .join('\n');
+}
+
+function buildPriorSourceReuseInstruction(sources: ChatSource[]): string {
+  return `The user is asking to restate or re-output a previous answer.
+
+Previously retrieved source links are available below. Reuse them only for claims already supported by the prior answer or by the source metadata shown here.
+
+Important anti-drift rule:
+- These links and snippets are not full abstracts. Do not infer missing sample sizes, mechanisms, effect sizes, protocols, or causal claims from a title or link.
+- If the current answer needs details that are not visible in the conversation or source metadata, say the detail is not available in the current context instead of inventing it.
+- Preserve clickable Markdown links when referencing a specific source.
+
+${buildRagCitationRule(sources.length)}
+
+Previously retrieved sources:
+${formatSourceLinksForPrompt(sources)}`;
 }
 
 function getCookieAttributes() {
@@ -298,7 +374,9 @@ async function countUserMessagesToday(supabase: ReturnType<typeof getSupabaseAdm
 
 function buildRagAnswerInstruction(sourceCount: number): string {
   const paperLabel = sourceCount === 1 ? 'paper' : 'papers';
-  return `Use the retrieved research as the backbone for this answer, not as optional decoration.
+  return `${buildRagCitationRule(sourceCount)}
+
+Use the retrieved research as the backbone for this answer, not as optional decoration.
 
 How to answer:
 - Start by answering the parent's actual question in plain English.
@@ -306,14 +384,47 @@ How to answer:
 - If a study provides concrete parameters, use them instead of inventing generic ones.
 - Do not turn the answer into a literature review. Mention the evidence naturally where it supports a key point.
 - Include 1-3 clickable Markdown citations in the body when making evidence-based claims, using the source links provided above.
+- Only cite URLs, PMIDs, DOIs, named studies, author-year references, or study durations from the current research source list provided for this answer. Do not cite or name studies that appear only in earlier chat history or memory context.
+- If "Citation handles to copy exactly" are provided above, use those handles verbatim for author-year citations.
 - If you mention an author-year citation such as "Capodieci et al. (2017)", it must be a Markdown link using the matching source URL, e.g. "[Capodieci et al. (2017)](https://...)". Never leave author-year citations as plain text when the source URL is available.
-- Also rely on the separate "Based on ${sourceCount} research ${paperLabel}" source list that the UI will show below the message.
+- For English answers, prefer "one retrieved study", "a small pilot study", or "the retrieved review" over plain author-year names unless you can make the study name a clickable Markdown citation from the current source list.
+- The UI may show a separate "Research sources for this answer" list. Do not imply every listed paper directly supports every claim.
 - If the research does not directly support a claim, say that part is practical judgment or clinical/common-sense guidance rather than pretending it is paper-backed.
+- Practical plans may include simple timing, but every unsourced timing must be explicitly labeled as a practical tracking window or starting estimate, not a research-derived expected effect. Do not write week-by-week expected improvements unless a retrieved study gives that exact timeline.
+- Preferred wording for unsourced practical timing: "Try this for 4-6 weeks as a practical tracking window, not a research-derived expected improvement timeline." Then explain the basis: tolerance, habit-building, and watching whether target behaviors trend in the right direction.
+- Do not write "try this for 4-6 weeks", "watch for 8-12 weeks", or similar practical windows without the phrase "practical tracking window" in the same sentence.
+- Do not give unsourced adherence percentages such as "50-60% of the time". Use qualitative wording like "often enough to see a pattern" unless a retrieved source gives the number.
+- You may use general knowledge, internal knowledge, memory context, and common practical guidance when retrieved papers do not cover the exact situation. Label it as practical guidance or commonly reported experience, not as retrieved-paper evidence.
+- Do not write as if you personally have clinical experience. Avoid "in my clinical practice", "what I've seen", "my clients", or "children I have treated".
+- Parent/therapist experience can be mentioned as practical context when it comes from general knowledge, memory, or internal knowledge. If it is not from the current retrieved papers, say so plainly: "This is practical guidance, not a finding from the retrieved papers."
 - Do not let retrieved research override the consultative flow. For broad personalized behavior problems, give a short evidence-informed orientation, then ask the most diagnostic follow-up question before recommending a specific plan.
 - During information gathering, do not output a Growth Plan-ready action table just because papers were retrieved. First clarify the failure point and what the parent has already tried.
 - If the plan readiness gate is met and you include saveable guidance, format a compact Growth Plan-ready block with: Goal, Try this for, action table when there are multiple steps, Watch for, and Why this may help. This block should be self-contained enough to save.
 - Use a Markdown table for multiple actions, stages, repeated timing/frequency fields, school/home comparisons, or weekly schedules.
 - For a single strategy, keep When, How often, and How long on separate lines.`;
+}
+
+function buildFinalAnswerGuard(sourceCount: number): string {
+  return `Final answer guard:
+- Reply in the same language as the user's current message. If the user writes in Chinese, reply in Chinese.
+- Do not use exact percentages, sample sizes, effect sizes, dosage-like quantities, named thresholds, checklist cutoffs, timelines, claimed improvement rates, or numeric metaphors unless they are stated in retrieved research, visible source context, or the user's own message.
+- If no source is available for a number, use qualitative wording instead, such as "some families", "many therapists report", "this varies", or "a short trial".
+- If you give a practical unsourced schedule, duration, or observation window, explicitly label it as a practical starting estimate, not a research-derived parameter.
+- Agreement is allowed only after checking the user's claim. Validate accurate observations, but do not use blanket phrases like "you are right", "you are completely right", or "exactly" for conclusions that are partly inferred, uncertain, evidence-limited, or rejecting professional assessment.
+- When the user asks you to confirm their own causal model ("对吗", "是不是", "说明..."), split the answer into "what the observation supports" and "what remains a hypothesis". Do not say the user's causal chain is accurate or established unless the current sources directly establish it.
+- For primitive reflex integration, sensory integration, vestibular training, semantic networks, ADHD, reading, writing, posture, and child-development claims, use conservative causal language. Say "may be related", "indirect", "early evidence", or "not directly established" unless retrieved research directly tests that exact causal pathway.
+- Do not infer a child's brain-network structure, connection efficiency, or future improvement timeline from one parent example. Frame it as a hypothesis to observe or assess.
+- Do not shorten, average, or translate research durations into a different expected timeline. If a study used 12 weeks or 26 weeks, keep that exact duration tied to that study; do not convert it into "4-8 weeks", "a few weeks", or "a month or two" as an expected improvement window.
+- You may give a practical trial or tracking window, but label it clearly: "This is a practical tracking window, not a research-derived expected improvement timeline." Explain the principle: use a short, low-risk observation period to see whether the child tolerates the routine and whether target behaviors trend in the right direction.
+- Do not write "try this for 4-6 weeks", "watch for 8-12 weeks", or similar practical windows unless the same sentence labels it as a practical tracking window.
+- Do not give unsourced adherence percentages such as "50-60% of the time". Use qualitative wording like "often enough to see a pattern" unless a retrieved source gives the number.
+- You may use general knowledge, internal knowledge, memory context, and common practical guidance when retrieved papers do not cover the exact situation. Label it as practical guidance or commonly reported experience, not as retrieved-paper evidence.
+- Do not write as if you personally have clinical experience. Avoid "in my clinical practice", "what I've seen", "my clients", or "children I have treated".
+- Parent/therapist experience can be mentioned as practical context when it comes from general knowledge, memory, or internal knowledge. If it is not from the current retrieved papers, say so plainly: "This is practical guidance, not a finding from the retrieved papers."
+- If you write "watch for changes by week X" or "expect improvement within X weeks", the exact timing must come from a current retrieved source. Otherwise say "track whether this changes over time" without week-specific promises.
+- Do not name earlier studies from chat history unless their source is included in the current research source list. If the current source list does not support the detail, say "based on our earlier discussion" without naming the study or giving exact numbers.
+- In English, avoid plain author-year study references. If you cannot link the current source, say "a retrieved study" or "earlier evidence we discussed" instead.
+- Current research source count for this answer: ${sourceCount}.`;
 }
 
 /**
@@ -519,6 +630,11 @@ export default async function handler(
       return;
     }
 
+    // Identify guest session ID for RAG context lookup
+    const guestSessionId = !session?.user?.email
+      ? ensureGuestSession(req, res)
+      : null;
+
     const reusableSources = shouldReusePriorSources(content || '')
       ? getRecentHistorySources(conversationHistory)
       : [];
@@ -603,12 +719,12 @@ export default async function handler(
         return res.status(429).json({ error: 'Daily chat limit reached' });
       }
     } else {
-      const guestSessionId = ensureGuestSession(req, res);
-      const usedCount = readGuestUsage(req.cookies[GUEST_CHAT_QUOTA_COOKIE], guestSessionId);
+      // guestSessionId was already set above for RAG context lookup
+      const usedCount = readGuestUsage(req.cookies[GUEST_CHAT_QUOTA_COOKIE], guestSessionId || '');
       if (usedCount >= GUEST_LIFETIME_CHAT_LIMIT) {
         return res.status(429).json({ error: 'Guest chat limit reached' });
       }
-      setSignedGuestUsage(res, guestSessionId, usedCount + 1);
+      setSignedGuestUsage(res, guestSessionId || '', usedCount + 1);
     }
 
     if (conversationId) {
@@ -649,7 +765,7 @@ export default async function handler(
         if (msg.role === 'user' || msg.role === 'assistant') {
           messages.push({
             role: msg.role,
-            content: msg.role === 'assistant' ? stripDsml(msg.content) : msg.content,
+            content: msg.role === 'assistant' ? stripHistoricCitationsForPrompt(msg.content) : msg.content,
           });
         }
       }
@@ -658,7 +774,7 @@ export default async function handler(
     if (reusableSources.length > 0) {
       messages.push({
         role: 'system',
-        content: `The user is asking to restate or re-output a previous answer. Reuse these previously retrieved research source links when citing evidence in the new answer. Include clickable Markdown links in the body when referencing specific studies:\n${formatSourceLinksForPrompt(reusableSources)}`,
+        content: buildPriorSourceReuseInstruction(reusableSources),
       });
     }
 
@@ -709,6 +825,26 @@ export default async function handler(
     // Shared accumulator to track content even if abort happens
     const accumulator = { content: '', sources: reusableSources };
 
+    // Load latest active RAG context for same-topic reuse
+    let cachedRagContext: Awaited<ReturnType<typeof getLatestRagContext>> = null;
+    if (ENABLE_RAG) {
+      try {
+        cachedRagContext = await getLatestRagContext({
+          conversationId: activeConversationId || conversationId,
+          guestSessionId,
+        });
+        if (cachedRagContext) {
+          console.log('[chat/stream] Loaded cached RAG context:', {
+            query: cachedRagContext.query?.slice(0, 60),
+            sourceCount: cachedRagContext.sources?.length,
+            topicKey: cachedRagContext.topic_key,
+          });
+        }
+      } catch (ctxErr) {
+        console.error('[chat/stream] RAG context load failed:', ctxErr);
+      }
+    }
+
     // Call DeepSeek with potential RAG tool support
     const { fullResponse, sources } = await streamChatWithRAG(
       messages,
@@ -716,7 +852,9 @@ export default async function handler(
       forceRAG || false,
       abortController.signal,
       accumulator,
-      requestedFolderKey
+      requestedFolderKey,
+      cachedRagContext,
+      { conversationId: activeConversationId, userId: authenticatedUserId, guestSessionId }
     );
 
     // Final check if client is still connected before saving
@@ -810,6 +948,14 @@ interface StreamAccumulator {
   sources: ChatSource[];
 }
 
+type RagContextInfo = Awaited<ReturnType<typeof getLatestRagContext>>;
+
+interface RagContextMeta {
+  conversationId?: string | null;
+  userId?: string | null;
+  guestSessionId?: string | null;
+}
+
 /**
  * Stream chat with RAG tool calling support
  * Handles multi-turn tool calling workflow
@@ -821,74 +967,111 @@ async function streamChatWithRAG(
   forceRAG: boolean = false,
   abortSignal?: AbortSignal,
   accumulator?: StreamAccumulator,
-  folderKey?: TopicFolder | null
+  folderKey?: TopicFolder | null,
+  cachedRagContext?: RagContextInfo,
+  contextMeta?: RagContextMeta
 ): Promise<{ fullResponse: string; sources: ChatSource[] }> {
   // Use external accumulator if provided, otherwise create local one
   const acc = accumulator || { content: '', sources: [] };
   let fullResponse = '';
   let collectedSources: ChatSource[] = [...acc.sources];
+  let ragContextSaved = false;
 
   try {
     // If forceRAG is enabled and ENABLE_RAG is true, make direct RAG call first
-    // 使用双LLM架构：第一个LLM提取论文核心发现，第二个LLM与用户对话
     if (forceRAG && ENABLE_RAG) {
       console.log('[chat/stream] Force RAG mode enabled - making direct RAG call');
 
-      // Get the user's last message
       const userMessage = messages[messages.length - 1];
 
       writeStatus(res, 'Searching the ADHD research library...');
 
       try {
-        // Execute RAG search with smart summary (双LLM架构)
-        // 如果 ENABLE_SMART_SUMMARY=true，会先用第一个LLM生成精炼摘要
         const ragResult = await executeRAGWithSmartSummary(
-          userMessage.content,  // query
-          userMessage.content,  // userQuestion (for smart summary)
-          10                    // top_k
+          userMessage.content,
+          userMessage.content,
+          10
         );
 
-        // Log which mode was used
         console.log(`[chat/stream] Force RAG: Using ${ragResult.summaryMode} mode`);
 
-        // Send sources to frontend and collect for database
         if (ragResult.sources.length > 0) {
           console.log(`[chat/stream] Force RAG: Sending ${ragResult.sources.length} paper sources to frontend`);
           res.write(`data: ${JSON.stringify({ type: 'sources', sources: ragResult.sources })}\n\n`);
           collectedSources = ragResult.sources;
         }
 
-        // Inject RAG results into conversation as a system message
         messages.push({
           role: 'system',
           content: `Research papers found for the user's question:\n\n${ragResult.formattedText}\n\n${buildRagAnswerInstruction(ragResult.sources.length)}`
         });
 
-        // Send status update with mode info
-        const modeInfo = ragResult.summaryMode === 'smart' ? '(智能摘要)' : '(原始模式)';
+        // Save fresh RAG context for same-topic reuse
+        if (ragResult.papers && ragResult.papers.length > 0 && contextMeta) {
+          saveRagContext({
+            conversationId: contextMeta.conversationId,
+            userId: contextMeta.userId,
+            guestSessionId: contextMeta.guestSessionId,
+            topicKey: folderKey || null,
+            query: userMessage.content,
+            question: userMessage.content,
+            papers: ragResult.papers.map((p): RAGContextPaper => ({
+              title: p.title,
+              abstract: p.abstract,
+              year: p.year,
+              journal: p.journal,
+              authors: p.authors,
+              authors_detailed: p.authors_detailed,
+              journal_country: p.journal_country,
+              url: p.url,
+              doi: p.doi,
+              pmid: p.pmid,
+              score: p.score,
+              topic: p.topic,
+              types: p.types,
+            })),
+            sources: ragResult.sources,
+          }).catch((err) => console.error('[chat/stream] Failed to save RAG context:', err));
+          ragContextSaved = true;
+        }
+
+        // Append question anchoring
+        messages.push({
+          role: 'system',
+          content: buildQuestionAnchor(userMessage.content),
+        });
+
+        const modeInfo = ragResult.summaryMode === 'smart' ? '(smart summary)' : '(raw mode)';
         writeStatus(
           res,
           `Found ${ragResult.sources.length} research ${ragResult.sources.length === 1 ? 'paper' : 'papers'} ${modeInfo}. Synthesizing answer...`
         );
       } catch (error) {
         console.error('[chat/stream] Force RAG search failed:', error);
-        // Continue without RAG if it fails
       }
     }
 
-    // Capture current user question once — used as context for routing and retrieval
+    // Capture current user question once
     const userQuestion = [...messages].reverse().find(m => m.role === 'user')?.content || '';
 
-    // Web RAG routing follows the mini-program's two-stage decision pattern:
-    // a required, non-streaming classifier first decides whether retrieval is needed.
-    // The final streaming call then answers with no tools attached, which avoids
-    // auto tool-call misses and DSML/tool-call leakage in the user-visible stream.
+    // Web RAG routing with cached context support
     if (!forceRAG && ENABLE_RAG) {
+      const cachedContextMeta = cachedRagContext
+        ? {
+            hasContext: true,
+            query: cachedRagContext.query,
+            question: cachedRagContext.question,
+            topicKey: cachedRagContext.topic_key,
+            sourceCount: cachedRagContext.sources?.length || 0,
+          }
+        : undefined;
+
       const decision = await routeRagNeed({
         messages,
         currentUserMessage: userQuestion,
         folderKey,
         signal: abortSignal,
+        cachedRagContext: cachedContextMeta,
       });
 
       if (decision.shouldSearch) {
@@ -919,21 +1102,96 @@ async function streamChatWithRAG(
             content: `Research papers found for the user's question:\n\n${ragResult.formattedText}\n\n${buildRagAnswerInstruction(ragResult.sources.length)}`,
           });
 
+          // Save fresh RAG context
+          if (ragResult.papers && ragResult.papers.length > 0 && contextMeta) {
+            saveRagContext({
+              conversationId: contextMeta.conversationId,
+              userId: contextMeta.userId,
+              guestSessionId: contextMeta.guestSessionId,
+              topicKey: folderKey || null,
+              query: decision.query || userQuestion,
+              question: userQuestion,
+              papers: ragResult.papers.map((p): RAGContextPaper => ({
+                title: p.title,
+                abstract: p.abstract,
+                year: p.year,
+                journal: p.journal,
+                authors: p.authors,
+                authors_detailed: p.authors_detailed,
+                journal_country: p.journal_country,
+                url: p.url,
+                doi: p.doi,
+                pmid: p.pmid,
+                score: p.score,
+                topic: p.topic,
+                types: p.types,
+              })),
+              sources: ragResult.sources,
+            }).catch((err) => console.error('[chat/stream] Failed to save RAG context:', err));
+            ragContextSaved = true;
+          }
+
+          // Append question anchoring
+          messages.push({
+            role: 'system',
+            content: buildQuestionAnchor(userQuestion),
+          });
+
           const paperLabel = ragResult.sources.length === 1 ? 'paper' : 'papers';
           writeStatus(res, `Found ${ragResult.sources.length} research ${paperLabel}. Synthesizing answer...`);
         } catch (error) {
           console.error('[chat/stream] Router RAG search failed:', error);
           messages.push({
             role: 'system',
-            content: 'Research retrieval was attempted but failed. Answer from your general knowledge, avoid pretending that papers were retrieved, and recommend professional evaluation when the topic is medical or safety-sensitive.',
+            content: `Research retrieval was attempted but failed. Answer from your general knowledge.
+
+Anti-drift requirements:
+- Do not pretend papers were retrieved.
+- Do not invent named studies, authors, journals, sample sizes, effect sizes, or source links.
+- Label unsupported parts as practical judgment or general knowledge.
+- Recommend professional evaluation when the topic is medical, diagnostic, medication-related, emergency, or safety-sensitive.`,
           });
         }
       } else {
         console.log('[chat/stream] RAG router skipped search:', decision.reason);
+
+        // Inject cached RAG context only when the router explicitly marks it as same-topic.
+        if (decision.useCachedContext && cachedRagContext && cachedRagContext.papers && cachedRagContext.papers.length > 0) {
+          console.log('[chat/stream] Injecting cached RAG context for same-topic follow-up');
+          const cachedPrompt = formatRagContextForPrompt({
+            papers: cachedRagContext.papers,
+            sources: cachedRagContext.sources,
+            question: userQuestion,
+            mode: 'cached',
+          });
+
+          messages.push({
+            role: 'system',
+            content: cachedPrompt,
+          });
+
+          // Use cached sources for the answer
+          collectedSources = cachedRagContext.sources as ChatSource[];
+          acc.sources = collectedSources;
+          res.write(`data: ${JSON.stringify({ type: 'sources', sources: collectedSources })}\n\n`);
+
+          // Append question anchoring
+          messages.push({
+            role: 'system',
+            content: buildQuestionAnchor(userQuestion),
+          });
+        } else if (cachedRagContext) {
+          console.log('[chat/stream] Cached RAG context available but not used:', decision.reason);
+        }
       }
     }
 
     // Streaming answer pass. RAG, when needed, has already been injected above.
+    messages.push({
+      role: 'system',
+      content: buildFinalAnswerGuard(collectedSources.length),
+    });
+
     const MAX_TOOL_ROUNDS = 1;
     let needForcedSynthesis = false;
 
@@ -979,7 +1237,7 @@ async function streamChatWithRAG(
       }
 
       const { finishReason, toolCalls, content } = await processOneRound(
-        reader, res, abortSignal, acc, fullResponse
+        reader, res, abortSignal, acc, fullResponse, collectedSources
       );
 
       fullResponse += content;
@@ -1080,7 +1338,7 @@ async function streamChatWithRAG(
         const synthReader = synthResponse.body?.getReader();
         if (synthReader) {
           const { content: synthContent, finishReason: synthFinish } = await processOneRound(
-            synthReader, res, abortSignal, acc, fullResponse
+            synthReader, res, abortSignal, acc, fullResponse, collectedSources
           );
           fullResponse += synthContent;
           acc.content = fullResponse;
@@ -1091,6 +1349,23 @@ async function streamChatWithRAG(
       }
 
       if (!res.writableEnded) res.write(`data: ${JSON.stringify({ type: 'done' })}\n\n`);
+    }
+
+    // Apply RAG process-leak filter to final response
+    fullResponse = filterRagProcessLeak(fullResponse);
+    if (collectedSources.length > 0 && fullResponse.length > 0) {
+      fullResponse = linkMatchedPlainAuthorYearRefs(fullResponse, collectedSources);
+      fullResponse = sanitizeUnmatchedNamedStudyRefs(fullResponse, collectedSources);
+    }
+    acc.content = fullResponse;
+
+    // Source reconciliation: match cited URLs/DOIs/PMIDs against available sources
+    if (collectedSources.length > 0 && fullResponse.length > 0) {
+      collectedSources = reconcileSources({
+        answerText: fullResponse,
+        injectedSources: collectedSources,
+        fullSourcePool: collectedSources,
+      });
     }
 
     res.end();
@@ -1150,7 +1425,8 @@ async function processOneRound(
   res: NextApiResponse,
   abortSignal?: AbortSignal,
   accumulator?: StreamAccumulator,
-  baseContent: string = ''
+  baseContent: string = '',
+  currentSources: ChatSource[] = []
 ): Promise<{
   finishReason: string | null;
   toolCalls: Array<{ id: string; type: 'function'; function: { name: string; arguments: string } }>;
@@ -1160,6 +1436,8 @@ async function processOneRound(
   let buffer = '';
   let content = '';
   const dsmlFilter = createDsmlFilter();
+  const ragLeakFilter = createRagProcessLeakFilter();
+  const namedStudyFilter = createNamedStudyRefFilter(currentSources);
   const toolCalls: Array<{ id: string; type: 'function'; function: { name: string; arguments: string } }> = [];
   let currentToolCallIndex = -1;
   let finishReason: string | null = null;
@@ -1190,7 +1468,13 @@ async function processOneRound(
             if (!choice) continue;
 
             if (choice.delta?.content) {
-              const safe = feedDsmlFilter(dsmlFilter, choice.delta.content);
+              const safe = feedNamedStudyRefFilter(
+                namedStudyFilter,
+                feedRagProcessLeakFilter(
+                  ragLeakFilter,
+                  feedDsmlFilter(dsmlFilter, choice.delta.content),
+                ),
+              );
               if (safe) {
                 content += safe;
                 if (accumulator) accumulator.content = baseContent + content;
@@ -1225,11 +1509,15 @@ async function processOneRound(
     reader.releaseLock();
   }
 
-  const tail = flushDsmlFilter(dsmlFilter);
-  if (tail) {
-    content += tail;
+  const tail = feedRagProcessLeakFilter(ragLeakFilter, flushDsmlFilter(dsmlFilter));
+  const finalTail = feedNamedStudyRefFilter(
+    namedStudyFilter,
+    tail + flushRagProcessLeakFilter(ragLeakFilter),
+  ) + flushNamedStudyRefFilter(namedStudyFilter);
+  if (finalTail) {
+    content += finalTail;
     if (accumulator) accumulator.content = baseContent + content;
-    res.write(`data: ${JSON.stringify({ type: 'token', content: tail })}\n\n`);
+    res.write(`data: ${JSON.stringify({ type: 'token', content: finalTail })}\n\n`);
   }
 
   if (finishReason === 'stop') {

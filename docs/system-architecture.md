@@ -1,6 +1,6 @@
 # System Architecture Design — Qimi AI English Web Version
 
-> Status: APPROVED — 2026-02-21 | Amended: 2026-02-27 (mood-tracking archived) | Amended: 2026-03-16 (unified sidebar, Dashboard hub, route restructure) | Amended: 2026-05-06 (current route/layout/migration reality + SOP v2.4 note) | Amended: 2026-05-27 (MVP/post-MVP route and module status alignment) | Self-reviewed: 2026-03-16 | Second-pass reviewed: 2026-03-16 (P0: 0, P1: 0 after fixes)
+> Status: APPROVED — 2026-02-21 | Amended: 2026-02-27 (mood-tracking archived) | Amended: 2026-03-16 (unified sidebar, Dashboard hub, route restructure) | Amended: 2026-05-06 (current route/layout/migration reality + SOP v2.4 note) | Amended: 2026-05-27 (MVP/post-MVP route and module status alignment) | Amended: 2026-06-10 (Chat RAG answer-time context boundary) | Self-reviewed: 2026-03-16 | Second-pass reviewed: 2026-03-16 (P0: 0, P1: 0 after fixes)
 > Created: 2026-02-21
 > Context: Phase 1 Layer 1 of Agent Development SOP
 > Scope: Canonical Layer 1 architecture for the web app. All module specs must follow this document unless it is explicitly amended.
@@ -28,6 +28,7 @@ This document was re-checked against:
 - Keep Membership/Billing as a required post-MVP business module. It is not implemented in the MVP.
 - Do not introduce a Feedback Ticket/Admin workflow for MVP; Contact Us remains the support path.
 - Chat file/image upload UI may remain as a coming-soon affordance, but file, image, and report interpretation are not active MVP capabilities.
+- Chat RAG answer quality may use server-side Supabase context rows for same-topic answer-time paper grounding. This is not a Paper Topics feature and must not expose a public paper browser, bulk abstracts, or a standalone research search surface.
 
 ### Current Implementation Notes
 
@@ -52,11 +53,13 @@ This document was re-checked against:
 - Browser reads use the public Supabase client with the anon key
 - Sensitive writes and privileged reads go through API routes with `getServerSession()` plus `getSupabaseAdmin()`
 - All user-owned tables still require RLS, even if the first implementation uses server-side admin access
+- Server-side RAG context rows, if added, are internal answer-time support data. They must be scoped to the owning conversation/user or guest session, protected by RLS plus API ownership checks, and excluded from public paper browsing APIs.
 
 ### Storage boundary
 
 - Persistent uploads should use Supabase Storage
 - Vercel filesystem is treated as ephemeral and must not be used for durable app data
+- Vercel function memory must not be used as the durable source for chat/RAG session context. Use Supabase for any reusable answer-time RAG context that must survive a request boundary.
 
 ### API response convention
 
