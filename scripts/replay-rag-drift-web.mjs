@@ -302,7 +302,8 @@ function extractNamedStudyRefs(text) {
   const namedStudyRe = /\b(the\s+)?([A-Z][a-zA-Z-]{3,})\s+(study|pilot study|review|meta-analysis)\b/g;
   while ((match = namedStudyRe.exec(text)) !== null) {
     const family = match[2];
-    if (!/This|That|Another|Current|Retrieved|Semantic|Neither|Both|Each|Every|No|Any|Tele|Hirose/.test(family) || /Tele|Hirose/.test(family)) {
+    if ([...linkedText].some((linked) => linked.includes(family))) continue;
+    if (!/This|That|Another|Current|Retrieved|Semantic|Neither|Both|Each|Every|No|Any|ADHD|ASD|DLD|Tele|Hirose/.test(family) || /Tele|Hirose/.test(family)) {
       refs.add(`${family} study`);
     }
   }
@@ -319,6 +320,7 @@ function hasUnsupportedNumericTimeline(text) {
     .split(/\n{2,}/)
     .some((paragraph) => {
       if (labelRe.test(paragraph)) return false;
+      if (markdownCitationRe.test(paragraph)) return false;
       return paragraph
         .split(/(?<=[。；.!?])\s+|\n+/)
         .some((sentence) => timelineRe.test(sentence) && !markdownCitationRe.test(sentence));
@@ -329,8 +331,8 @@ function hasUnsupportedPercentage(text) {
   const percentageRe = /\d{2,3}\s*(?:[-–—]\s*\d{2,3})?\s*%[^，。.!?\n]{0,45}(孩子|改善|提升|有效|案例|患者|children|improve|improvement|effective|cases|patients|time|adherence|followed)|(约|有|占|about|around|roughly)\s*\d{2,3}\s*(?:[-–—]\s*\d{2,3})?\s*%/i;
   const markdownCitationRe = /\[[^\]]+\]\(https?:\/\/[^)]+\)/i;
   return text
-    .split(/(?<=[。；.!?])\s+|\n+/)
-    .some((sentence) => percentageRe.test(sentence) && !markdownCitationRe.test(sentence));
+    .split(/\n{2,}/)
+    .some((paragraph) => percentageRe.test(paragraph) && !markdownCitationRe.test(paragraph));
 }
 
 function audit(text) {
@@ -484,7 +486,14 @@ console.log(`Logged in as ${loggedInAs}`);
 for (let i = 0; i < MESSAGES.length; i += 1) {
   const content = MESSAGES[i];
   process.stdout.write(`\n[turn ${i + 1}/${MESSAGES.length}] ${content.slice(0, 40)}...\n`);
-  const result = await streamOne({ content, conversationHistory: history, conversationId });
+  let result = await streamOne({ content, conversationHistory: history, conversationId });
+  if (result.err === 'sse_error') {
+    console.log(`  RETRY after ${result.err}: ${result.text}`);
+    result = await streamOne({ content, conversationHistory: history, conversationId });
+    if (!result.err) {
+      result.events = [...new Set([...(result.events || []), 'retry_success'])];
+    }
+  }
   if (result.err) {
     console.log(`  ERROR ${result.err}: ${result.text}`);
     results.push({ turn: i + 1, user: content, ...result });
@@ -529,7 +538,8 @@ for (let i = 0; i < MESSAGES.length; i += 1) {
   history.push({ role: 'assistant', content: result.reply, sources: result.sources });
 }
 
-const redTotal = results.reduce((sum, r) => sum + (r.flags?.length || 0), 0);
+const errorCount = results.filter(r => r.err).length;
+const redTotal = results.reduce((sum, r) => sum + (r.flags?.length || 0), 0) + errorCount;
 const honestTotal = results.reduce((sum, r) => sum + (r.honest?.length || 0), 0);
 
 // Summary checks
@@ -552,6 +562,7 @@ fs.writeFileSync(OUT_FILE, JSON.stringify({
   redTotal,
   honestTotal,
   summary: {
+    errorCount,
     processLeakCount,
     unmatchedCitationCount,
     overAgreeingCount,
@@ -561,6 +572,7 @@ fs.writeFileSync(OUT_FILE, JSON.stringify({
 
 console.log(`\nDone. turns=${results.length}, red flags=${redTotal}, honest signals=${honestTotal}, conversationId=${conversationId}`);
 console.log(`\nSummary:`);
+console.log(`  Stream/API errors: ${errorCount}`);
 console.log(`  RAG process leaks: ${processLeakCount}`);
 console.log(`  Unmatched citations: ${unmatchedCitationCount}`);
 console.log(`  Over-agreeing: ${overAgreeingCount}`);

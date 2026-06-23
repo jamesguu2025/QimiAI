@@ -163,7 +163,7 @@ export function linkMatchedPlainAuthorYearRefs(text: string, sources: ChatSource
   return splitMarkdownLinks(text).map((part) => {
     if (part.linked) return part.text;
 
-    return part.text.replace(
+    let linked = part.text.replace(
       /\b([A-Z][a-zA-Z-]{3,})(\s+(?:et\s+al\.?|and\s+[A-Z][a-zA-Z-]{3,}|&\s+[A-Z][a-zA-Z-]{3,}))?[,\s]*(?:\(|,)?\s*(20\d{2}|19\d{2})\)?/g,
       (match, familyName, collaborators, year) => {
         const key = `${familyName.replace(/[^a-z-]/gi, '').toLowerCase()}:${year}`;
@@ -174,6 +174,19 @@ export function linkMatchedPlainAuthorYearRefs(text: string, sources: ChatSource
         return `[${label}](${matches[0].url})`;
       }
     );
+
+    linked = linked.replace(
+      /\b(20\d{2}|19\d{2})\s+(study|pilot study|review|meta-analysis)\s+by\s*([A-Z][a-zA-Z-]{3,})/g,
+      (match, year, studyType, familyName) => {
+        const key = `${familyName.replace(/[^a-z-]/gi, '').toLowerCase()}:${year}`;
+        const matches = sourceByKey.get(key) || [];
+        if (matches.length !== 1) return match;
+
+        return `${year} ${studyType} by [${familyName} et al. (${year})](${matches[0].url})`;
+      }
+    );
+
+    return linked;
   }).join('');
 }
 
@@ -218,17 +231,30 @@ export function createNamedStudyRefFilter(sources: ChatSource[]): NamedStudyRefF
   return { buffer: '', sources };
 }
 
+function findNamedStudyFilterBoundary(buffer: string): number {
+  const newline = buffer.lastIndexOf('\n');
+  if (newline !== -1) return newline;
+
+  const boundaryRe = /[.!?]\s/g;
+  let match: RegExpExecArray | null;
+  let boundary = -1;
+
+  while ((match = boundaryRe.exec(buffer)) !== null) {
+    const candidate = match.index;
+    const prefix = buffer.slice(0, candidate + 1);
+    if (/\bet\s+al\.$/i.test(prefix)) continue;
+    boundary = candidate;
+  }
+
+  return boundary;
+}
+
 export function feedNamedStudyRefFilter(
   state: NamedStudyRefFilterState,
   chunk: string,
 ): string {
   state.buffer += chunk;
-  const boundary = Math.max(
-    state.buffer.lastIndexOf('. '),
-    state.buffer.lastIndexOf('! '),
-    state.buffer.lastIndexOf('? '),
-    state.buffer.lastIndexOf('\n'),
-  );
+  const boundary = findNamedStudyFilterBoundary(state.buffer);
 
   if (boundary === -1 && state.buffer.length < 1200) return '';
 
