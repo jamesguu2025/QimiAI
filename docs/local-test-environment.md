@@ -42,6 +42,38 @@ Prerequisites:
 - Node 20+
 - Project dependencies installed with `npm install --legacy-peer-deps`
 
+## Parallel Local Projects
+
+Qimi keeps the default local Supabase ports:
+
+```text
+Qimi app: http://localhost:4000
+Qimi Supabase API: http://127.0.0.1:54321
+Qimi DB: postgresql://postgres:postgres@127.0.0.1:54322/postgres
+Qimi Studio: http://127.0.0.1:54323
+Qimi Inbucket: http://127.0.0.1:54324
+Qimi analytics: 54327
+```
+
+The separate social media account manager project at:
+
+```text
+/Users/jamesguu/Library/CloudStorage/OneDrive-个人/work/Million Dollar Business/social media account manager
+```
+
+uses a separate local Supabase port group so both projects can run at the same time:
+
+```text
+Social app: http://localhost:3000
+Social Supabase API: http://127.0.0.1:55321
+Social DB: postgresql://postgres:postgres@127.0.0.1:55322/postgres
+Social Studio: http://127.0.0.1:55323
+Social Mailpit: http://127.0.0.1:55324
+Social analytics: 55327
+```
+
+Do not move Qimi to the social project's `553xx` ports, and do not move the social project back to Qimi's `543xx` ports. If both stacks are running, `docker ps` should show both `supabase_*_qimi-ai-website` and `supabase_*_lazibuzz-local` containers with different host ports.
+
 Start local Supabase:
 
 ```bash

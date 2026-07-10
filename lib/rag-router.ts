@@ -336,8 +336,8 @@ function deterministicFallback(
   userMessage: string,
   cachedContext?: CachedRagContext,
 ): RagRouteDecision {
-  const evidencePatterns = /\b(effectiveness|safe|safety|evidence|frequency|schedule|supplement|nutrition|medication|exercise|sensory|training|comparison|dosage|dose|rate|improvement|outcome|intervention|therapy|treatment|benefit|side.?effect|risk|study|research|clinical|trial|randomized|meta.?analysis|systematic.?review)\b/i;
-  const cnEvidencePatterns = /(效果|安全|证据|频率|剂量|补充|营养|药物|运动|感觉统合|训练|对比|改善|干预|治疗|副作用|风险|研究|临床|试验)/;
+  const evidencePatterns = /\b(effectiveness|safe|safety|evidence|frequency|schedule|supplement|nutrition|medication|exercises?|sensory|training|comparison|dosage|dose|rate|improvement|outcome|intervention|therapy|treatment|benefit|side.?effect|risk|study|research|clinical|trial|randomized|meta.?analysis|systematic.?review|developmental?|motor|physical|language|speech|posture|gait|balance|coordination|flatfoot|flat.?feet|arch|arches|collapsed|regression|fallback|primitive reflex|reflex integration|vestibular|proprioception|orthopedic|physiotherapy|physical therapy|occupational therapy)\b/i;
+  const cnEvidencePatterns = /(效果|安全|证据|频率|剂量|补充|营养|药物|运动|感觉统合|训练|对比|改善|干预|治疗|副作用|风险|研究|临床|试验|发育|运动发育|语言发育|姿势|步态|平衡|协调|足弓|扁平足|塌陷|退步|倒退|原始反射|反射整合|前庭|本体觉|骨科|物理治疗|作业治疗)/;
 
   const isEvidenceSensitive = evidencePatterns.test(userMessage) || cnEvidencePatterns.test(userMessage);
 
