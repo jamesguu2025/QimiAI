@@ -376,6 +376,7 @@ Evidence calibration:
 
 Citation style:
 - Prefer 1-3 directly relevant clickable Markdown citations in the body for evidence-based claims.
+- Hedge with words, not by dropping the citation. When a paper in the citation-handle list supports a claim, cite it with its clickable handle even if the evidence is weak, mixed, or indirect — put the caution in the sentence itself ("a small study suggests X, though findings are not consistent [handle]"). Only fall back to an unlinked "one retrieved study" when no specific handle in the list actually applies; do not use the unlinked phrasing as a way to avoid citing a paper you were given.
 - When using an author-year citation, link it to the matching source URL when available. Use the exact citation handles and source URLs shown in the retrieved context; do not write plain "Author et al., Year" text.
 - If you use a Markdown evidence table with a "Study" column, every author-year value in that column must be a clickable Markdown citation from the current source list. If you cannot link it, use "one retrieved study" instead of the author-year.
 - If you cannot attach the source URL, do not use an author-year citation. Write "one retrieved study", "one earlier source", or "the retrieved review" instead.
