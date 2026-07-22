@@ -1,10 +1,10 @@
 # Module Spec: Chat RAG Answer Quality
 
-> Status: PLANNED - MVP launch hardening P0, created 2026-06-10
+> Status: IMPLEMENTED, NOT YET HUMAN-ACCEPTED - MVP launch hardening P0, created 2026-06-10, refreshed 2026-07-22
 > Module: shared-chat / RAG answer quality
 > Routes: `/chat`, `pages/api/chat/stream.ts`
-> Implementation status: Planned; this document is the implementation baseline for the next repair slice
-> SOP status: Planned with Search Ledger, ADR-lite, AQS self-review, and explicit acceptance gates.
+> Implementation status: Core hardening is implemented. PICO-aware directness scoring and evidence-status wording were added on 2026-07-22 after the `Big Toe Arch Support` audit; human replay remains open.
+> SOP status: Technical checks and focused automated regression are recorded; final human acceptance remains required.
 
 ---
 
@@ -78,6 +78,10 @@ Accessed: 2026-06-10.
 | SL-RAG-4 | `Supabase Row Level Security policies documentation` | Supabase docs, "Row Level Security" - https://supabase.com/docs/guides/database/postgres/row-level-security | Found | Tables in exposed schemas should use RLS for granular data security. | Does not replace Qimi's server-side ownership checks. |
 | SL-RAG-5 | `Vercel Functions lifecycle invocation scale down zero` | Vercel docs, "Vercel Functions" - https://vercel.com/docs/functions | Found | Functions run per invocation, may reuse instances, and scale down to zero; durable chat context should not rely on process memory. | Does not prohibit using an external cache, but supports avoiding in-memory cache. |
 | SL-RAG-6 | `OWASP LLM01 prompt injection RAG output filtering` | OWASP GenAI Security Project, "LLM01:2025 Prompt Injection" - https://genai.owasp.org/llmrisk/llm01-prompt-injection/ | Found | RAG apps can be affected by malicious retrieved content; mitigations include input/output filtering, separating untrusted content, and adversarial testing. | Does not certify any single regex filter as complete protection. |
+| SL-RAG-7 | `retrieve rerank cross encoder official documentation` | Sentence Transformers, "Retrieve & Re-Rank" - https://www.sbert.net/examples/sentence_transformer/applications/retrieve_rerank/README.html | Found | A two-stage retrieve-then-rerank pipeline is a mature pattern; the more precise scorer is applied only to the retrieved candidate set. | Does not validate an LLM judge as a clinical fidelity verifier. |
+| SL-RAG-8 | `Cochrane directness PICO population intervention outcome` | Cochrane Handbook, Chapters 3 and 15 - https://www.cochrane.org/authors/handbooks-and-manuals/handbook/current/chapter-03 | Found | Evidence applicability depends on the population, intervention/exposure, comparator, and outcomes; indirectness must be considered rather than inferred from broad topical similarity. | Does not define Qimi's 0-3 relevance thresholds. |
+| SL-RAG-9 | `DeepSeek JSON Output response_format json_object` | DeepSeek API Docs, "JSON Output" - https://api-docs.deepseek.com/guides/json_mode/ | Found | DeepSeek supports structured JSON output when `response_format` is `json_object` and the prompt explicitly requests JSON. | Structured syntax does not guarantee clinically correct classification. |
+| SL-RAG-10 | `AAOS flexible flatfoot children tiptoe arch treatment` | AAOS OrthoInfo, "Flexible Flatfoot in Children" - https://orthoinfo.aaos.org/en/diseases--conditions/flexible-flatfoot-in-children | Found | An arch that appears seated or on tiptoe is consistent with flexible flatfoot; most children outgrow the pattern, some never develop arches, and painless cases commonly need no treatment. | Does not predict one child's outcome or establish that isolated big-toe exercise repairs an arch. |
 
 ### Evidence Layering
 
@@ -101,6 +105,8 @@ Accessed: 2026-06-10.
 | ADR-RAG-4 | Reconcile displayed sources with the papers injected or cited in the answer. | Normal | SL-RAG-1 | `RAGSources` currently says "Based on N" from returned sources. | The UI should not overstate the evidence base or show unrelated retrieval noise as support. | Automatic URL matching cannot prove every claim is grounded. | Accepted for plan | Add URL/PMID/DOI consistency checks in replay. |
 | ADR-RAG-5 | Add RAG-process output filtering in addition to DSML filtering. | Normal | SL-RAG-6 | Current filter focuses on DSML, not "I am calling/searching" text. | User-visible answers should not expose tool chatter, query JSON, or internal process. | Regex filters are incomplete against arbitrary leakage. | Accepted for plan | Add regression cases for known leakage patterns. |
 | ADR-RAG-6 | Strengthen the Web prompt with anti-sycophancy and exact-number-source rules. | High | SL-RAG-6 | Mini-program prompt already contains stronger guardrail-over-agreement language. | The assistant should correct unsafe/unsupported assumptions rather than please the parent. | Prompt rules alone do not guarantee behavior. | Accepted for plan | Replay must include over-agreeing checks. |
+| ADR-RAG-7 | Replace binary topical keep/drop with one PICO-aware 0-3 relevance/directness result inside the existing rerank call. | High | SL-RAG-7, SL-RAG-8, SL-RAG-9 | The audited big-toe answer promoted a cerebral-palsy foot-stretching pilot as the leading answer source. | Adjacent evidence may remain visible as supporting context but cannot become direct evidence for a named intervention. | The LLM judge can still misclassify; parsing therefore fails open while directness fails cautious. | Implemented, pending human acceptance | Focused script plus exact-prompt replay. |
+| ADR-RAG-8 | Carry `direct`, `indirect_only`, `none_found`, or `retrieval_failed` into final-answer instructions. | High | SL-RAG-8 | The audited answer changed retrieval absence into the universal claim "there's no direct research evidence" and ranked a general program without comparative evidence. | Answer wording must distinguish this retrieval result from the global literature and prohibit unsupported intervention rankings. | This is a generation constraint, not a deterministic claim verifier. | Implemented, pending human acceptance | Exact-prompt replay must use retrieval-bounded wording. |
 
 ---
 
@@ -637,3 +643,35 @@ This slice is done only when all are true:
 - Same-topic follow-up can use cached full abstracts without repeating RAG.
 - No RAG/tool-process chatter appears in streamed or saved output.
 - Report upload guidance remains present as a coming-soon/product-forward affordance, not as active report interpretation.
+
+---
+
+## 11. 2026-07-22 Big-Toe Evidence Audit
+
+Audit case: `Can exercising my son's big toe make his collapsed arch better?`
+
+Observed retrieval returned pediatric foot-arch background papers and one small cerebral-palsy foot-intrinsic-muscle stretching pilot, but no paper that directly tested isolated big-toe exercise for a nine-year-old child's collapsed arch. The generated answer was directionally cautious, but it still had three fidelity defects:
+
+1. It used an adjacent intervention and different population as the leading research example.
+2. It said there was no direct research evidence instead of limiting the claim to the current retrieval.
+3. It ranked a general strengthening program above one isolated movement without a retrieved comparative study.
+
+Implemented acceptance rules:
+
+- Named-intervention questions must be classified as intervention questions, including common English forms such as `exercise` and `exercising`.
+- A retrieved paper is primary evidence for a named intervention only when the relevance judge assigns score 3 and `intervention_match=exact`.
+- Score-2 adjacent evidence may remain supporting context but must be labeled indirect.
+- Judge failure keeps papers available but does not silently promote unknown directness to primary evidence.
+- Final answer wording must say `I did not find direct evidence in the retrieved sources` when status is `indirect_only`; it must not imply that the global literature was exhausted.
+- Comparative effectiveness claims require a retrieved comparative study.
+- When only indirect evidence is available, the answer must not convert uncertainty into `likely/unlikely` or `will/will not` efficacy conclusions.
+- For possible pediatric flexible flatfoot, it is accurate to say most children outgrow the pattern while some never develop an arch; do not turn this population-level guidance into an individual promise.
+- The replay harness must flag indirect-evidence answers that still use likely/unlikely efficacy conclusions or convert retrieval absence into a global claim that no study exists.
+- The replay harness must treat efficacy synonyms such as `correct`, `restore`, and `rebuild` the same as `fix`, and flag unsupported assumptions that a child is typically developing or otherwise healthy.
+
+Technical acceptance record:
+
+- `npm run test:rag-evidence`: PASS (question classification, structured parsing, legacy parser compatibility, fail-open behavior, exact-vs-adjacent grouping).
+- `npx tsc --noEmit`: PASS.
+- `npm run build`: required before human replay acceptance.
+- Human acceptance: OPEN; rerun the same English prompt in a new conversation and review directness, source choice, and practical guidance.

@@ -1,6 +1,6 @@
 # Project Control — Qimi Web
 
-> Created: 2026-03-15 | Amended: 2026-03-16 (route restructure, module rename, execution order update) | Amended: 2026-05-06 (SOP v2.4 + local Supabase acceptance + current code reality) | Amended: 2026-05-20 (Growth Plan accepted, Crisis Calm archived, Report Analysis moved to dedicated post-MVP planning) | Amended: 2026-05-27 (MVP scope/document alignment) | Amended: 2026-06-10 (Chat RAG Answer Quality launch hardening)
+> Created: 2026-03-15 | Amended: 2026-03-16 (route restructure, module rename, execution order update) | Amended: 2026-05-06 (SOP v2.4 + local Supabase acceptance + current code reality) | Amended: 2026-05-20 (Growth Plan accepted, Crisis Calm archived, Report Analysis moved to dedicated post-MVP planning) | Amended: 2026-05-27 (MVP scope/document alignment) | Amended: 2026-06-10 (Chat RAG Answer Quality launch hardening) | Amended: 2026-07-22 (PICO-aware RAG directness hardening)
 > Purpose: Freeze the execution order, document priority, branch acceptance policy, and current implementation/acceptance baseline so future work does not drift.
 > Status: ACTIVE
 
@@ -117,7 +117,7 @@ Use these labels only:
 Current baseline:
 
 - Chat infrastructure: `Implemented` and human-accepted in current working branch
-- Chat RAG Answer Quality: `Planned` as MVP launch hardening P0 (same-topic RAG context reuse, citation/source consistency, prompt anti-sycophancy, and RAG process-leak filtering; spec: `docs/specs/chat-rag-answer-quality.md`)
+- Chat RAG Answer Quality: `Implemented, not yet human-accepted` as MVP launch hardening P0 (same-topic context reuse, source consistency, process-leak filtering, PICO-aware directness scoring, and retrieval-bounded evidence wording; spec: `docs/specs/chat-rag-answer-quality.md`)
 - Follow-up reminder module: `Partially implemented`
 - AppLayout → SmartDrawer unification: `Implemented` (code reality: `components/Layout/AppLayout.tsx:5-54` imports and renders SmartDrawer)
 - Dashboard (feature hub): `Implemented` and human-accepted in current working branch
@@ -150,6 +150,7 @@ The project must move forward in this order unless the user explicitly overrides
 > Amended 2026-05-20: Growth Plan, memory/profile learning, onboarding, analytics MVP, compliance copy, and Dashboard entry behavior have been implemented on the current baseline. Crisis Calm is archived. Report Analysis remains a separate P1/post-MVP candidate.
 > Amended 2026-05-27: Report Analysis spec was refreshed with SOP v2.4 evidence, Search Ledger, ADR-lite, post-MVP minimum scope, upload/privacy/security boundaries, and Growth Plan handoff rules. Implementation still requires a dedicated branch and normal technical/functional/human acceptance gates.
 > Amended 2026-06-10: Added Chat RAG Answer Quality as MVP launch hardening P0. This is shared chat infrastructure stabilization, not a new product module. See `docs/specs/chat-rag-answer-quality.md`.
+> Amended 2026-07-22: Recorded PICO-aware directness scoring and structured evidence status as implemented. The same-prompt English human replay remains the acceptance gate.
 
 1. Stabilize and freeze shared chat infrastructure
 2. Finish only the minimum follow-up reminder closure needed to keep the current branch coherent

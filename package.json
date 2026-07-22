@@ -12,6 +12,7 @@
     "supabase:stop": "supabase stop",
     "supabase:reset": "supabase db reset",
     "verify:mvp-cleanup": "node scripts/verify-mvp-cleanup.mjs",
+    "test:rag-evidence": "node --experimental-strip-types scripts/validate-rag-evidence-web.mjs",
     "build": "next build",
     "start": "next start -p 4000"
   },

@@ -8,6 +8,7 @@ import { buildSystemMessage, UserProfile } from '../../../lib/prompts';
 import {
   buildRagCitationRule,
   executeRAGWithSmartSummary,
+  type RAGEvidenceStatus,
 } from '../../../services/rag-service';
 import { getSupabaseAdmin } from '../../../lib/supabase';
 import { isTopicFolder, normalizeTopicFolder, TopicFolder } from '../../../types/chat';
@@ -372,9 +373,36 @@ async function countUserMessagesToday(supabase: ReturnType<typeof getSupabaseAdm
   return count || 0;
 }
 
-function buildRagAnswerInstruction(sourceCount: number): string {
+function buildEvidenceStatusInstruction(evidenceStatus?: RAGEvidenceStatus): string {
+  if (evidenceStatus === 'indirect_only') {
+    return `Evidence status: INDIRECT ONLY for the user's exact question.
+- Say "I did not find direct evidence in the retrieved sources for this exact question," not "there is no research evidence."
+- Do not follow that retrieval-bounded sentence with a global claim such as "there is no study that tested this" or "no research exists." The retrieval result cannot prove absence from the full literature.
+- You may use adjacent studies as explicitly labeled background, but do not imply they tested the named intervention, population, or outcome.
+- Do not conclude that the named intervention is likely or unlikely to work, help, improve, correct, fix, rebuild, or change the condition when only indirect evidence was retrieved. Say its effect is not established for this exact situation.
+- Do not claim or imply that one intervention is more effective than another unless a retrieved comparative study directly supports that ranking.`;
+  }
+  if (evidenceStatus === 'none_found') {
+    return `Evidence status: NO RELEVANT SOURCE FOUND in this retrieval.
+- Answer with clearly labeled general knowledge or practical guidance.
+- Do not name studies or imply that the search proves no research exists.`;
+  }
+  if (evidenceStatus === 'retrieval_failed') {
+    return `Evidence status: RETRIEVAL FAILED.
+- Do not imply that research was reviewed or that no research exists.
+- Use clearly labeled general knowledge and recommend appropriate professional assessment for safety-sensitive questions.`;
+  }
+  if (evidenceStatus === 'direct') {
+    return 'Evidence status: at least one retrieved paper directly matches the core question. Keep each claim tied to the paper that actually supports it.';
+  }
+  return '';
+}
+
+function buildRagAnswerInstruction(sourceCount: number, evidenceStatus?: RAGEvidenceStatus): string {
   const paperLabel = sourceCount === 1 ? 'paper' : 'papers';
   return `${buildRagCitationRule(sourceCount)}
+
+${buildEvidenceStatusInstruction(evidenceStatus)}
 
 Use the retrieved research as the backbone for this answer, not as optional decoration.
 
@@ -386,6 +414,7 @@ How to answer:
 - Include 1-3 clickable Markdown citations in the body when making evidence-based claims, using the source links provided above.
 - Only cite URLs, PMIDs, DOIs, named studies, author-year references, or study durations from the current research source list provided for this answer. Do not cite or name studies that appear only in earlier chat history or memory context.
 - If "Citation handles to copy exactly" are provided above, use those handles verbatim for author-year citations.
+- A citation handle already includes "et al." when appropriate. Never append another "et al." after a Markdown citation handle.
 - If you mention an author-year citation such as "Capodieci et al. (2017)", it must be a Markdown link using the matching source URL, e.g. "[Capodieci et al. (2017)](https://...)". Never leave author-year citations as plain text when the source URL is available.
 - If you use a Markdown evidence table with a "Study" column, every author-year value in that column must be a clickable Markdown citation from the current source list. If you cannot link it, use "one retrieved study" instead of the author-year.
 - For English answers, prefer "one retrieved study", "a small pilot study", or "the retrieved review" over plain author-year names unless you can make the study name a clickable Markdown citation from the current source list.
@@ -405,14 +434,19 @@ How to answer:
 - For child-specific or family-education cases involving behavior, learning, discipline, motivation, homework, routines, emotion, sleep, social relationships, school fit, language, attention, sensory/motor patterns, development, regression, asymmetry, primitive reflexes, sensory integration, or unclear cause, use layered formulation before planning: give a bounded first read, name the possible layers, ask the 1-2 most diagnostic missing questions, and avoid a full plan until the likely bottleneck is clearer.
 - Do not reduce a complex child/family presentation to one surface label such as motivation, behavior, attention, bad habits, parenting style, sensory seeking, primitive reflexes, anxiety, or weak muscles. Separate what the observation supports from what still needs assessment.
 - For collapsed arches that appear seated but collapse standing, do not conclude "bones and ligaments are normal" from text alone. Say it may fit a flexible arch pattern and ask whether the arch appears on tiptoe plus whether there is pain, limping, tight calves/heel cords, frequent falls, or broader one-sided weakness.
+- For possible pediatric flexible flatfoot, it is acceptable to state the AAOS general guidance that most children outgrow the pattern, while some never develop a visible arch. Do not promise an individual outcome, and do not reframe an arch-function question as whether an exercise changes bone structure.
 - During information gathering, do not output a Growth Plan-ready action table just because papers were retrieved. First clarify the failure point and what the parent has already tried.
 - If the plan readiness gate is met and you include saveable guidance, format a compact Growth Plan-ready block with: Goal, Try this for, action table when there are multiple steps, Watch for, and Why this may help. This block should be self-contained enough to save.
 - Use a Markdown table for multiple actions, stages, repeated timing/frequency fields, school/home comparisons, or weekly schedules.
 - For a single strategy, keep When, How often, and How long on separate lines.`;
 }
 
-function buildFinalAnswerGuard(sourceCount: number): string {
+function buildFinalAnswerGuard(sourceCount: number, evidenceStatus?: RAGEvidenceStatus): string {
+  const finalEvidencePreflight = evidenceStatus === 'indirect_only'
+    ? `Before sending, rewrite any sentence saying the named intervention is "likely/unlikely" to work, help, improve, correct, fix, rebuild, or change the condition. The compliant conclusion is: "Its effect is not established for this exact situation."`
+    : '';
   return `Final answer guard:
+${buildEvidenceStatusInstruction(evidenceStatus)}
 - Reply in the same language as the user's current message. If the user writes in Chinese, reply in Chinese.
 - Do not use exact percentages, sample sizes, effect sizes, dosage-like quantities, named thresholds, checklist cutoffs, timelines, claimed improvement rates, or numeric metaphors unless they are stated in retrieved research, visible source context, or the user's own message.
 - If no source is available for a number, use qualitative wording instead, such as "some families", "many therapists report", "this varies", or "a short trial".
@@ -438,6 +472,10 @@ function buildFinalAnswerGuard(sourceCount: number): string {
 - For child-specific or family-education cases involving behavior, learning, discipline, motivation, homework, routines, emotion, sleep, social relationships, school fit, language, attention, sensory/motor patterns, development, regression, asymmetry, primitive reflexes, sensory integration, or unclear cause, use layered formulation before planning: give a bounded first read, name the possible layers, ask the 1-2 most diagnostic missing questions, and avoid a full plan until the likely bottleneck is clearer.
 - Do not reduce a complex child/family presentation to one surface label such as motivation, behavior, attention, bad habits, parenting style, sensory seeking, primitive reflexes, anxiety, or weak muscles. Separate what the observation supports from what still needs assessment.
 - For collapsed arches that appear seated but collapse standing, do not conclude "bones and ligaments are normal" from text alone. Say it may fit a flexible arch pattern and ask whether the arch appears on tiptoe plus whether there is pain, limping, tight calves/heel cords, frequent falls, or broader one-sided weakness.
+- For possible pediatric flexible flatfoot, do not diagnose normal bones or ligaments from text. You may say most children outgrow the pattern, while some never develop a visible arch; do not predict this child's individual outcome. Painless flexible flatfoot often needs no treatment, while symptoms and examination determine whether intervention is appropriate.
+- Do not call the child "typically developing", "otherwise healthy", or "without a diagnosed condition" unless current profile/history explicitly establishes that. Compare an indirect study to "a child without that study condition" instead.
+- Do not assert that ligament laxity, muscle weakness, or one mechanical factor is the cause of this child's arch pattern from text alone. Present these only as possibilities that examination can distinguish.
+${finalEvidencePreflight}
 - Current research source count for this answer: ${sourceCount}.`;
 }
 
@@ -990,6 +1028,7 @@ async function streamChatWithRAG(
   let fullResponse = '';
   let collectedSources: ChatSource[] = [...acc.sources];
   let ragContextSaved = false;
+  let ragEvidenceStatus: RAGEvidenceStatus | undefined;
 
   try {
     // If forceRAG is enabled and ENABLE_RAG is true, make direct RAG call first
@@ -1008,6 +1047,7 @@ async function streamChatWithRAG(
         );
 
         console.log(`[chat/stream] Force RAG: Using ${ragResult.summaryMode} mode`);
+        ragEvidenceStatus = ragResult.evidenceStatus;
 
         if (ragResult.sources.length > 0) {
           console.log(`[chat/stream] Force RAG: Sending ${ragResult.sources.length} paper sources to frontend`);
@@ -1017,7 +1057,7 @@ async function streamChatWithRAG(
 
         messages.push({
           role: 'system',
-          content: `Research papers found for the user's question:\n\n${ragResult.formattedText}\n\n${buildRagAnswerInstruction(ragResult.sources.length)}`
+          content: `Research papers found for the user's question:\n\n${ragResult.formattedText}\n\n${buildRagAnswerInstruction(ragResult.sources.length, ragResult.evidenceStatus)}`
         });
 
         // Save fresh RAG context for same-topic reuse
@@ -1062,6 +1102,7 @@ async function streamChatWithRAG(
         );
       } catch (error) {
         console.error('[chat/stream] Force RAG search failed:', error);
+        ragEvidenceStatus = 'retrieval_failed';
       }
     }
 
@@ -1103,6 +1144,7 @@ async function streamChatWithRAG(
           );
 
           console.log(`[chat/stream] Router RAG: Using ${ragResult.summaryMode} mode`);
+          ragEvidenceStatus = ragResult.evidenceStatus;
 
           if (ragResult.sources.length > 0) {
             console.log(`[chat/stream] Router RAG: Sending ${ragResult.sources.length} paper sources to frontend`);
@@ -1113,7 +1155,7 @@ async function streamChatWithRAG(
 
           messages.push({
             role: 'system',
-            content: `Research papers found for the user's question:\n\n${ragResult.formattedText}\n\n${buildRagAnswerInstruction(ragResult.sources.length)}`,
+            content: `Research papers found for the user's question:\n\n${ragResult.formattedText}\n\n${buildRagAnswerInstruction(ragResult.sources.length, ragResult.evidenceStatus)}`,
           });
 
           // Save fresh RAG context
@@ -1155,6 +1197,7 @@ async function streamChatWithRAG(
           writeStatus(res, `Found ${ragResult.sources.length} research ${paperLabel}. Synthesizing answer...`);
         } catch (error) {
           console.error('[chat/stream] Router RAG search failed:', error);
+          ragEvidenceStatus = 'retrieval_failed';
           messages.push({
             role: 'system',
             content: `Research retrieval was attempted but failed. Answer from your general knowledge.
@@ -1203,7 +1246,7 @@ Anti-drift requirements:
     // Streaming answer pass. RAG, when needed, has already been injected above.
     messages.push({
       role: 'system',
-      content: buildFinalAnswerGuard(collectedSources.length),
+      content: buildFinalAnswerGuard(collectedSources.length, ragEvidenceStatus),
     });
 
     const MAX_TOOL_ROUNDS = 1;
@@ -1288,6 +1331,7 @@ Anti-drift requirements:
             const toolResult = await executeRAGWithSmartSummary(
               args.query || '', userQuestion, args.top_k || 10
             );
+            ragEvidenceStatus = toolResult.evidenceStatus;
             console.log(`[chat/stream] Tool result using ${toolResult.summaryMode} mode`);
             messages.push({ role: 'tool', tool_call_id: toolCall.id, content: toolResult.formattedText });
             roundSources.push(...toolResult.sources);
@@ -1327,7 +1371,7 @@ Anti-drift requirements:
       // Inject explicit instruction so the model doesn't try to emit DSML tool-calls anyway
       messages.push({
         role: 'system',
-        content: `You have all the research findings you need above. Write your final answer to the user now based on these findings. Do NOT request additional searches or emit any tool-call markup.\n\n${buildRagAnswerInstruction(collectedSources.length)}`,
+        content: `You have all the research findings you need above. Write your final answer to the user now based on these findings. Do NOT request additional searches or emit any tool-call markup.\n\n${buildRagAnswerInstruction(collectedSources.length, ragEvidenceStatus)}`,
       });
 
       const synthResponse = await fetch(`${DEEPSEEK_API_BASE}/chat/completions`, {

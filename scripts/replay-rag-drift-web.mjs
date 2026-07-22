@@ -337,6 +337,16 @@ function hasUnsupportedPercentage(text) {
 
 function audit(text) {
   const flags = [];
+  const reportsIndirectOnly = /did(?: not|n't) find direct evidence in the retrieved|retrieved sources? (?:are|is) indirect|indirect evidence/i.test(text);
+  if (reportsIndirectOnly && /\b(?:unlikely|likely) to (?:fix|improve|help|change|correct|rebuild|restore)|\b(?:will not|won't) (?:fix|improve|help|change|correct|rebuild|restore)/i.test(text)) {
+    flags.push('indirect evidence converted into likely/unlikely efficacy conclusion');
+  }
+  if (/\b(?:typically developing|otherwise healthy|without a diagnosed condition)\b/i.test(text)) {
+    flags.push('unsupported child baseline assumption');
+  }
+  if (reportsIndirectOnly && /\b(?:there (?:is|are)|we have) no (?:study|studies|research|evidence)\b/i.test(text)) {
+    flags.push('retrieval result converted into global evidence-absence claim');
+  }
   if (/我接触过|我见过(很多|不少|过很多)|我的来访者|我经手|我这边的(反馈|案例|孩子)|在我的(实践|临床)|\b(in my clinical practice|my clients|families I work with|I have seen many|children I have treated)\b/i.test(text)) {
     flags.push('fake personal experience');
   }

@@ -27,6 +27,8 @@ export type EvidenceQuestionType =
   | 'background';
 
 export type EvidenceTier = 'strong' | 'moderate' | 'low_extrapolation' | 'background';
+export type InterventionMatch = 'exact' | 'adjacent' | 'none' | 'not_applicable' | 'unknown';
+export type QuestionSpecificity = 'named_specific' | 'open' | 'not_applicable' | 'unknown';
 
 /** Neutral reason codes. Locale wording is applied by the consuming app. */
 export type EvidenceReasonCode =
@@ -76,6 +78,10 @@ export interface EvidencePaperLike {
   pmid?: string;
   doi?: string;
   is_high_evidence?: boolean;
+  rag_relevance_score?: number | null;
+  rag_intervention_match?: InterventionMatch;
+  rag_question_specificity?: QuestionSpecificity;
+  rag_relevance_reason?: string;
 }
 
 export interface EvidenceGroups<T extends EvidencePaperLike> {
@@ -115,10 +121,10 @@ export function detectEvidenceQuestionType(questionText = ''): EvidenceQuestionT
   if (/自然改善|随.*年龄|长大|发育.*改善|轨迹|预后|会不会.*改善|能不能.*追上|prognosis|trajectory|maturation|developmental/.test(q)) {
     return 'prognosis';
   }
-  if (/训练|干预|治疗|补充|药|运动|方案|有没有用|有效|改善.*方法|intervention|treatment|training|therapy/.test(q)) {
+  if (/训练|干预|治疗|补充|药|运动|方案|有没有用|有效|改善.*方法|intervention|treatment|training|therapy|exercis(?:e|es|ed|ing)|effectiveness|effective|efficacy|rehabilitation|physiotherapy|physical therapy|orthotics?|insoles?|bracing|stretching|strengthening/.test(q)) {
     return 'intervention';
   }
-  if (/诊断|筛查|评估|量表|检查|是不是.*adhd|是不是.*自闭|diagnos|screen|assessment|test/.test(q)) {
+  if (/诊断|筛查|评估|量表|检查|是不是.*adhd|是不是.*自闭|diagnos|screen|assessment|clinical test|diagnostic test|screening test/.test(q)) {
     return 'diagnosis';
   }
   if (/相关|原因|导致|影响|风险|解释|为什么|etiology|cause|associated|risk/.test(q)) {
@@ -351,10 +357,22 @@ export function selectEvidenceForInjection<T extends EvidencePaperLike>(
     const matchesAdhd = assessment.reasonCodes.includes('match_population_adhd');
     const matchesAge = assessment.reasonCodes.includes('match_age_child');
     const matchesOutcome = assessment.reasonCodes.includes('match_outcome_cognition');
+    const relevanceScore = Number(paper.rag_relevance_score);
+    const questionSpecificity = paper.rag_question_specificity || 'unknown';
+    const interventionMatch = paper.rag_intervention_match || 'unknown';
 
     let isPrimary = false;
     if (questionType === 'prognosis') {
       isPrimary = !isLow && !isBackground && !isInterventionForPrognosis && isTrajectory && matchesAdhd && matchesAge && matchesOutcome;
+    } else if (
+      questionType === 'intervention' &&
+      (questionSpecificity === 'named_specific' || questionSpecificity === 'unknown')
+    ) {
+      // A nearby intervention, population, or outcome can inform context but must
+      // not become direct evidence for a specifically named intervention.
+      isPrimary = !isLow && !isBackground && relevanceScore === 3 && interventionMatch === 'exact';
+    } else if (Number.isInteger(relevanceScore) && relevanceScore >= 0 && relevanceScore <= 3) {
+      isPrimary = !isLow && !isBackground && relevanceScore === 3;
     } else {
       isPrimary = !isLow && !isBackground;
     }
@@ -454,26 +472,41 @@ export interface RelevanceGatePaper {
   topic?: string;
 }
 
+export interface RelevanceGateDecision {
+  keep: boolean;
+  relevanceScore: number | null;
+  interventionMatch: InterventionMatch;
+  questionSpecificity: QuestionSpecificity;
+  reason: string;
+}
+
 /** Build the relevance-gate prompt. Pure. Conservative by design (keep-on-doubt). */
 export function buildRelevanceGatePrompt(question: string, papers: RelevanceGatePaper[]): string {
   const list = papers
     .map((p, i) => {
       const title = String(p.title || 'Untitled').trim();
-      const abstract = String(p.abstract || '').trim().slice(0, 320);
+      const abstract = String(p.abstract || '').trim().slice(0, 900);
       return `[${i}] ${title}\n${abstract}`;
     })
     .join('\n\n');
 
-  return `You are a relevance filter for a pediatric and child-development research assistant.
+  return `You are a PICO-aware relevance filter for a pediatric and child-development research assistant.
 
-Given a parent's question about their child and a list of retrieved research papers, decide for EACH paper whether it is in the SAME clinical/topical domain as the question — i.e. whether it could plausibly inform an answer to THIS child's situation.
+First classify the question:
+- named_specific: asks whether a named intervention, exercise, treatment, test, exposure, or mechanism helps a specific problem.
+- open: asks generally what may help or what evidence exists without naming one intervention.
+- not_applicable: the question is not about an intervention.
 
-Mark a paper keep=false ONLY when its population, condition, or subject is clearly unrelated to the child's described issue — for example: adult-only populations (e.g. bariatric-surgery patients), unrelated diseases, generic methodology/protocol-standardization papers, or molecular-mechanism studies not about the child's problem.
+Then score each paper against the question's population/problem, named intervention or exposure, and outcome:
+- 3 = directly addresses the question. For named_specific questions, the paper must study the named intervention (not merely the same body region).
+- 2 = useful but indirect: adjacent intervention, different population, or different outcome.
+- 1 = only broad background in the same domain and cannot materially answer the question.
+- 0 = unrelated.
 
-Be conservative. If a paper is even partially related — same body region, same developmental/behavioral/motor domain, same age group, or a plausibly transferable intervention — keep it (keep=true). When in doubt, keep it.
+For intervention_match use exact, adjacent, none, or not_applicable. A paper about foot stretching in cerebral palsy is adjacent, not exact, for a question about big-toe exercise for a child's collapsed arch. Study quality and relevance are separate: a strong RCT can still be indirect.
 
-Return ONLY a JSON array, one object per paper, no prose:
-[{"i": <index>, "keep": true|false, "reason": "<short>"}]
+Keep scores 2-3 and drop scores 0-1. When genuinely uncertain between 1 and 2, use 2. Return ONLY one valid JSON object, no prose:
+{"question_specificity":"named_specific|open|not_applicable","decisions":[{"i":0,"relevance_score":0,"intervention_match":"exact|adjacent|none|not_applicable","keep":false,"reason":"short PICO comparison"}]}
 
 PARENT QUESTION:
 ${question}
@@ -485,15 +518,34 @@ ${list}`;
 /**
  * Parse the relevance-gate response into a keep[] mask. Pure.
  * Fail-open at every step: anything unparseable or ambiguous keeps the paper,
- * and a paper is only dropped when the judge explicitly says keep=false.
+ * but leaves directness unknown so it cannot become primary evidence for a
+ * specifically named intervention.
  */
-export function parseRelevanceGateDecisions(raw: string, count: number): boolean[] {
-  const keep = new Array<boolean>(count).fill(true);
+export function parseRelevanceGateAssessments(raw: string, count: number): RelevanceGateDecision[] {
+  const fallback = (): RelevanceGateDecision => ({
+    keep: true,
+    relevanceScore: null,
+    interventionMatch: 'unknown',
+    questionSpecificity: 'unknown',
+    reason: 'judge output unavailable',
+  });
+  const decisions = Array.from({ length: count }, fallback);
   try {
-    const match = String(raw || '').match(/\[[\s\S]*\]/);
-    if (!match) return keep;
-    const arr = JSON.parse(match[0]);
-    if (!Array.isArray(arr)) return keep;
+    const text = String(raw || '').trim();
+    const objectMatch = text.match(/\{[\s\S]*\}/);
+    const arrayMatch = text.match(/\[[\s\S]*\]/);
+    if (!objectMatch && !arrayMatch) return decisions;
+    const objectIndex = objectMatch?.index ?? Number.POSITIVE_INFINITY;
+    const arrayIndex = arrayMatch?.index ?? Number.POSITIVE_INFINITY;
+    const jsonCandidate = arrayIndex < objectIndex ? arrayMatch?.[0] : objectMatch?.[0];
+    const parsed = JSON.parse(jsonCandidate || '[]');
+    const arr = Array.isArray(parsed) ? parsed : parsed.decisions;
+    if (!Array.isArray(arr)) return decisions;
+    const specificityValue = Array.isArray(parsed) ? 'unknown' : parsed.question_specificity;
+    const specificity: QuestionSpecificity =
+      specificityValue === 'named_specific' || specificityValue === 'open' || specificityValue === 'not_applicable'
+        ? specificityValue
+        : 'unknown';
     for (const item of arr) {
       if (!item || typeof item !== 'object') continue;
       const idx =
@@ -501,15 +553,35 @@ export function parseRelevanceGateDecisions(raw: string, count: number): boolean
         : typeof item.index === 'number' ? item.index
         : null;
       if (idx === null || idx < 0 || idx >= count) continue;
-      const off =
+      const explicitOff =
         item.keep === false ||
         item.relevant === false ||
         item.in_domain === false ||
         item.on_domain === false;
-      if (off) keep[idx] = false;
+      const rawScore = Number(item.relevance_score ?? item.relevanceScore);
+      const relevanceScore = Number.isInteger(rawScore) && rawScore >= 0 && rawScore <= 3
+        ? rawScore
+        : null;
+      const rawMatch = item.intervention_match ?? item.interventionMatch;
+      const interventionMatch: InterventionMatch =
+        rawMatch === 'exact' || rawMatch === 'adjacent' || rawMatch === 'none' || rawMatch === 'not_applicable'
+          ? rawMatch
+          : 'unknown';
+      decisions[idx] = {
+        keep: explicitOff ? false : relevanceScore === null ? true : relevanceScore >= 2,
+        relevanceScore,
+        interventionMatch,
+        questionSpecificity: specificity,
+        reason: typeof item.reason === 'string' ? item.reason.slice(0, 240) : '',
+      };
     }
-    return keep;
+    return decisions;
   } catch {
-    return keep;
+    return decisions;
   }
+}
+
+/** Backward-compatible boolean mask for older callers and rollback scripts. */
+export function parseRelevanceGateDecisions(raw: string, count: number): boolean[] {
+  return parseRelevanceGateAssessments(raw, count).map(decision => decision.keep);
 }

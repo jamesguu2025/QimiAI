@@ -17,8 +17,10 @@ import {
   classifyEvidenceForQuestion,
   describeEvidenceEn,
   buildRelevanceGatePrompt,
-  parseRelevanceGateDecisions,
+  parseRelevanceGateAssessments,
   type EvidenceGroups,
+  type InterventionMatch,
+  type QuestionSpecificity,
 } from '../lib/rag-evidence';
 
 // RAG API configuration
@@ -91,6 +93,10 @@ export interface PaperResult {
   llm_reason?: string | null;
   llm_confidence?: number | string | null;
   llm_category?: string | null;
+  rag_relevance_score?: number | null;
+  rag_intervention_match?: InterventionMatch;
+  rag_question_specificity?: QuestionSpecificity;
+  rag_relevance_reason?: string;
 }
 
 function getPaperUrl(paper: PaperResult): string {
@@ -327,7 +333,10 @@ export interface RAGToolCallResult {
     pmid?: string;
   }>;
   papers?: PaperResult[]; // Full paper data for server-side context persistence
+  evidenceStatus?: RAGEvidenceStatus;
 }
+
+export type RAGEvidenceStatus = 'direct' | 'indirect_only' | 'none_found' | 'retrieval_failed';
 
 /**
  * Unified anti-drift citation policy for retrieved research.
@@ -538,7 +547,8 @@ ${content.substring(0, 4000)}${content.length > 4000 ? '\n[Abstract truncated af
 Evidence-tier discipline (each paper is pre-labeled PRIMARY or SUPPORTING):
 - Build the core answer from PRIMARY papers. Cite them as direct support only when population, age, and outcome match the user's child.
 - SUPPORTING papers are background or adjacent evidence. You may use them for context or next-step direction, but do not present them as direct evidence for the core question.
-- If there is no PRIMARY paper, say the direct evidence is limited rather than upgrading a SUPPORTING paper into a direct answer.`
+- If there is no PRIMARY paper, say the direct evidence is limited rather than upgrading a SUPPORTING paper into a direct answer.
+${evidenceGroups.primary.length === 0 ? '- There is no PRIMARY paper in this set. Do not conclude that the named intervention is likely or unlikely to work. State only that its effect is not established for the exact question.' : ''}`
       : '';
 
     const prompt = `You are an evidence summarization assistant for Qimi AI.
@@ -647,10 +657,11 @@ async function applyRelevanceGate(question: string, papers: PaperResult[]): Prom
       body: JSON.stringify({
         model: DEEPSEEK_MODEL,
         messages: [{ role: 'user', content: prompt }],
-        max_tokens: 500,
+        max_tokens: 900,
         temperature: 0,
         stream: false,
         thinking: DEEPSEEK_THINKING,
+        response_format: { type: 'json_object' },
       }),
       signal: AbortSignal.timeout(8000),
     });
@@ -659,14 +670,22 @@ async function applyRelevanceGate(question: string, papers: PaperResult[]): Prom
 
     const data = await response.json();
     const raw = data.choices?.[0]?.message?.content || '';
-    const keep = parseRelevanceGateDecisions(raw, papers.length);
-    const kept = papers.filter((_, i) => keep[i]);
+    const assessments = parseRelevanceGateAssessments(raw, papers.length);
+    const assessed = papers.map((paper, i) => ({
+      ...paper,
+      rag_relevance_score: assessments[i].relevanceScore,
+      rag_intervention_match: assessments[i].interventionMatch,
+      rag_question_specificity: assessments[i].questionSpecificity,
+      rag_relevance_reason: assessments[i].reason,
+    }));
+    const kept = assessed.filter((_, i) => assessments[i].keep);
     const dropped = papers.length - kept.length;
 
-    // Guard: never let the gate empty the whole set — fall back to all papers.
+    // Guard: never let the gate empty the whole set. Preserve the assessments so
+    // all candidates remain injectable as cautious supporting evidence.
     if (kept.length === 0) {
       console.warn('[RAG] Relevance gate would drop all papers; ignoring gate (fail-open)');
-      return papers;
+      return assessed;
     }
     if (dropped > 0) {
       console.log(`[RAG] Relevance gate dropped ${dropped}/${papers.length} off-domain paper(s)`);
@@ -700,6 +719,7 @@ export async function executeRAGWithSmartSummary(
       formattedText: `No relevant research papers were retrieved for this query.\n\n${buildRagCitationRule(0)}\n\nAnswer from general knowledge only. Do not cite named studies, sample sizes, effect sizes, or source links for this turn.`,
       sources: [],
       papers: retrievedPapers,
+      evidenceStatus: 'none_found',
       summaryMode: 'raw',
     };
   }
@@ -719,6 +739,16 @@ export async function executeRAGWithSmartSummary(
   const papers = evidenceGroups
     ? [...evidenceGroups.primary, ...evidenceGroups.supporting]
     : gatedPapers;
+  const hasDirectPicoMatch = papers.some(paper =>
+    paper.rag_relevance_score === 3 &&
+    (paper.rag_intervention_match === 'exact' || paper.rag_intervention_match === 'not_applicable')
+  );
+  const hasRelevanceAssessment = papers.some(paper => paper.rag_relevance_score !== null && paper.rag_relevance_score !== undefined);
+  const evidenceStatus: RAGEvidenceStatus = hasDirectPicoMatch || (!hasRelevanceAssessment && (evidenceGroups?.primary.length || 0) > 0)
+    ? 'direct'
+    : papers.length > 0
+      ? 'indirect_only'
+      : 'none_found';
 
   if (evidenceGroups) {
     console.log(
@@ -745,9 +775,10 @@ export async function executeRAGWithSmartSummary(
     if (summary) {
       console.log('[RAG] ✅ 智能摘要生成成功');
       return {
-        formattedText: `Research support: found ${papers.length} relevant ADHD studies.\n\n${summary}\n\nCitation handles to copy exactly when citing in the answer:\n${citationHandles || 'No citation handles available.'}\n\nClickable source links:\n${sourceLinks || 'No source links available.'}`,
+        formattedText: `Research support: found ${papers.length} relevant research ${papers.length === 1 ? 'study' : 'studies'}.\nEvidence status for the exact user question: ${evidenceStatus}.\n\n${summary}\n\nCitation handles to copy exactly when citing in the answer:\n${citationHandles || 'No citation handles available.'}\n\nClickable source links:\n${sourceLinks || 'No source links available.'}`,
         sources,
         papers,
+        evidenceStatus,
         summaryMode: 'smart',
       };
     }
@@ -768,6 +799,7 @@ export async function executeRAGWithSmartSummary(
     formattedText: `${formattedResults}\n\n**Citation Handles To Copy Exactly**:\n${citationHandles || 'No citation handles available.'}\n\n**Clickable Source Links**:\n${sourceLinks || 'No source links available.'}\n\n**Topic Distribution**: ${topicsInfo}`,
     sources,
     papers,
+    evidenceStatus,
     summaryMode: 'raw',
   };
 }
