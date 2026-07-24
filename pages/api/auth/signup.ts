@@ -1,37 +1,53 @@
 import type { NextApiRequest, NextApiResponse } from 'next';
 import bcrypt from 'bcryptjs';
 import { getSupabaseAdmin } from '@/lib/supabase';
+import { getClientIp, getPayloadSizeBytes, rejectIfRateLimited } from '@/lib/rate-limit';
+
+const MAX_PAYLOAD_BYTES = 4 * 1024;
 
 export default async function handler(
   req: NextApiRequest,
   res: NextApiResponse
 ) {
   if (req.method !== 'POST') {
+    res.setHeader('Allow', ['POST']);
     return res.status(405).json({ error: 'Method not allowed' });
   }
+
+  if (getPayloadSizeBytes(req) > MAX_PAYLOAD_BYTES) {
+    return res.status(413).json({ error: '请求内容过大' });
+  }
+
+  if (rejectIfRateLimited(req, res, {
+    namespace: 'signup',
+    key: getClientIp(req),
+    limit: 5,
+    windowMs: 15 * 60 * 1000,
+  })) return;
 
   const { email, password, name } = req.body;
 
   // 验证输入
-  if (!email || !password) {
+  if (typeof email !== 'string' || typeof password !== 'string' || !email || !password) {
     return res.status(400).json({ error: '请输入邮箱和密码' });
   }
 
   // 验证邮箱格式
   const emailRegex = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
-  if (!emailRegex.test(email)) {
+  const normalizedEmail = email.toLowerCase().trim();
+  if (normalizedEmail.length > 254 || !emailRegex.test(normalizedEmail)) {
     return res.status(400).json({ error: '请输入有效的邮箱地址' });
   }
 
   // 验证密码强度
-  if (password.length < 8) {
-    return res.status(400).json({ error: '密码至少需要8个字符' });
+  if (password.length < 8 || password.length > 128) {
+    return res.status(400).json({ error: '密码长度需要在8到128个字符之间' });
   }
+
+  const normalizedName = typeof name === 'string' ? name.trim().slice(0, 100) : '';
 
   try {
     const supabase = getSupabaseAdmin();
-    const normalizedEmail = email.toLowerCase().trim();
-
     // 检查邮箱是否已存在
     const { data: existingUser } = await supabase
       .from('users')
@@ -40,13 +56,7 @@ export default async function handler(
       .single();
 
     if (existingUser) {
-      if (existingUser.password_hash) {
-        return res.status(400).json({ error: '该邮箱已注册，请直接登录' });
-      } else {
-        return res.status(400).json({
-          error: '该邮箱已通过 Google 注册，请使用 Google 登录'
-        });
-      }
+      return res.status(400).json({ error: '该邮箱已注册，请登录或使用原注册方式' });
     }
 
     // 哈希密码
@@ -58,7 +68,7 @@ export default async function handler(
       .from('users')
       .insert({
         email: normalizedEmail,
-        name: name?.trim() || null,
+        name: normalizedName || null,
         password_hash: passwordHash,
         provider: 'email',
       })

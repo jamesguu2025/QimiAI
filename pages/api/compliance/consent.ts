@@ -7,6 +7,7 @@ import {
   PARENTAL_CONSENT_TEXT,
   PARENTAL_CONSENT_VERSION,
 } from '@/lib/compliance/consent';
+import { getPayloadSizeBytes, rejectIfRateLimited } from '@/lib/rate-limit';
 
 function getClientIp(req: NextApiRequest): string | null {
   const forwardedFor = req.headers['x-forwarded-for'];
@@ -24,6 +25,17 @@ export default async function handler(req: NextApiRequest, res: NextApiResponse)
   if (!session?.user?.email) {
     return res.status(401).json({ error: 'Unauthorized' });
   }
+
+  if (getPayloadSizeBytes(req) > 4 * 1024) {
+    return res.status(413).json({ error: 'Payload too large' });
+  }
+
+  if (rejectIfRateLimited(req, res, {
+    namespace: 'consent',
+    key: session.user.email,
+    limit: 10,
+    windowMs: 60 * 60 * 1000,
+  })) return;
 
   const consentText = typeof req.body?.consentText === 'string'
     ? req.body.consentText.trim()

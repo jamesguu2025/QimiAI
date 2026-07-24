@@ -2,6 +2,7 @@ import { dirname } from 'node:path';
 import { fileURLToPath } from 'node:url';
 
 const rootDir = dirname(fileURLToPath(import.meta.url));
+const isProduction = process.env.NODE_ENV === 'production';
 
 /** @type {import('next').NextConfig} */
 const nextConfig = {
@@ -37,6 +38,14 @@ const nextConfig = {
       {
         source: "/:path*",
         headers: [
+          ...(isProduction ? [{
+            key: "Strict-Transport-Security",
+            value: "max-age=31536000",
+          }] : []),
+          {
+            key: "Content-Security-Policy",
+            value: "base-uri 'self'; form-action 'self'; frame-ancestors 'none'; object-src 'none'",
+          },
           {
             key: "X-Content-Type-Options",
             value: "nosniff",
@@ -56,6 +65,19 @@ const nextConfig = {
           {
             key: "Permissions-Policy",
             value: "camera=(), microphone=(), geolocation=()",
+          },
+          {
+            key: "X-Permitted-Cross-Domain-Policies",
+            value: "none",
+          },
+        ],
+      },
+      {
+        source: "/api/:path*",
+        headers: [
+          {
+            key: "Cache-Control",
+            value: "private, no-store, max-age=0",
           },
         ],
       },

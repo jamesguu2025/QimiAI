@@ -227,3 +227,41 @@ Database-backed work must use this order:
 Production Supabase is only for validated migrations and production maintenance. Guest migration testing, schema experiments, repeated refresh tests, and destructive cleanup must happen locally first.
 
 Every schema change must be captured in version-controlled SQL under `supabase/migrations/` before it is applied to staging or production.
+
+---
+
+## 10. Security Release Gate Rule
+
+Before public release, major data-flow changes, authentication changes, database migrations, AI/RAG behavior changes, upload/report features, billing, or any feature that stores child/family/sensitive information, run a security release gate in this order:
+
+1. Govern and scope
+   - Identify the launch slice, data classes, user roles, trust boundaries, third-party processors, regulatory assumptions, and explicit non-goals.
+   - Record owner decisions and residual risk in the relevant spec or review note.
+2. Identify attack surface
+   - Inventory routes, API endpoints, database tables, RLS policies, browser storage, background jobs, external calls, and AI/tool boundaries touched by the slice.
+   - Confirm local/staging/production environment targets before running any write or migration.
+3. Protect by design
+   - Verify deny-by-default auth, per-request authorization, ownership checks, RLS, input/schema limits, output handling, CSRF/session posture, secure headers, secret handling, and data minimization.
+   - For LLM features, verify prompt-injection boundaries, sensitive-information disclosure controls, tool/action limits, retrieval grounding, and user-facing uncertainty language.
+4. Verify implementation
+   - Run risk-scaled machine checks: dependency audit, type/build, route/API smoke, authorization and cross-user tests, RLS inspection, migration replay/rollback path, secret scan, logging scan, and feature-specific regression scripts.
+   - Use OWASP ASVS/API/LLM controls as the checklist source, not only the OWASP awareness Top 10.
+5. Detect and operate
+   - Confirm security logging for auth failures, authorization failures, rate-limit triggers, high-risk changes, provider failures, and deletion/export events.
+   - Confirm logs do not contain chat content, child/family profile details, tokens, credentials, or other sensitive data.
+6. Respond and recover
+   - Confirm backup/restore, migration rollback or roll-forward, account deletion cascade, incident contact path, breach/regulatory revisit triggers, and secret rotation plan.
+7. Human acceptance
+   - Human acceptance can start only after the technical gate passes and residual launch conditions are written down.
+8. Merge, deploy, or carry forward
+   - Required launch blockers must be fixed before release.
+   - MVP-conditional residual risks must have an owner, accepted scope, revisit trigger, and post-MVP task if they are not fixed now.
+
+Evidence basis:
+
+- NIST Cybersecurity Framework 2.0 organizes risk management around Govern, Identify, Protect, Detect, Respond, and Recover.
+- NIST SP 800-218 Secure Software Development Framework defines secure development practices for preparing the organization, protecting software, producing well-secured software, and responding to vulnerabilities.
+- OWASP ASVS provides the technical verification standard for application security controls.
+- OWASP API Security Top 10 2023 highlights API-specific risks such as object-level authorization, authentication, resource consumption, sensitive business flows, SSRF, and unsafe API consumption.
+- OWASP Top 10 for LLM Applications 2025 adds AI-specific checks for prompt injection, sensitive information disclosure, LLM supply chain, excessive agency, insecure output handling, and overreliance.
+- CISA Secure by Design / Secure by Default guidance requires product teams to shift more security responsibility into the product and default configuration rather than relying on users to compensate later.

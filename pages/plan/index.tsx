@@ -1,15 +1,19 @@
 import Head from 'next/head';
-import { Plus } from 'lucide-react';
+import { useRouter } from 'next/router';
+import { Plus, Sparkles } from 'lucide-react';
 import { useCallback, useEffect, useMemo, useState } from 'react';
 import { useSession } from 'next-auth/react';
 import AppLayout from '@/components/Layout/AppLayout';
 import PlanCategoryAccordion from '@/components/GrowthPlan/PlanCategoryAccordion';
 import PlanItemForm from '@/components/GrowthPlan/PlanItemForm';
+import PlanGenerator from '@/components/GrowthPlan/PlanGenerator';
+import ComposedPlanLibrary from '@/components/GrowthPlan/ComposedPlanLibrary';
 import PlanSummary from '@/components/GrowthPlan/PlanSummary';
 import { useAuthUIStore } from '@/stores/authUIStore';
 import AuthRequiredState from '@/components/Auth/AuthRequiredState';
-import type { ActionPlanItem, PlanCategory } from '@/types/plan';
+import type { ActionPlanItem, ComposedPlan, CreatePlanItemRequest, PlanCategory } from '@/types/plan';
 import { PLAN_CATEGORIES } from '@/types/plan';
+import type { GeneratedPlanDraft } from '@/lib/plan-generation';
 
 type PlanFormValues = {
   category: PlanCategory;
@@ -20,9 +24,13 @@ type PlanFormValues = {
 const PLAN_AUTH_REASON = 'Sign up to save AI-recommended strategies into your Growth Plan and track what works for your family over time.';
 
 export default function GrowthPlanPage() {
+  const router = useRouter();
   const { data: session, status } = useSession();
   const { openLoginModal } = useAuthUIStore();
   const [items, setItems] = useState<ActionPlanItem[]>([]);
+  const [composedPlans, setComposedPlans] = useState<ComposedPlan[]>([]);
+  const [openComposedPlanId, setOpenComposedPlanId] = useState<string | null>(null);
+  const [saveNotice, setSaveNotice] = useState<string | null>(null);
   const [totalItems, setTotalItems] = useState(0);
   const [starredCount, setStarredCount] = useState(0);
   const [openCategories, setOpenCategories] = useState<PlanCategory[]>(['emotion']);
@@ -30,6 +38,7 @@ export default function GrowthPlanPage() {
   const [error, setError] = useState<string | null>(null);
   const [formError, setFormError] = useState<string | null>(null);
   const [showForm, setShowForm] = useState(false);
+  const [showGenerator, setShowGenerator] = useState(false);
   const [editingItem, setEditingItem] = useState<ActionPlanItem | null>(null);
   const [isSubmitting, setIsSubmitting] = useState(false);
   const [entitlementTier] = useState<'free' | 'pro'>('free');
@@ -70,11 +79,29 @@ export default function GrowthPlanPage() {
     }
   }, [session?.user?.email]);
 
+  const fetchComposedPlans = useCallback(async () => {
+    if (!session?.user?.email) return;
+    try {
+      const response = await fetch('/api/composed-plans');
+      if (!response.ok) throw new Error('Failed to load composed plans');
+      const data = await response.json();
+      setComposedPlans(data.plans || []);
+    } catch (err) {
+      setError(err instanceof Error ? err.message : 'Failed to load composed plans');
+    }
+  }, [session?.user?.email]);
+
   useEffect(() => {
     if (session?.user?.email) {
       fetchItems();
+      fetchComposedPlans();
     }
-  }, [session?.user?.email, fetchItems]);
+  }, [session?.user?.email, fetchItems, fetchComposedPlans]);
+
+  useEffect(() => {
+    const requestedPlan = typeof router.query.plan === 'string' ? router.query.plan : null;
+    if (requestedPlan) setOpenComposedPlanId(requestedPlan);
+  }, [router.query.plan]);
 
   const sortedItems = useMemo(() => {
     return [...items].sort((a, b) => {
@@ -91,7 +118,7 @@ export default function GrowthPlanPage() {
       }));
   }, [sortedItems]);
 
-  async function handleCreate(values: PlanFormValues) {
+  async function handleCreate(values: CreatePlanItemRequest): Promise<boolean> {
     setIsSubmitting(true);
     setFormError(null);
 
@@ -114,10 +141,58 @@ export default function GrowthPlanPage() {
         return nextItems;
       });
       setShowForm(false);
+      setShowGenerator(false);
+      setOpenCategories((current) => current.includes(data.item.category)
+        ? current
+        : [...current, data.item.category]);
+      return true;
     } catch (err) {
       setFormError(err instanceof Error ? err.message : 'Failed to create plan item');
     } finally {
       setIsSubmitting(false);
+    }
+    return false;
+  }
+
+  async function handleSaveComposed(draft: GeneratedPlanDraft, sourcePlanIds: string[]): Promise<boolean> {
+    setFormError(null);
+    try {
+      const response = await fetch('/api/composed-plans', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          title: draft.painPoint,
+          summary: draft.strategySummary,
+          explanationMarkdown: draft.explanationMarkdown,
+          interventionBlocks: draft.interventionBlocks,
+          sourcePlanIds,
+        }),
+      });
+      if (!response.ok) {
+        const data = await response.json().catch(() => ({}));
+        throw new Error(data.error || 'Failed to save composed plan');
+      }
+      const data = await response.json();
+      setComposedPlans((current) => [data.plan, ...current]);
+      setOpenComposedPlanId(data.plan.id);
+      setShowGenerator(false);
+      setSaveNotice(`“${data.plan.title}” was saved to My Composed Plans.`);
+      window.setTimeout(() => document.getElementById('my-composed-plans')?.scrollIntoView({ behavior: 'smooth', block: 'start' }), 0);
+      return true;
+    } catch (err) {
+      setFormError(err instanceof Error ? err.message : 'Failed to save composed plan');
+      return false;
+    }
+  }
+
+  async function handleDeleteComposed(id: string) {
+    try {
+      const response = await fetch(`/api/composed-plans?id=${id}`, { method: 'DELETE' });
+      if (!response.ok && response.status !== 204) throw new Error('Failed to delete composed plan');
+      setComposedPlans((current) => current.filter((plan) => plan.id !== id));
+      if (openComposedPlanId === id) setOpenComposedPlanId(null);
+    } catch (err) {
+      setError(err instanceof Error ? err.message : 'Failed to delete composed plan');
     }
   }
 
@@ -196,6 +271,11 @@ export default function GrowthPlanPage() {
     setFormError(null);
   }
 
+  function closeGenerator() {
+    setShowGenerator(false);
+    setFormError(null);
+  }
+
   function toggleCategory(category: PlanCategory) {
     setOpenCategories((current) => (
       current.includes(category)
@@ -243,47 +323,86 @@ export default function GrowthPlanPage() {
     <AppLayout>
       <Head><title>Growth Plan - Qimi AI</title></Head>
 
-      <main className="mx-auto max-w-4xl py-8">
-        <div className="flex flex-col gap-4 sm:flex-row sm:items-start sm:justify-between">
-          <div>
+      <main className="mx-auto w-full min-w-0 max-w-4xl py-6 sm:py-8">
+        <div className="flex min-w-0 flex-col gap-4 sm:flex-row sm:items-start sm:justify-between">
+          <div className="min-w-0">
             <h1 className="text-2xl font-bold text-slate-900">Growth Plan</h1>
             <p className="mt-1 text-sm text-slate-600">
               Keep practical strategies in one place and check in as you try them.
             </p>
           </div>
 
-          {quotaReached ? (
+          <div className="flex w-full flex-col gap-2 sm:w-auto sm:flex-row sm:flex-wrap sm:justify-end">
             <button
               type="button"
-              disabled
-              className="inline-flex items-center justify-center rounded-xl bg-primary-purple/10 px-4 py-2 text-sm font-semibold text-primary-purple"
-            >
-              Upgrade for More Items
-            </button>
-          ) : (
-            <button
-              type="button"
+              disabled={isLoading}
               onClick={() => {
                 setEditingItem(null);
-                setShowForm(true);
+                setShowForm(false);
+                setShowGenerator(true);
                 setFormError(null);
               }}
-              className="inline-flex items-center justify-center gap-2 rounded-xl bg-primary-teal px-4 py-2 text-sm font-semibold text-white transition-colors hover:bg-primary-teal/90"
+              className="inline-flex items-center justify-center gap-2 rounded-xl border border-primary-purple/30 bg-primary-purple/5 px-4 py-2 text-sm font-semibold text-primary-purple transition-colors hover:bg-primary-purple/10 disabled:cursor-not-allowed disabled:opacity-50"
             >
-              <Plus className="h-4 w-4" />
-              Add Plan Item
+              <Sparkles className="h-4 w-4" />
+              Generate Plan
             </button>
-          )}
+            {quotaReached ? (
+              <button
+                type="button"
+                disabled
+                className="inline-flex items-center justify-center rounded-xl bg-primary-purple/10 px-4 py-2 text-sm font-semibold text-primary-purple"
+              >
+                Upgrade for More Items
+              </button>
+            ) : (
+              <button
+                type="button"
+                onClick={() => {
+                  setEditingItem(null);
+                  setShowGenerator(false);
+                  setShowForm(true);
+                  setFormError(null);
+                }}
+                className="inline-flex items-center justify-center gap-2 rounded-xl bg-primary-teal px-4 py-2 text-sm font-semibold text-white transition-colors hover:bg-primary-teal/90"
+              >
+                <Plus className="h-4 w-4" />
+                Add Plan Item
+              </button>
+            )}
+          </div>
         </div>
 
         <div className="mt-6 space-y-5">
+          {saveNotice && (
+            <div role="status" className="flex items-center justify-between gap-3 rounded-xl border border-emerald-200 bg-emerald-50 p-3 text-sm text-emerald-800">
+              <span>{saveNotice}</span>
+              <button type="button" onClick={() => setSaveNotice(null)} className="font-semibold">Dismiss</button>
+            </div>
+          )}
+
+          <ComposedPlanLibrary
+            plans={composedPlans}
+            openPlanId={openComposedPlanId}
+            onOpenPlan={setOpenComposedPlanId}
+            onDelete={handleDeleteComposed}
+          />
+
           <PlanSummary totalItems={totalItems} starredCount={starredCount} />
+
+          {showGenerator && (
+            <PlanGenerator items={items} onSave={handleSaveComposed} onCancel={closeGenerator} />
+          )}
+
+          {formError && showGenerator && (
+            <div className="rounded-xl border border-red-200 bg-red-50 p-3 text-sm text-red-700">{formError}</div>
+          )}
 
           {(showForm || editingItem) && (
             <div className="space-y-3">
               <PlanItemForm
                 initialValues={editingItem || undefined}
-                onSubmit={editingItem ? handleUpdate : handleCreate}
+                onSubmit={editingItem ? handleUpdate : async (values) => { await handleCreate(values); }}
                 onCancel={closeForm}
                 isSubmitting={isSubmitting}
               />
@@ -303,6 +422,12 @@ export default function GrowthPlanPage() {
               </button>
             </div>
           )}
+
+          <div className="pt-2">
+            <p className="text-xs font-semibold uppercase tracking-wide text-slate-400">Source library</p>
+            <h2 className="text-lg font-bold text-slate-900">Saved Plan Sources</h2>
+            <p className="mt-1 text-sm text-slate-500">These categorized source plans remain available when you compose a new cross-topic plan.</p>
+          </div>
 
           {isLoading ? (
             <div className="space-y-3">
@@ -331,6 +456,7 @@ export default function GrowthPlanPage() {
                   onStar={handleStar}
                   onEdit={(nextItem) => {
                     setShowForm(false);
+                    setShowGenerator(false);
                     setEditingItem(nextItem);
                     setFormError(null);
                   }}

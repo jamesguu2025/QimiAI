@@ -3,6 +3,8 @@
 
 import { useState } from 'react';
 import { signOut } from 'next-auth/react';
+import { clearConversationsCache } from '@/stores/chatStore';
+import { guestStorage } from '@/utils/guest-storage';
 
 export function DeleteAccountSection() {
   const [showConfirm, setShowConfirm] = useState(false);
@@ -27,6 +29,8 @@ export function DeleteAccountSection() {
       }
 
       // Account deleted — sign out and redirect to landing
+      clearConversationsCache();
+      guestStorage.clear();
       await signOut({ callbackUrl: '/' });
     } catch (err) {
       setError(err instanceof Error ? err.message : 'Something went wrong');

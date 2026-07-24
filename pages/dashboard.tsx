@@ -6,6 +6,7 @@ import { useState, useEffect } from 'react';
 import AppLayout from '../components/Layout/AppLayout';
 import { DashboardCard } from '../components/Dashboard/DashboardCard';
 import AuthRequiredState from '@/components/Auth/AuthRequiredState';
+import DashboardPlansOverview from '@/components/Dashboard/DashboardPlansOverview';
 
 const DASHBOARD_AUTH_REASON = 'Sign up to unlock your Dashboard, preserve guest conversations, and activate Memory and Growth Plan features for personalized AI support.';
 
@@ -97,6 +98,8 @@ export default function DashboardPage() {
         <p className="text-slate-600 mb-6">
           Hi{userName ? ` ${userName}` : 'there'}, here's your family overview.
         </p>
+
+        <DashboardPlansOverview />
 
         {/* Stats Section */}
         <div className="grid grid-cols-2 gap-4 mb-6">

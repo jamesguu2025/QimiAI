@@ -7,6 +7,7 @@ import type { NextApiRequest, NextApiResponse } from 'next';
 import { getServerSession } from 'next-auth';
 import { authOptions } from '../auth/[...nextauth]';
 import { getSupabaseAdmin } from '../../../lib/supabase';
+import { getPayloadSizeBytes, rejectIfRateLimited } from '../../../lib/rate-limit';
 
 export default async function handler(
   req: NextApiRequest,
@@ -21,6 +22,17 @@ export default async function handler(
     if (!session?.user?.email) {
       return res.status(401).json({ error: 'Unauthorized' });
     }
+
+    if (getPayloadSizeBytes(req) > 1024) {
+      return res.status(413).json({ error: 'Payload too large' });
+    }
+
+    if (rejectIfRateLimited(req, res, {
+      namespace: 'delete-account',
+      key: session.user.email,
+      limit: 5,
+      windowMs: 30 * 60 * 1000,
+    })) return;
 
     const { confirmation } = req.body;
     if (confirmation !== 'DELETE') {

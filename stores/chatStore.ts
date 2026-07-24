@@ -23,7 +23,8 @@ const WELCOME_MESSAGE: Message = {
 };
 
 /** Local cache constants */
-const CACHE_KEY = 'qimi_conversations_cache';
+const CACHE_KEY = 'qimi_conversations_cache_v2';
+const LEGACY_CACHE_KEY = 'qimi_conversations_cache';
 const CACHE_TIMESTAMP_KEY = 'qimi_conversations_cache_timestamp';
 const CACHE_TTL = 5 * 60 * 1000; // 5 minutes
 const MAX_HISTORY_MESSAGES = 10;
@@ -67,7 +68,9 @@ function trimHistorySources(sources?: RAGSource[]) {
 function saveConversationsToCache(conversations: Conversation[]): void {
   if (typeof window === 'undefined') return;
   try {
-    localStorage.setItem(CACHE_KEY, JSON.stringify(conversations));
+    const cacheSafeConversations = conversations.map(({ lastMessage: _lastMessage, ...conversation }) => conversation);
+    localStorage.removeItem(LEGACY_CACHE_KEY);
+    localStorage.setItem(CACHE_KEY, JSON.stringify(cacheSafeConversations));
     localStorage.setItem(CACHE_TIMESTAMP_KEY, Date.now().toString());
   } catch (error) {
     console.warn('[chatStore] Failed to save to cache:', error);
@@ -78,6 +81,7 @@ function saveConversationsToCache(conversations: Conversation[]): void {
 function loadConversationsFromCache(): { conversations: Conversation[]; isStale: boolean } | null {
   if (typeof window === 'undefined') return null;
   try {
+    localStorage.removeItem(LEGACY_CACHE_KEY);
     const cached = localStorage.getItem(CACHE_KEY);
     const timestamp = localStorage.getItem(CACHE_TIMESTAMP_KEY);
 
@@ -95,10 +99,11 @@ function loadConversationsFromCache(): { conversations: Conversation[]; isStale:
 }
 
 /** Clear localStorage cache */
-function clearConversationsCache(): void {
+export function clearConversationsCache(): void {
   if (typeof window === 'undefined') return;
   try {
     localStorage.removeItem(CACHE_KEY);
+    localStorage.removeItem(LEGACY_CACHE_KEY);
     localStorage.removeItem(CACHE_TIMESTAMP_KEY);
   } catch (error) {
     console.warn('[chatStore] Failed to clear cache:', error);

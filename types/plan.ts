@@ -80,6 +80,28 @@ export interface CreatePlanItemRequest {
   sourceType?: 'manual' | 'chat';
 }
 
+/** A compiled, cross-topic plan created from Saved Plan sources. */
+export interface ComposedPlan {
+  id: string;
+  userId: string;
+  title: string;
+  summary: string;
+  explanationMarkdown?: string;
+  topicCategories: PlanCategory[];
+  interventionBlocks: PlanContentBlock[];
+  sourcePlanIds: string[];
+  createdAt: string;
+  updatedAt: string;
+}
+
+export interface CreateComposedPlanRequest {
+  title: string;
+  summary: string;
+  explanationMarkdown?: string;
+  interventionBlocks: PlanContentBlock[];
+  sourcePlanIds: string[];
+}
+
 /** 更新方案项目请求 */
 export interface UpdatePlanItemRequest {
   painPoint?: string;

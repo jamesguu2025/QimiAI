@@ -5,6 +5,10 @@ import type { NextApiRequest, NextApiResponse } from 'next';
 import { getServerSession } from 'next-auth';
 import { authOptions } from '../auth/[...nextauth]';
 import { getSupabaseAdmin } from '../../../lib/supabase';
+import { getPayloadSizeBytes, rejectIfRateLimited } from '../../../lib/rate-limit';
+import { isTopicFolder, normalizeTopicFolder } from '../../../types/chat';
+
+const UUID_REGEX = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
 
 export default async function handler(
   req: NextApiRequest,
@@ -12,7 +16,7 @@ export default async function handler(
 ) {
   const { id } = req.query;
 
-  if (!id || typeof id !== 'string') {
+  if (!id || typeof id !== 'string' || !UUID_REGEX.test(id)) {
     return res.status(400).json({ error: 'Conversation ID is required' });
   }
 
@@ -42,6 +46,12 @@ export default async function handler(
 
     // For DELETE, skip the verification query - just delete directly
     if (req.method === 'DELETE') {
+      if (rejectIfRateLimited(req, res, {
+        namespace: 'conversation-delete',
+        key: userId,
+        limit: 30,
+        windowMs: 10 * 60 * 1000,
+      })) return;
       const { error: deleteError, count } = await supabase
         .from('conversations')
         .delete({ count: 'exact' })
@@ -92,7 +102,6 @@ export default async function handler(
         title: conversation.title,
         folderKey: conversation.folder_key,
         messageCount: conversation.message_count,
-        lastMessage: conversation.last_message,
         isPinned: conversation.is_pinned || false,
         createdAt: conversation.created_at,
         updatedAt: conversation.updated_at,
@@ -109,13 +118,33 @@ export default async function handler(
       return res.status(200).json(formattedConversation);
 
     } else if (req.method === 'PATCH') {
+      if (getPayloadSizeBytes(req) > 4 * 1024) return res.status(413).json({ error: 'Payload too large' });
+      if (rejectIfRateLimited(req, res, {
+        namespace: 'conversation-update',
+        key: userId,
+        limit: 60,
+        windowMs: 10 * 60 * 1000,
+      })) return;
+
       // Update conversation
       const { title, folderKey, isPinned } = req.body;
 
       const updateData: Record<string, unknown> = {};
-      if (title !== undefined) updateData.title = title;
-      if (folderKey !== undefined) updateData.folder_key = folderKey;
-      if (isPinned !== undefined) updateData.is_pinned = isPinned;
+      if (title !== undefined) {
+        if (typeof title !== 'string' || !title.trim() || title.trim().length > 120) {
+          return res.status(400).json({ error: 'Invalid title' });
+        }
+        updateData.title = title.replace(/\s+/g, ' ').trim();
+      }
+      if (folderKey !== undefined) {
+        if (folderKey !== null && !isTopicFolder(folderKey)) return res.status(400).json({ error: 'Invalid folder' });
+        updateData.folder_key = folderKey ? normalizeTopicFolder(folderKey) : null;
+      }
+      if (isPinned !== undefined) {
+        if (typeof isPinned !== 'boolean') return res.status(400).json({ error: 'Invalid pin value' });
+        updateData.is_pinned = isPinned;
+      }
+      if (Object.keys(updateData).length === 0) return res.status(400).json({ error: 'No fields to update' });
 
       const { data: updated, error: updateError } = await supabase
         .from('conversations')
@@ -136,7 +165,6 @@ export default async function handler(
         title: updated.title,
         folderKey: updated.folder_key,
         messageCount: updated.message_count,
-        lastMessage: updated.last_message,
         isPinned: updated.is_pinned || false,
         createdAt: updated.created_at,
         updatedAt: updated.updated_at,
@@ -151,8 +179,7 @@ export default async function handler(
   } catch (error) {
     console.error('[conversations] API error:', error);
     return res.status(500).json({
-      error: 'Internal server error',
-      message: error instanceof Error ? error.message : 'Unknown error'
+      error: 'Internal server error'
     });
   }
 }

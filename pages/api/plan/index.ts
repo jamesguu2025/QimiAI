@@ -4,7 +4,9 @@ import { authOptions } from '../auth/[...nextauth]';
 import { getSupabaseAdmin } from '../../../lib/supabase';
 import type { ActionPlanItem, PlanCategory, PlanContentBlock, WeekDay } from '../../../types/plan';
 import { PLAN_CATEGORIES } from '../../../types/plan';
+import { PLAN_TITLE_MAX_LENGTH } from '../../../lib/plan-generation';
 import { trackServerEvent } from '../../../lib/analytics';
+import { getPayloadSizeBytes, rejectIfRateLimited } from '../../../lib/rate-limit';
 
 type PlanItemRow = {
   id: string;
@@ -29,6 +31,7 @@ type PlanItemRow = {
 const VALID_CATEGORIES = new Set(PLAN_CATEGORIES.map((category) => category.id));
 const UUID_REGEX = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
 const FREE_PLAN_LIMIT = 5;
+const MAX_PAYLOAD_BYTES = 48 * 1024;
 
 function mapPlanItem(row: PlanItemRow): ActionPlanItem {
   return {
@@ -62,6 +65,21 @@ function isPlanCategory(value: unknown): value is PlanCategory {
 
 function validateText(value: unknown) {
   return typeof value === 'string' && value.trim().length > 0;
+}
+
+function validateBlocks(value: unknown): PlanContentBlock[] | null {
+  if (value === undefined) return [];
+  if (!Array.isArray(value) || value.length > 10) return null;
+  const blocks: PlanContentBlock[] = [];
+  for (const candidate of value) {
+    if (!candidate || typeof candidate !== 'object' || Array.isArray(candidate)) return null;
+    const block = candidate as Record<string, unknown>;
+    const title = typeof block.title === 'string' ? block.title.trim() : '';
+    const contentMarkdown = typeof block.contentMarkdown === 'string' ? block.contentMarkdown.trim() : '';
+    if (!contentMarkdown || contentMarkdown.length > 4000 || title.length > 120) return null;
+    blocks.push({ title: title || undefined, contentMarkdown });
+  }
+  return blocks;
 }
 
 async function getOrCreateUser(req: NextApiRequest, res: NextApiResponse) {
@@ -111,6 +129,18 @@ export default async function handler(req: NextApiRequest, res: NextApiResponse)
 
   const { supabase, userId } = context;
 
+  if (req.method === 'POST' || req.method === 'PUT') {
+    if (getPayloadSizeBytes(req) > MAX_PAYLOAD_BYTES) {
+      return res.status(413).json({ error: 'Plan content is too large' });
+    }
+    if (rejectIfRateLimited(req, res, {
+      namespace: 'plan-write',
+      key: userId,
+      limit: 30,
+      windowMs: 10 * 60 * 1000,
+    })) return;
+  }
+
   try {
     if (req.method === 'GET') {
       const category = getSingleQueryValue(req.query.category);
@@ -119,6 +149,7 @@ export default async function handler(req: NextApiRequest, res: NextApiResponse)
         .from('plan_items')
         .select('*')
         .eq('user_id', userId)
+        .eq('legacy_composed_shadow', false)
         .order('star', { ascending: false })
         .order('created_at', { ascending: false });
 
@@ -152,14 +183,28 @@ export default async function handler(req: NextApiRequest, res: NextApiResponse)
       if (!validateText(painPoint)) {
         return res.status(400).json({ error: 'Pain point is required' });
       }
+      if (painPoint.trim().length > PLAN_TITLE_MAX_LENGTH) {
+        return res.status(400).json({ error: `Plan title must be ${PLAN_TITLE_MAX_LENGTH} characters or fewer` });
+      }
       if (!validateText(strategy)) {
         return res.status(400).json({ error: 'Strategy is required' });
       }
+      if (strategy.trim().length > 4000) return res.status(400).json({ error: 'Strategy is too long' });
+      if (strategySummary !== undefined && (!validateText(strategySummary) || strategySummary.trim().length > 500)) {
+        return res.status(400).json({ error: 'Strategy summary is invalid' });
+      }
+      if (explanationMarkdown !== undefined
+        && (typeof explanationMarkdown !== 'string' || explanationMarkdown.trim().length > 4000)) {
+        return res.status(400).json({ error: 'Plan explanation is invalid' });
+      }
+      const cleanBlocks = validateBlocks(interventionBlocks);
+      if (!cleanBlocks) return res.status(400).json({ error: 'Intervention blocks are invalid' });
 
       const { count, error: countError } = await supabase
         .from('plan_items')
         .select('id', { count: 'exact', head: true })
-        .eq('user_id', userId);
+        .eq('user_id', userId)
+        .eq('legacy_composed_shadow', false);
 
       if (countError) {
         console.error('[plan] quota count error:', countError);
@@ -181,7 +226,7 @@ export default async function handler(req: NextApiRequest, res: NextApiResponse)
           strategy: strategy.trim(),
           strategy_summary: validateText(strategySummary) ? strategySummary.trim() : strategy.trim(),
           explanation_markdown: validateText(explanationMarkdown) ? explanationMarkdown.trim() : null,
-          intervention_blocks: Array.isArray(interventionBlocks) ? interventionBlocks : [],
+          intervention_blocks: cleanBlocks,
           check_in_days: [],
         })
         .select('*')
@@ -214,23 +259,30 @@ export default async function handler(req: NextApiRequest, res: NextApiResponse)
       }
       if (painPoint !== undefined) {
         if (!validateText(painPoint)) return res.status(400).json({ error: 'Pain point must be a non-empty string' });
+        if (painPoint.trim().length > PLAN_TITLE_MAX_LENGTH) return res.status(400).json({ error: `Plan title must be ${PLAN_TITLE_MAX_LENGTH} characters or fewer` });
         update.pain_point = painPoint.trim();
       }
       if (strategy !== undefined) {
         if (!validateText(strategy)) return res.status(400).json({ error: 'Strategy must be a non-empty string' });
+        if (strategy.trim().length > 4000) return res.status(400).json({ error: 'Strategy is too long' });
         update.strategy = strategy.trim();
         update.strategy_summary = strategy.trim();
       }
       if (strategySummary !== undefined) {
         if (!validateText(strategySummary)) return res.status(400).json({ error: 'Strategy summary must be a non-empty string' });
+        if (strategySummary.trim().length > 500) return res.status(400).json({ error: 'Strategy summary is too long' });
         update.strategy_summary = strategySummary.trim();
       }
       if (explanationMarkdown !== undefined) {
+        if (typeof explanationMarkdown !== 'string' || explanationMarkdown.trim().length > 4000) {
+          return res.status(400).json({ error: 'Plan explanation is invalid' });
+        }
         update.explanation_markdown = validateText(explanationMarkdown) ? explanationMarkdown.trim() : null;
       }
       if (interventionBlocks !== undefined) {
-        if (!Array.isArray(interventionBlocks)) return res.status(400).json({ error: 'Intervention blocks must be an array' });
-        update.intervention_blocks = interventionBlocks;
+        const cleanBlocks = validateBlocks(interventionBlocks);
+        if (!cleanBlocks) return res.status(400).json({ error: 'Intervention blocks are invalid' });
+        update.intervention_blocks = cleanBlocks;
       }
       if (star !== undefined) {
         if (typeof star !== 'boolean') return res.status(400).json({ error: 'Star must be a boolean' });

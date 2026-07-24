@@ -4,6 +4,7 @@ import { authOptions } from '../auth/[...nextauth]';
 import { getSupabaseAdmin } from '../../../lib/supabase';
 import type { ActionPlanItem, PlanCategory, PlanContentBlock, WeekDay } from '../../../types/plan';
 import { PLAN_CATEGORIES } from '../../../types/plan';
+import { PLAN_TITLE_MAX_LENGTH } from '../../../lib/plan-generation';
 import { extractMarkdownTables } from '../../../utils/markdown-tables';
 import { trackServerEvent } from '../../../lib/analytics';
 import { getPayloadSizeBytes, rejectIfRateLimited } from '../../../lib/rate-limit';
@@ -247,6 +248,7 @@ Rules:
 - If there is no concrete strategy, return hasActionableStrategy=false and category="none".
 - Use only these categories for saveable strategies: emotion, learning, exercise, nutrition, social, sleep, school.
 - strategySummary should be one concise sentence for card display.
+- painPoint is the saved plan title. Return a concise noun phrase of no more than ${PLAN_TITLE_MAX_LENGTH} characters; do not copy a full user sentence.
 - Safety flags may include: none, medical, diagnosis, medication, crisis, legal, not_child_related, too_vague.
 
 Output JSON shape:
@@ -360,7 +362,7 @@ function validateExtractedPlan(extracted: ExtractedPlan) {
   return {
     plan: {
       category: extracted.category,
-      painPoint: extracted.painPoint.trim().slice(0, 500),
+      painPoint: extracted.painPoint.trim().slice(0, PLAN_TITLE_MAX_LENGTH),
       explanationMarkdown: typeof extracted.explanationMarkdown === 'string'
         ? extracted.explanationMarkdown.trim().slice(0, 2000)
         : '',
@@ -386,6 +388,7 @@ async function findDuplicate(
       .from('plan_items')
       .select('id')
       .eq('user_id', userId)
+      .eq('legacy_composed_shadow', false)
       .eq('source_message_id', sourceMessageId)
       .maybeSingle();
 
@@ -398,6 +401,7 @@ async function findDuplicate(
     .from('plan_items')
     .select('id, pain_point, strategy, strategy_summary, intervention_blocks')
     .eq('user_id', userId)
+    .eq('legacy_composed_shadow', false)
     .eq('category', category);
 
   if (sourceConversationId) {
@@ -519,7 +523,8 @@ export default async function handler(req: NextApiRequest, res: NextApiResponse)
     const { count, error: countError } = await supabase
       .from('plan_items')
       .select('id', { count: 'exact', head: true })
-      .eq('user_id', userId);
+      .eq('user_id', userId)
+      .eq('legacy_composed_shadow', false);
 
     if (countError) {
       console.error('[plan/save-from-chat] quota count error:', countError);

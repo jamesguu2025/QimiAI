@@ -150,3 +150,83 @@ Phase 1.5 — done (2026-06-27): cross-domain relevance gate on Web
 - Verified on the real retrieved sets: `d8e2e13b` (9→3) drops the wrongly-cited irisin/autophagy molecular paper AND keeps the previously-missed reflex-integration paper; `876c7b97` (6→2) drops all four noise papers. Off-domain papers no longer reach PRIMARY.
 - Cost/latency: one extra cheap LLM call per evidence-sensitive turn (temperature 0, ≤500 tokens, 8s timeout). Swap to Nano/Haiku when the main model migrates.
 - Still to do: (a) port the same gate to the mini-program (or share via `@qimi/rag-core`); (b) optional upgrade to a cross-encoder (Cohere Rerank / BGE) behind the same interface if the LLM judge proves too slow/costly at scale; (c) the `detectEvidenceQuestionType` "test"→diagnosis misfire is still open (low impact now that noise is gated out).
+
+### OPT-004 External evidence fallback when internal RAG has no direct evidence
+
+- Status: `Open`
+- Priority: `P2`
+- Area: `chat / RAG / evidence coverage / live literature search / cross-platform parity`
+- Date added: `2026-07-14`
+- Source: mini-program flatfoot/towel-curl production-chat audit and cross-platform follow-up
+
+Problem:
+- The relevance gate can remove off-domain papers after retrieval, but it cannot recover evidence absent from or missed by the shared BM25 index.
+- For the question “Is towel-curl exercise a good intervention for pediatric flatfoot?”, internal RAG failed to retrieve the 2012 short-foot-versus-towel-curl RCT even when queried by PMID `22715143`, DOI `10.1123/jsr.21.4.327`, full title, and author names. PubMed contains the paper, and external search also found an adolescent-flatfoot comparison study.
+- Therefore “internal RAG found no direct evidence” must not be presented as “the literature contains no direct evidence.” Model knowledge may still be used, but it must be labeled separately from retrieved evidence.
+
+Validated options and constraints:
+- DeepSeek officially exposes native Web Search through its Anthropic-compatible endpoint while still using DeepSeek credentials, models, infrastructure, and billing; Anthropic is the wire protocol, not the provider.
+- A live local probe returned `server_tool_use` + `web_search_tool_result`. The flatfoot query completed in about 7.6 seconds and discovered PMID `22715143` plus an adolescent towel-curl comparison.
+- Do not treat native Web Search results as medical evidence directly: the probe's `allowed_domains` constraint was not reliably honored, results included ordinary sites, Semantic Scholar, and irrelevant PDFs, and one response leaked unconverted DSML tool markup.
+
+Suggested architecture (shared with mini-program):
+1. Keep internal RAG first. Trigger external retrieval only for an evidence-sensitive question when `primary evidence = 0`; a RAG outage is not an evidence gap.
+2. Query PubMed first for structured PMID/DOI/title/abstract metadata.
+3. If PubMed is still insufficient, use DeepSeek native Web Search for discovery only, never direct injection.
+4. Enforce an application-side source allowlist and validate PMID/DOI against PubMed, Crossref, or the publisher before a result can enter evidence context. Do not rely on provider-side domain filtering.
+5. Pass validated external papers through the existing relevance scorer, direct-intervention match, and primary/supporting tiering; tag them `external_live_search`.
+6. If no direct external evidence remains, continue with clearly labeled general model knowledge rather than refusing to answer or fabricating citations.
+7. Add a feature flag, timeout/circuit breaker, latency and cost monitoring, and a queue of externally found PMID/DOI records for later RAG ingestion.
+
+Acceptance criteria:
+- The flatfoot regression finds PMID `22715143` but classifies it as healthy university-age adults, not direct pediatric-flatfoot evidence.
+- The adolescent towel-curl study is discoverable but downgraded for source/study quality.
+- Unverified or non-allowlisted search results never enter the evidence prompt.
+- Search timeout/failure does not block the answer and model memory is never represented as live-search evidence.
+- Web and mini-program use the same trigger, validation rules, evidence labels, and regression fixtures.
+
+Current decision:
+- Deferred. Do not add external search to either production path yet. Continue with internal RAG, relevance gating, and transparent general-knowledge fallback until this item is implemented and accepted locally as a separate project.
+
+### OPT-005 Structured plan check-ins, Dashboard progress, and visualization
+
+- Status: `Open — explicitly deferred until after MVP launch`
+- Priority: `P1 post-MVP`
+- Area: `growth-plan / daily execution / analytics / visualization`
+- Date added: `2026-07-23`
+- Source: product-owner review of the generated visual-plan workflow
+
+Problem:
+- The current composed plan is a readable plan document, but it is stored through the existing single `plan_items` record and Markdown-block model.
+- That representation cannot reliably record completion for each generated action, distinguish partial completion from non-completion, retain structured barriers, or calculate meaningful plan-level trends.
+- Adding interactive controls directly to the static preview would create UI without a durable event model and could produce misleading completion rates.
+
+Approved future UX:
+- Each scheduled plan step uses one mutually exclusive daily status: `completed`, `partly_completed`, or `not_done`; an unanswered item remains unrecorded rather than being treated as failure.
+- `partly_completed` and `not_done` request a short structured reason plus an optional note. Reason choices are domain-neutral by default and may expose domain-specific options only when the plan supports them.
+- A separate `not_scheduled` / `no_opportunity` path is excluded from the adherence denominator so days without a real execution opportunity do not lower completion rate.
+- Immediate feedback remains an implementation instruction and is not conflated with the user's completion record.
+- Dashboard shows a compact `Today's plan` card, completed/total count, recent trend, outstanding actions, and a continue-check-in entry. The full plan and history live under a dedicated plan detail route rather than expanding the Dashboard into the full plan editor.
+- Visualization may show completion/partial/non-completion over time and recurring barrier categories. It must label missing data and denominator rules clearly.
+
+Tracking hierarchy:
+1. Daily implementation fidelity: completion status for each scheduled action.
+2. Barrier context: structured reason only when execution is partial or absent.
+3. Plan-specific outcome or quality measures: optional and reviewed at an appropriate interval; they are not universal daily fields.
+4. Safety or escalation flags: domain-specific and never inferred from a generic physical-response template.
+
+Data-model direction to validate in the future slice:
+- A compiled-plan record separate from the Saved Plan source library.
+- Structured plan-step records with stable IDs and source provenance.
+- Append-only or auditable per-step check-in events with local-date/time-zone handling.
+- A review/version model so AI recommendations cannot silently overwrite the active plan.
+- Explicit denominator, missed-data, archive, edit, and versioning rules before charts are accepted.
+
+AI boundary:
+- One missed action records data only; it does not trigger plan modification or evidence search.
+- Repeated barriers may produce a user-visible summary and an invitation to review.
+- Any material intervention change requires a separate, user-confirmed review flow. New evidence search is visible and cited; it never silently changes the active plan.
+
+Launch decision:
+- Do not implement the schema, Dashboard card, daily check-in controls, statistics, or charts in the current MVP launch-hardening slice.
+- First complete source-faithful plan generation, technical acceptance, and MVP release readiness. Reopen OPT-005 as its own spec/migration/acceptance slice after launch.

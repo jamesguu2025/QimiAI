@@ -304,7 +304,12 @@ function getCookieAttributes() {
 }
 
 function getCookieSigningSecret() {
-  return process.env.NEXTAUTH_SECRET || process.env.AUTH_SECRET || 'qimi-local-dev-secret';
+  const secret = process.env.NEXTAUTH_SECRET || process.env.AUTH_SECRET;
+  if (secret) return secret;
+  if (process.env.NODE_ENV === 'production') {
+    throw new Error('Missing NEXTAUTH_SECRET in production');
+  }
+  return 'qimi-local-dev-secret';
 }
 
 function signGuestUsage(sessionId: string, count: number) {
@@ -1340,7 +1345,7 @@ Anti-drift requirements:
             messages.push({
               role: 'tool',
               tool_call_id: toolCall.id,
-              content: `Error: ${error instanceof Error ? error.message : 'Tool execution failed'}`,
+              content: 'The research tool is temporarily unavailable.',
             });
           }
         }
