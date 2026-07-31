@@ -52,6 +52,7 @@ SOP interpretation rule:
 - `/Users/jamesguu/qimi-ai-website/qimi-ai-website/docs/specs/memory-profile-summary.md`
 - `/Users/jamesguu/qimi-ai-website/qimi-ai-website/docs/specs/compliance.md` (added 2026-03-17, MVP launch gate)
 - `/Users/jamesguu/qimi-ai-website/qimi-ai-website/docs/specs/membership-billing.md` (added 2026-03-17, post-MVP monetization module)
+- `/Users/jamesguu/qimi-ai-website/qimi-ai-website/docs/specs/ai-usage-quota.md` (added 2026-07-26, cross-module MVP cost-control launch gate)
 - ~~`/Users/jamesguu/qimi-ai-website/qimi-ai-website/docs/specs/user-profile.md`~~ — SUPERSEDED by family-profile.md (2026-03-16)
 
 ### Planning Rules

@@ -30,7 +30,6 @@ type PlanItemRow = {
 
 const VALID_CATEGORIES = new Set(PLAN_CATEGORIES.map((category) => category.id));
 const UUID_REGEX = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
-const FREE_PLAN_LIMIT = 5;
 const MAX_PAYLOAD_BYTES = 48 * 1024;
 
 function mapPlanItem(row: PlanItemRow): ActionPlanItem {
@@ -199,23 +198,6 @@ export default async function handler(req: NextApiRequest, res: NextApiResponse)
       }
       const cleanBlocks = validateBlocks(interventionBlocks);
       if (!cleanBlocks) return res.status(400).json({ error: 'Intervention blocks are invalid' });
-
-      const { count, error: countError } = await supabase
-        .from('plan_items')
-        .select('id', { count: 'exact', head: true })
-        .eq('user_id', userId)
-        .eq('legacy_composed_shadow', false);
-
-      if (countError) {
-        console.error('[plan] quota count error:', countError);
-        return res.status(500).json({ error: 'Failed to check plan limit' });
-      }
-
-      if ((count || 0) >= FREE_PLAN_LIMIT) {
-        return res.status(403).json({
-          error: 'Free plan limit reached. Upgrade to Pro for unlimited items.',
-        });
-      }
 
       const { data, error } = await supabase
         .from('plan_items')

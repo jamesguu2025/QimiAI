@@ -6,6 +6,8 @@
 > Branch: historical source branch `feature/growth-plan`; accepted implementation now lives on the current baseline.
 > SOP v2.4 status: Current accepted baseline includes the manual plan flow and Chat Save addendum; future Growth Plan work must refresh current-code facts with line evidence.
 
+> **MVP quota amendment — 2026-07-25:** Earlier five-item Free-tier limits in this historical spec are superseded for the no-billing MVP. Saving, viewing, editing, starring, checking in, and deleting Saved/Composed Plans do not call the model and therefore do not consume an AI allowance or a five-item product quota. Cost-bearing AI plan actions—Generate, Regenerate, and AI-assisted Save from Chat—share one authenticated allowance of 10 user-initiated operations per Asia/Shanghai week. Internal draft/audit retries within one user action count as that single operation. Supabase atomic counters are authoritative; the UI only displays remaining usage. Guest users must register before saving or generating plans.
+
 ---
 
 ## 0. Planning Baseline

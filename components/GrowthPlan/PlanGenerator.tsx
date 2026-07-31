@@ -26,9 +26,11 @@ type PlanGeneratorProps = {
   items: ActionPlanItem[];
   onSave: (draft: GeneratedPlanDraft, sourcePlanIds: string[]) => Promise<boolean>;
   onCancel: () => void;
+  quotaRemaining?: number;
+  onQuotaConsumed?: (remaining: number) => void;
 };
 
-export default function PlanGenerator({ items, onSave, onCancel }: PlanGeneratorProps) {
+export default function PlanGenerator({ items, onSave, onCancel, quotaRemaining, onQuotaConsumed }: PlanGeneratorProps) {
   const orderedItems = useMemo(() => [...items].sort((a, b) => Number(b.star) - Number(a.star)), [items]);
   const [selectedIds, setSelectedIds] = useState<string[]>(() => orderedItems.filter((item) => item.star).map((item) => item.id));
   const [manualItems, setManualItems] = useState<string[]>([]);
@@ -71,6 +73,10 @@ export default function PlanGenerator({ items, onSave, onCancel }: PlanGenerator
       setError('Choose at least one saved plan or add your own item.');
       return;
     }
+    if (quotaRemaining === 0) {
+      setError('You have used this week\'s 10 AI plan operations. Your saved plans remain available to view and edit.');
+      return;
+    }
 
     setIsGenerating(true);
     setError(null);
@@ -83,6 +89,7 @@ export default function PlanGenerator({ items, onSave, onCancel }: PlanGenerator
       const data = await response.json().catch(() => ({}));
       if (!response.ok) throw new Error(data.error || 'Could not build a visual plan.');
       setDraft(data.draft);
+      if (typeof data.quota?.remaining === 'number') onQuotaConsumed?.(data.quota.remaining);
       setViewMode('visual');
     } catch (generateError) {
       setError(generateError instanceof Error ? generateError.message : 'Could not build a visual plan.');
@@ -176,6 +183,11 @@ export default function PlanGenerator({ items, onSave, onCancel }: PlanGenerator
         <p className="text-xs font-semibold uppercase tracking-wide text-primary-purple">Saved Plan Composer</p>
         <h2 id="plan-composer-title" className="text-lg font-bold text-slate-900">Turn saved ideas into one visual plan</h2>
         <p className="mt-1 text-sm text-slate-600">Starred plans are selected automatically. Choose what to include; Qimi will reorganize the saved material without asking you to tell the story again.</p>
+        {typeof quotaRemaining === 'number' && (
+          <p className={`mt-2 text-xs font-semibold ${quotaRemaining === 0 ? 'text-red-600' : 'text-slate-500'}`}>
+            {quotaRemaining} of 10 AI plan operations remaining this week. Saving, viewing, editing, and deleting plans do not use this allowance.
+          </p>
+        )}
       </div>
 
       <div className="mt-5 grid min-w-0 grid-cols-1 gap-4 xl:grid-cols-[minmax(0,1.15fr)_minmax(300px,0.85fr)] xl:gap-5">
@@ -286,7 +298,7 @@ export default function PlanGenerator({ items, onSave, onCancel }: PlanGenerator
           <div className="mt-auto flex flex-col-reverse gap-2 pt-6 sm:flex-row sm:justify-end">
             <button type="button" onClick={onCancel} disabled={isGenerating} className={secondaryButtonClassName}>Cancel</button>
             <button type="button" onClick={generateDraft} disabled={isGenerating || selectedCount === 0} className={primaryButtonClassName}>
-              {isGenerating ? 'Organizing saved plans...' : `Generate from ${selectedCount} item${selectedCount === 1 ? '' : 's'}`}
+              {isGenerating ? 'Composing your plan...' : `Compose from ${selectedCount} item${selectedCount === 1 ? '' : 's'}`}
             </button>
           </div>
         </div>

@@ -16,6 +16,7 @@ import { useAuthUIStore } from '../stores/authUIStore';
 import MemoryToast from '../components/Chat/MemoryToast';
 import { isTopicFolder, Message, normalizeTopicFolder, TopicFolder } from '../types/chat';
 import { trackClientEvent } from '../lib/client-analytics';
+import { useAiQuota } from '../hooks/useAiQuota';
 
 const TOPIC_LABELS: Record<TopicFolder, string> = {
     emotion: 'Emotions',
@@ -34,6 +35,12 @@ export default function ChatPage() {
     const { mode } = router.query;
     const { data: session, status } = useSession();
     const { openLoginModal } = useAuthUIStore();
+    const { quota, refreshQuota } = useAiQuota(status !== 'loading');
+
+    useEffect(() => {
+        if (status === 'loading') return;
+        void refreshQuota();
+    }, [status, session?.user?.email, refreshQuota]);
 
     // 访客模式状态
     const [isGuest, setIsGuest] = useState(true);
@@ -262,8 +269,14 @@ export default function ChatPage() {
         // TODO: 登录用户从 Supabase 获取 userProfile (Phase 2)
 
         await sendMessage(content, attachments, false, userProfile, activeFolderKey);
+        await refreshQuota();
 
         if (isGuest) {
+            trackClientEvent('chat:message_sent', {
+                conversation_type: 'guest',
+                auth_state: 'guest',
+                folder_key: activeFolderKey || 'general',
+            });
             if (nextGuestMessageCount === 1) {
                 trackClientEvent('chat:first_message_sent', {
                     conversation_type: 'guest',
@@ -317,6 +330,7 @@ export default function ChatPage() {
     const handleSelectConversation = async (conversationId: string) => {
         try {
             await selectConversation(conversationId);
+            trackClientEvent('chat:history_viewed', { auth_state: 'authenticated' });
         } catch (error) {
             console.error('Failed to load conversation:', error);
         }
@@ -402,15 +416,12 @@ export default function ChatPage() {
             <Head><title>{pageTitle}</title></Head>
 
             <div className="flex-1 flex flex-col min-h-0 overflow-hidden">
-                {/* 访客剩余消息提示 */}
-                {isGuest && guestMessageCount > 0 && (
-                    <div className="flex-shrink-0 px-4 py-2 bg-amber-50 border-b border-amber-100">
-                        <div className="max-w-3xl mx-auto flex items-center justify-center gap-2 text-sm text-amber-700">
+                {quota && (quota.authState === 'authenticated' || quota.chat.used > 0 || quota.chat.remaining === 0) && (
+                    <div className={`flex-shrink-0 border-b px-4 py-2 ${quota.chat.remaining === 0 ? 'border-red-100 bg-red-50' : quota.authState === 'authenticated' ? 'border-teal-100 bg-teal-50' : 'border-amber-100 bg-amber-50'}`}>
+                        <div className={`mx-auto flex max-w-3xl items-center justify-center gap-2 text-sm ${quota.chat.remaining === 0 ? 'text-red-700' : quota.authState === 'authenticated' ? 'text-teal-700' : 'text-amber-700'}`}>
                             <span>
-                                {guestStorage.getRemainingMessages()} free messages remaining.{' '}
-                                <button onClick={() => openLoginModal('signup')} className="font-semibold underline hover:text-amber-800">
-                                    Sign in for more
-                                </button>
+                                {quota.chat.remaining} of {quota.chat.limit} messages remaining {quota.chat.period === 'day' ? 'today' : 'in your guest trial'}.
+                                {quota.authState === 'guest' && <>{' '}<button onClick={() => openLoginModal('signup')} className="font-semibold underline hover:text-amber-800">Sign in to create a personalized Growth Plan</button></>}
                             </span>
                         </div>
                     </div>

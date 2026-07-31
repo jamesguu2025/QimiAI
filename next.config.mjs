@@ -29,6 +29,16 @@ const nextConfig = {
         destination: "/api/auth/signin/facebook",
         permanent: false,
       },
+      {
+        source: "/founder",
+        destination: "/about",
+        permanent: false,
+      },
+      {
+        source: "/james-family.jpg",
+        destination: "/about",
+        permanent: false,
+      },
     ];
   },
 

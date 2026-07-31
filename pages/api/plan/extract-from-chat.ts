@@ -3,6 +3,8 @@ import { getServerSession } from 'next-auth';
 import { authOptions } from '../auth/[...nextauth]';
 import { getSupabaseAdmin } from '../../../lib/supabase';
 import { getPayloadSizeBytes, rejectIfRateLimited } from '../../../lib/rate-limit';
+import { actorKey, consumePersistentRateLimit, consumePlanAiQuota } from '../../../lib/ai-usage';
+import { trackServerEvent } from '../../../lib/analytics';
 import type { PlanCategory, PlanContentBlock } from '../../../types/plan';
 import { PLAN_CATEGORIES } from '../../../types/plan';
 import { PLAN_TITLE_MAX_LENGTH } from '../../../lib/plan-generation';
@@ -460,6 +462,20 @@ export default async function handler(req: NextApiRequest, res: NextApiResponse)
       assistantContent.trim()
     );
 
+    const planActor = actorKey('user', userId);
+    const minuteLimit = await consumePersistentRateLimit({ actorKey: planActor, scope: 'plan_ai' });
+    if (!minuteLimit.allowed) {
+      res.setHeader('Retry-After', String(minuteLimit.retryAfterSeconds));
+      return res.status(429).json({ error: 'Too many AI plan requests. Please wait a minute and try again.' });
+    }
+    const quota = await consumePlanAiQuota(userId);
+    if (!quota.allowed) {
+      await trackServerEvent(req, 'quota:limit_reached', {
+        feature: 'plan_ai', auth_state: 'authenticated', period: 'week',
+      }, { userId, pagePath: '/chat' });
+      return res.status(429).json({ error: 'Weekly AI plan limit reached', quota: { remaining: 0 } });
+    }
+
     const extracted = await extractDraft(
       assistantContent.trim().slice(0, 8000),
       typeof userContext === 'string' ? userContext.trim().slice(0, 1000) : undefined
@@ -510,6 +526,7 @@ export default async function handler(req: NextApiRequest, res: NextApiResponse)
         sourceTime,
       },
       duplicate,
+      quota: { remaining: quota.remaining },
     });
   } catch (error) {
     console.error('[plan/extract-from-chat] error:', error);

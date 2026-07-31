@@ -9,7 +9,6 @@ import type { PlanCategory, PlanContentBlock } from '@/types/plan';
 
 const UUID_REGEX = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
 const MAX_PAYLOAD_BYTES = 48 * 1024;
-const FREE_COMPOSED_PLAN_LIMIT = 5;
 const VALID_CATEGORIES = new Set<PlanCategory>([
   'emotion', 'learning', 'exercise', 'nutrition', 'social', 'sleep', 'school',
 ]);
@@ -173,15 +172,6 @@ export default async function handler(req: NextApiRequest, res: NextApiResponse)
     if (missingTopic) return res.status(400).json({ error: 'Composed plan is missing a selected topic section' });
   }
 
-  const { count: existingCount, error: countError } = await context.supabase
-    .from('composed_plans')
-    .select('id', { count: 'exact', head: true })
-    .eq('user_id', context.userId);
-  if (countError) return res.status(500).json({ error: 'Failed to check composed plan limit' });
-  if ((existingCount || 0) >= FREE_COMPOSED_PLAN_LIMIT) {
-    return res.status(403).json({ error: 'Free plan limit reached. Keep up to five composed plans.' });
-  }
-
   const { data, error } = await context.supabase
     .from('composed_plans')
     .insert({
@@ -203,6 +193,10 @@ export default async function handler(req: NextApiRequest, res: NextApiResponse)
   await trackServerEvent(req, 'plan:item_saved', {
     save_source: 'composed',
     category: topicCategories.length === 1 ? topicCategories[0] : 'multi',
+  }, { userId: context.userId, pagePath: '/plan' });
+  await trackServerEvent(req, 'plan:composed_saved', {
+    source_count: sourcePlanIds.length,
+    topic_count: topicCategories.length,
   }, { userId: context.userId, pagePath: '/plan' });
   return res.status(201).json({ plan: mapComposedPlan(data as ComposedPlanRow) });
 }

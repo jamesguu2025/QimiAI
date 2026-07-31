@@ -89,7 +89,7 @@ This acceptance result belongs to the shared chat infrastructure slice, not to t
 As of 2026-05-06, the local Supabase environment and guest chat migration path have passed technical acceptance and human acceptance in the current working branch:
 
 - local Supabase starts through the project scripts
-- local database resets from `supabase/migrations/` and `supabase/seed.sql`
+- local database schema changes are applied non-destructively from `supabase/migrations/`
 - Next.js reads local Supabase via `.env.local`
 - guest chat reply flow works
 - assistant markdown table rendering works
@@ -100,6 +100,14 @@ As of 2026-05-06, the local Supabase environment and guest chat migration path h
 - SmartDrawer history click loads the correct conversation and supports continued replies
 
 This acceptance result belongs to the shared local test environment and chat/guest-migration infrastructure slice, not to a downstream product module.
+
+### Reset command prohibition
+
+Project agents must never execute any reset command. This includes `supabase db reset`, `npm run supabase:reset`, `git reset`, schema recreation, database recreation, or an equivalent destructive reset operation. This prohibition applies to local development, automated testing, staging, and production.
+
+Use non-destructive migration commands, targeted repair migrations, read-only inspection, `git revert`, and isolated disposable test databases instead. Existing local test data and user-owned worktree changes must be preserved.
+
+If a clean database replay is required, create a new isolated disposable database that has never held user or acceptance data. If no safe non-destructive path exists, stop and report the blocker. Do not run any reset command.
 
 ---
 
@@ -125,6 +133,8 @@ Current baseline:
 - **Compliance (MVP launch gate)**: `Implemented` for the current MVP launch baseline (privacy/terms/consent surfaces, adult-user confirmation, delete-account/settings path, and EBG review record exist; legal launch details remain checklist items rather than missing product surfaces)
 - Settings (account): `Implemented` and human-accepted in current working branch
 - Growth Plan: `Implemented` and human-accepted in current working branch (manual plan management and chat save-to-plan path implemented; post-MVP export/reminder refinements remain separate)
+- AI Usage Quota and Cost Control: `Partially implemented`; formal plan is `docs/specs/ai-usage-quota.md`. Newly discovered cost-bearing route coverage, server/client authority, visible reset data, and focused tests are MVP launch blockers pending human approval.
+- Registered Onboarding Fallback: `Implemented` and human-accepted on 2026-07-27; consent runs first, then server-authoritative onboarding with pre-population and explicit durable completion. See `docs/reviews/registered-onboarding-fallback-2026-07-26.md`.
 - Report Analysis: `Planned` (valuable, but moved out of the current MVP acceptance baseline; post-MVP P1 spec refreshed on 2026-05-27; requires a dedicated implementation branch before coding)
 - Crisis Calm: `Archived` (explicitly deferred from MVP by user decision on 2026-05-20)
 - Memory Profile Summary: `Implemented` and human-accepted in current working branch (conversation extraction, profile display, and profile summary path are active; future quality tuning is non-blocking)
@@ -135,7 +145,8 @@ Explicit non-module decisions for the current MVP baseline:
 
 - Feedback Ticket/Admin workflow: not planned for MVP; Contact Us is sufficient for launch.
 - Paper Topics / Research Browser: not planned due copyright/licensing and redistribution risk. Keep research-backed citations limited to answer-time support in chat.
-- Chat file/image upload: UI affordance may remain as a coming-soon signal, but no report/image/document interpretation is active in the MVP until a dedicated upload/report feature is implemented and accepted.
+- Chat file/image upload: hidden for MVP because the prior affordance did not upload, persist, scan, or interpret files. Reopen only through the dedicated post-MVP upload/privacy/security item in `docs/optimization-backlog.md`.
+- MVP AI-cost quota policy (2026-07-25): guest chat is 10 messages lifetime per server-issued guest identifier; registered free chat is 30 messages per Asia/Shanghai day; authenticated AI plan operations share 10 uses per Asia/Shanghai week. Non-AI plan save/view/edit/delete operations do not consume the AI allowance.
 
 ---
 
@@ -163,11 +174,12 @@ The project must move forward in this order unless the user explicitly overrides
 9. **Growth Plan acceptance closure** — completed on current baseline; only carry forward non-blocking refinements
 10. **Memory Profile Summary acceptance closure** — completed on current baseline; only carry forward extraction quality tuning
 11. **Analytics MVP launch hygiene** — event correctness, internal-user filtering, and weekly report verification
-12. ~~**Security and abuse-prevention pass**~~ — completed on the current MVP baseline for rate limits on cost-bearing endpoints, logging minimization, ownership checks, upload boundaries, provider-neutral public errors/log labels, and public API review; carry forward only newly discovered launch blockers
-13. **Chat RAG Answer Quality launch hardening** — complete before public MVP launch if current replay/manual tests still show citation mismatch, over-agreeing, or same-topic RAG context drift. This work is scoped by `docs/specs/chat-rag-answer-quality.md` and must not expand into Paper Topics, Report Analysis, or new services.
-14. `report-analysis` dedicated implementation branch as first P1/post-MVP feature after launch readiness is closed
-15. `membership-billing` (post-MVP required monetization; Stripe checkout, billing portal, entitlement sync)
-16. Return to deeper follow-up reminder iteration only after the higher-frequency product paths above are stable
+12. **AI usage quota and abuse-prevention closure**; reopened on 2026-07-26 after the audit found browser-reachable model calls outside the product allowance, a competing guest browser counter, incomplete reset metadata, and missing focused boundary tests. Follow `docs/specs/ai-usage-quota.md` before public launch.
+13. **Registered onboarding fallback closure**; add the authenticated user fallback defined in `docs/specs/onboarding.md` and `docs/reviews/registered-onboarding-fallback-2026-07-26.md`. Consent must run first. Existing values must be pre-populated. No reset command is permitted.
+14. **Chat RAG Answer Quality launch hardening** — complete before public MVP launch if current replay/manual tests still show citation mismatch, over-agreeing, or same-topic RAG context drift. This work is scoped by `docs/specs/chat-rag-answer-quality.md` and must not expand into Paper Topics, Report Analysis, or new services.
+15. `report-analysis` dedicated implementation branch as first P1/post-MVP feature after launch readiness is closed
+16. `membership-billing` (post-MVP required monetization; Stripe checkout, billing portal, entitlement sync)
+17. Return to deeper follow-up reminder iteration only after the higher-frequency product paths above are stable
 
 Rationale:
 

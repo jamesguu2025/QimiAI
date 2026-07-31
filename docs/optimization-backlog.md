@@ -230,3 +230,25 @@ AI boundary:
 Launch decision:
 - Do not implement the schema, Dashboard card, daily check-in controls, statistics, or charts in the current MVP launch-hardening slice.
 - First complete source-faithful plan generation, technical acceptance, and MVP release readiness. Reopen OPT-005 as its own spec/migration/acceptance slice after launch.
+
+### OPT-006 Authenticated attachment upload, private storage, and safe interpretation
+
+- Status: `Open — UI hidden for MVP`
+- Priority: `P1 post-MVP`
+- Area: `chat / uploads / Supabase Storage / privacy / security`
+- Date added: `2026-07-25`
+- Source: product-owner MVP quota and cost review
+
+Problem:
+- The former Chat attachment affordance accepted local image/document objects but did not upload file bytes, did not persist them in Supabase Storage, and the chat API did not parse or interpret them. Keeping it visible implied a capability that did not exist.
+
+Required future slice before reopening the UI:
+- Require authentication and use a private Supabase Storage bucket with user-scoped object paths and server-verified ownership.
+- Define a narrow allowlist for MIME type and extension, magic-byte validation, per-file/request/user size limits, upload rate limits, and malware scanning/quarantine before any parser or model receives content.
+- Specify supported interpretation paths separately for images, PDFs, Word documents, and plain text; reject unsupported/encrypted/corrupt files with provider-neutral errors.
+- Define consent, child/family-data notice, retention period, deletion/account-deletion behavior, signed-URL lifetime, metadata minimization, and audit logging.
+- Treat uploaded content as untrusted input: isolate parsing, prevent prompt/tool injection, do not follow embedded links/instructions automatically, and never expose one user's object to another.
+- Add local-Supabase migrations/policies, security tests, parser fixtures, failure-state UX, cost quotas for model/OCR/parser calls, and human acceptance before enabling the attachment control.
+
+Current MVP decision:
+- Attachment input, paperclip, drag-and-drop, and local preview are hidden. No attachment bytes are stored in Supabase.

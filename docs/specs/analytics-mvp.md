@@ -6,6 +6,8 @@
 > API routes: `pages/api/analytics/event.ts`, `pages/api/analytics/summary.ts` (optional internal read endpoint)
 > Scope: Privacy-friendly MVP product analytics for landing → onboarding → chat → memory → growth plan funnel, activation, retention, and chat error observability.
 
+> **Launch event amendment — 2026-07-25:** Web aligns with the mini-program's retention intent, adapted to current Web features. Add authoritative `chat:message_sent`, `plan:generation_started/completed/failed`, `plan:composed_saved`, `plan:item_checked_in`, `plan:library_viewed`, `chat:history_viewed`, and `quota:limit_reached` events. Do not copy archived mood or non-existent follow-up interactions. Registered-user D1/D7 retention uses meaningful successful chat/plan events; guest retention remains directional because the MVP guest identifier can be lost when site data is cleared. Internal/test events remain excluded from operational reports. No message, plan, child, file, or profile content may enter analytics properties.
+
 ---
 
 ## 0. Planning Baseline

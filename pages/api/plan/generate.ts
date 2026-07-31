@@ -17,6 +17,8 @@ import {
 } from '../../../lib/plan-generation';
 import type { GeneratedPlanDraft } from '../../../lib/plan-generation';
 import type { PlanCategory, PlanContentBlock } from '../../../types/plan';
+import { consumePersistentRateLimit, consumePlanAiQuota, actorKey } from '../../../lib/ai-usage';
+import { trackServerEvent } from '../../../lib/analytics';
 
 const DEEPSEEK_API_KEY = process.env.DEEPSEEK_API_KEY;
 const DEEPSEEK_API_BASE = process.env.DEEPSEEK_API_BASE || 'https://api.deepseek.com';
@@ -137,6 +139,23 @@ export default async function handler(req: NextApiRequest, res: NextApiResponse)
       return res.status(400).json({ error: 'Selected plan content is too large. Choose fewer items.' });
     }
     const category = sources[0]?.category || 'learning';
+
+    const planActor = actorKey('user', context.userId);
+    const minuteLimit = await consumePersistentRateLimit({ actorKey: planActor, scope: 'plan_ai' });
+    if (!minuteLimit.allowed) {
+      res.setHeader('Retry-After', String(minuteLimit.retryAfterSeconds));
+      return res.status(429).json({ error: 'Too many plan requests. Please wait a minute and try again.' });
+    }
+    const quota = await consumePlanAiQuota(context.userId);
+    if (!quota.allowed) {
+      await trackServerEvent(req, 'quota:limit_reached', {
+        feature: 'plan_ai', auth_state: 'authenticated', period: 'week',
+      }, { userId: context.userId, pagePath: '/plan' });
+      return res.status(429).json({ error: 'Weekly AI plan limit reached', quota: { remaining: 0 } });
+    }
+    await trackServerEvent(req, 'plan:generation_started', {
+      generation_source: 'composer', source_count: selectedCountForAnalytics(sources.length, validation.input.manualItems.length),
+    }, { userId: context.userId, pagePath: '/plan' });
 
     const generationPrompt = buildPlanGenerationPrompt(validation.input, sources);
     const requestDraft = (prompt: string) => fetch(`${DEEPSEEK_API_BASE}/chat/completions`, {
@@ -289,9 +308,21 @@ export default async function handler(req: NextApiRequest, res: NextApiResponse)
       });
       return res.status(502).json({ error: 'The draft added or changed details that were not in your saved plans. Please generate it again.' });
     }
-    return res.status(200).json({ draft: draftValidation.draft });
+    await trackServerEvent(req, 'plan:generation_completed', {
+      generation_source: 'composer',
+      source_count: selectedCountForAnalytics(sources.length, validation.input.manualItems.length),
+      remaining: quota.remaining,
+    }, { userId: context.userId, pagePath: '/plan' });
+    return res.status(200).json({ draft: draftValidation.draft, quota: { remaining: quota.remaining } });
   } catch (error) {
     console.error('[plan/generate] failed:', error instanceof Error ? error.message : error);
+    await trackServerEvent(req, 'plan:generation_failed', {
+      generation_source: 'composer', error_code: error instanceof Error ? error.name : 'unknown', retryable: true,
+    }, { userId: context.userId, pagePath: '/plan' });
     return res.status(502).json({ error: 'Could not build a plan draft. Please try again.' });
   }
+}
+
+function selectedCountForAnalytics(savedCount: number, manualCount: number) {
+  return Math.min(20, Math.max(0, savedCount + manualCount));
 }

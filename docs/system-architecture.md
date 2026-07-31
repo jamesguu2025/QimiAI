@@ -27,7 +27,7 @@ This document was re-checked against:
 - Keep Crisis Calm archived/deferred from MVP, but retain its historical spec and prototype for a possible future reopen.
 - Keep Membership/Billing as a required post-MVP business module. It is not implemented in the MVP.
 - Do not introduce a Feedback Ticket/Admin workflow for MVP; Contact Us remains the support path.
-- Chat file/image upload UI may remain as a coming-soon affordance, but file, image, and report interpretation are not active MVP capabilities.
+- Chat file/image upload UI is hidden for MVP. File, image, and report upload/interpretation require a later authenticated private-storage, validation, malware-scanning, retention, deletion, and consent design.
 - Chat RAG answer quality may use server-side Supabase context rows for same-topic answer-time paper grounding. This is not a Paper Topics feature and must not expose a public paper browser, bulk abstracts, or a standalone research search surface.
 
 ### Current Implementation Notes
@@ -380,12 +380,13 @@ When a guest user registers or logs in, all temporary data collected during the 
 |----------------|-------|-----------|----------|
 | Landing page (`/`) | Full | Full | Full |
 | Blog (`/blog`) | Full | Full | Full |
-| Chat (`/chat`) | 10 messages lifetime | 50 msg/day | Future billing decision |
+| Chat (`/chat`) | 10 messages lifetime | 30 msg/day (Asia/Shanghai reset) | Future billing decision |
 | RAG research mode | No | 5 queries/day | Unlimited |
 | Paper Topics / Research Browser | No | No | No *(deferred; not in Web MVP)* |
 | ~~Mood tracking (`/mood`)~~ | ~~No~~ | ~~Full~~ | ~~Full~~ *(ARCHIVED)* |
 | Crisis calm (`/calm`) | Archived/deferred | Archived/deferred | Archived/deferred |
-| Growth plan (`/plan`) | No | Full (max 5 items) | Full (unlimited) |
+| Growth plan storage (`/plan`) | No | Save/view/edit/delete open; normal abuse controls apply | Future billing decision |
+| AI plan operations | No | 10/week shared by Generate, Regenerate, and AI-assisted Save from Chat | Future billing decision |
 | Report analysis (`/reports`) | No | P1/Post-MVP, not in current MVP | Future billing decision |
 | Dashboard (`/dashboard`) | No | Full | Full |
 | Family profile (`/family`) | No | Full | Full |
@@ -425,7 +426,8 @@ if (quota.messagesUsed >= quota.messagesLimit) {
 ### Special Cases
 
 - **Crisis calm** (`/calm`): archived/deferred. If reopened later, the access model should be refreshed before implementation.
-- **Chat guest mode**: permanent 10-message trial allowance. The current client-side counter is only a UX control; production enforcement should add server-side quota/rate limiting for cost-bearing chat calls.
+- **Chat guest mode**: permanent 10-message trial allowance, enforced by a Supabase atomic counter keyed to a server-issued HttpOnly guest identifier. A normal browser/computer restart does not reset it; clearing site data or changing browser/device creates a new identifier, which is an accepted MVP limitation.
+- **AI quota authority**: Supabase server-side atomic counters are the source of truth. Client counters and badges are display/fuse controls only. Guest/free cost-bearing endpoints also use a persistent 5-request-per-minute bucket; ordinary non-AI plan storage operations retain payload, ownership, and general abuse controls but do not consume AI quota.
 - **Stripe subscription check**: Not implemented yet. Current schema has no `users.subscription_tier` column and no `GET /api/user/subscription` route. For now, all registered users are treated as Free tier. Pro features must not be treated as enforceable until the membership-billing module creates the billing schema/API.
 
 ---

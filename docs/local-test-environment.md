@@ -1,6 +1,6 @@
 # Local Test Environment
 
-> Status: ACTIVE | Amended: 2026-05-06 (SOP v2.4 evidence note)
+> Status: ACTIVE | Amended: 2026-07-26
 
 This project must not use production Supabase for routine local feature testing.
 
@@ -10,19 +10,20 @@ This setup document has been checked against the current `agent-dev-sop` on 2026
 
 External evidence:
 
-- Supabase's official local development guide supports local CLI development, version-controlled migrations under `supabase/migrations/`, `supabase db reset`, and seed data through `supabase/seed.sql`: https://supabase.com/docs/guides/cli/local-development
+- Supabase's official local development guide supports local CLI development and version-controlled migrations under `supabase/migrations/`: https://supabase.com/docs/guides/cli/local-development
 - Supabase's official CLI local development workflow supports running the local stack with `supabase start` and Docker-compatible local services: https://supabase.com/docs/guides/cli
 
 Internal code evidence:
 
-- `package.json:L6-L15` defines `dev`, `dev:local`, env switching, `supabase:start`, `supabase:stop`, `supabase:reset`, `build`, and `start`.
+- `package.json:L6-L15` defines `dev`, `dev:local`, env switching, Supabase lifecycle scripts, `build`, and `start`.
 - `supabase/migrations/` contains the versioned local schema source of truth.
-- `supabase/seed.sql` contains the local seed data loaded by reset.
+- `supabase/seed.sql` contains seed data for a newly created isolated test database.
 
 Conclusion:
 
 - The local testing policy is accepted as the default database-backed development path.
 - Production Supabase remains restricted to validated migrations and explicit production maintenance.
+- Project agents must never execute a database reset command. This project rule is stricter than the general Supabase CLI workflow.
 
 ## Environment Policy
 
@@ -111,7 +112,7 @@ Or start local mode in one command:
 npm run dev:local
 ```
 
-## Database Reset
+## Non-destructive database workflow
 
 Local schema is managed by migration files in:
 
@@ -132,13 +133,15 @@ Email: local-parent@example.com
 Password: LocalTest123!
 ```
 
-Reset local Supabase to a known state:
+Apply pending migrations without deleting existing data:
 
 ```bash
-npm run supabase:reset
+npx supabase migration up --local
 ```
 
-This applies migrations and reloads seed data. Use this before testing guest migration, conversation persistence, user profile, growth plan, or other database-backed features.
+Never execute any reset command. This includes `supabase db reset`, `npm run supabase:reset`, `git reset`, schema recreation, database recreation, or an equivalent destructive reset operation. This applies to local development, automated testing, staging, and production.
+
+For migration replay testing, create a new isolated disposable database that has never held user or acceptance data. For an existing local database, use forward-only migrations, targeted repair migrations, and read-only inspection. If a safe non-destructive path is unavailable, stop and report the blocker.
 
 ## Environment Switching
 
@@ -173,7 +176,7 @@ Before testing any feature that writes data, verify `.env.local` points to the i
 Production Supabase changes require:
 
 1. Migration file committed under `supabase/migrations/`
-2. Local reset passing
+2. Non-destructive local migration application passing
 3. Staging or branch verification
 4. Explicit production migration approval
 
@@ -184,7 +187,7 @@ Do not manually edit production schema unless the same SQL is also captured in v
 Accepted on 2026-05-06:
 
 - `npm run supabase:start` starts the local stack.
-- `npm run supabase:reset` rebuilds the database from migrations and seed data.
+- Pending migrations can be applied without deleting existing local acceptance data.
 - `npm run env:local` points `.env.local` to `http://127.0.0.1:54321`.
 - `npm run dev` serves the app at `http://localhost:4000`.
 - Guest chat works without DSML leakage.

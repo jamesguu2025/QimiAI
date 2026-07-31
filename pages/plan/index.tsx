@@ -1,7 +1,7 @@
 import Head from 'next/head';
 import { useRouter } from 'next/router';
 import { Plus, Sparkles } from 'lucide-react';
-import { useCallback, useEffect, useMemo, useState } from 'react';
+import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { useSession } from 'next-auth/react';
 import AppLayout from '@/components/Layout/AppLayout';
 import PlanCategoryAccordion from '@/components/GrowthPlan/PlanCategoryAccordion';
@@ -14,6 +14,8 @@ import AuthRequiredState from '@/components/Auth/AuthRequiredState';
 import type { ActionPlanItem, ComposedPlan, CreatePlanItemRequest, PlanCategory } from '@/types/plan';
 import { PLAN_CATEGORIES } from '@/types/plan';
 import type { GeneratedPlanDraft } from '@/lib/plan-generation';
+import { useAiQuota } from '@/hooks/useAiQuota';
+import { trackClientEvent } from '@/lib/client-analytics';
 
 type PlanFormValues = {
   category: PlanCategory;
@@ -41,7 +43,8 @@ export default function GrowthPlanPage() {
   const [showGenerator, setShowGenerator] = useState(false);
   const [editingItem, setEditingItem] = useState<ActionPlanItem | null>(null);
   const [isSubmitting, setIsSubmitting] = useState(false);
-  const [entitlementTier] = useState<'free' | 'pro'>('free');
+  const libraryViewTrackedRef = useRef(false);
+  const { quota, refreshQuota, setQuota } = useAiQuota(Boolean(session?.user?.email));
 
   useEffect(() => {
     if (status !== 'loading' && !session) {
@@ -97,6 +100,15 @@ export default function GrowthPlanPage() {
       fetchComposedPlans();
     }
   }, [session?.user?.email, fetchItems, fetchComposedPlans]);
+
+  useEffect(() => {
+    if (!session?.user?.email || isLoading || libraryViewTrackedRef.current) return;
+    libraryViewTrackedRef.current = true;
+    trackClientEvent('plan:library_viewed', {
+      saved_plan_count: items.length,
+      composed_plan_count: composedPlans.length,
+    });
+  }, [session?.user?.email, isLoading, items.length, composedPlans.length]);
 
   useEffect(() => {
     const requestedPlan = typeof router.query.plan === 'string' ? router.query.plan : null;
@@ -317,8 +329,6 @@ export default function GrowthPlanPage() {
     );
   }
 
-  const quotaReached = totalItems >= 5 && entitlementTier !== 'pro';
-
   return (
     <AppLayout>
       <Head><title>Growth Plan - Qimi AI</title></Head>
@@ -345,18 +355,9 @@ export default function GrowthPlanPage() {
               className="inline-flex items-center justify-center gap-2 rounded-xl border border-primary-purple/30 bg-primary-purple/5 px-4 py-2 text-sm font-semibold text-primary-purple transition-colors hover:bg-primary-purple/10 disabled:cursor-not-allowed disabled:opacity-50"
             >
               <Sparkles className="h-4 w-4" />
-              Generate Plan
+              Compose Plan
             </button>
-            {quotaReached ? (
-              <button
-                type="button"
-                disabled
-                className="inline-flex items-center justify-center rounded-xl bg-primary-purple/10 px-4 py-2 text-sm font-semibold text-primary-purple"
-              >
-                Upgrade for More Items
-              </button>
-            ) : (
-              <button
+            <button
                 type="button"
                 onClick={() => {
                   setEditingItem(null);
@@ -368,8 +369,7 @@ export default function GrowthPlanPage() {
               >
                 <Plus className="h-4 w-4" />
                 Add Plan Item
-              </button>
-            )}
+            </button>
           </div>
         </div>
 
@@ -391,7 +391,19 @@ export default function GrowthPlanPage() {
           <PlanSummary totalItems={totalItems} starredCount={starredCount} />
 
           {showGenerator && (
-            <PlanGenerator items={items} onSave={handleSaveComposed} onCancel={closeGenerator} />
+            <PlanGenerator
+              items={items}
+              onSave={handleSaveComposed}
+              onCancel={closeGenerator}
+              quotaRemaining={quota?.planAi?.remaining}
+              onQuotaConsumed={(remaining) => {
+                setQuota((current) => current?.planAi ? {
+                  ...current,
+                  planAi: { ...current.planAi, remaining, used: current.planAi.limit - remaining },
+                } : current);
+                void refreshQuota();
+              }}
+            />
           )}
 
           {formError && showGenerator && (

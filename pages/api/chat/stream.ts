@@ -15,7 +15,14 @@ import { isTopicFolder, normalizeTopicFolder, TopicFolder } from '../../../types
 import { routeRagNeed } from '../../../lib/rag-router';
 import { trackServerEvent } from '../../../lib/analytics';
 import { getClientIp, getPayloadSizeBytes, rejectIfRateLimited } from '../../../lib/rate-limit';
-import { createHmac, randomUUID, timingSafeEqual } from 'crypto';
+import { ensureGuestSession } from '../../../lib/guest-session';
+import {
+  actorKey,
+  AI_USAGE_LIMITS,
+  consumeAiQuota,
+  consumePersistentRateLimit,
+  shanghaiDayKey,
+} from '../../../lib/ai-usage';
 import {
   getLatestRagContext,
   saveRagContext,
@@ -214,10 +221,6 @@ const DEEPSEEK_API_BASE = process.env.DEEPSEEK_API_BASE || 'https://api.deepseek
 const DEEPSEEK_MODEL = process.env.DEEPSEEK_MODEL || 'deepseek-v4-flash';
 const DEEPSEEK_THINKING = { type: 'disabled' };
 const MAX_CHAT_PAYLOAD_BYTES = 64 * 1024;
-const AUTH_DAILY_CHAT_LIMIT = 50;
-const GUEST_LIFETIME_CHAT_LIMIT = 10;
-const GUEST_SESSION_COOKIE = 'qimi_guest_session';
-const GUEST_CHAT_QUOTA_COOKIE = 'qimi_guest_chat_quota';
 const ENABLE_RAG = process.env.ENABLE_RAG === 'true';
 
 function shouldReusePriorSources(userMessage: string): boolean {
@@ -295,87 +298,6 @@ ${buildRagCitationRule(sources.length)}
 
 Previously retrieved sources:
 ${formatSourceLinksForPrompt(sources)}`;
-}
-
-function getCookieAttributes() {
-  const attrs = ['Path=/', 'Max-Age=31536000', 'HttpOnly', 'SameSite=Lax'];
-  if (process.env.NODE_ENV === 'production') attrs.push('Secure');
-  return attrs.join('; ');
-}
-
-function getCookieSigningSecret() {
-  const secret = process.env.NEXTAUTH_SECRET || process.env.AUTH_SECRET;
-  if (secret) return secret;
-  if (process.env.NODE_ENV === 'production') {
-    throw new Error('Missing NEXTAUTH_SECRET in production');
-  }
-  return 'qimi-local-dev-secret';
-}
-
-function signGuestUsage(sessionId: string, count: number) {
-  return createHmac('sha256', getCookieSigningSecret())
-    .update(`${sessionId}.${count}`)
-    .digest('base64url');
-}
-
-function readGuestUsage(rawValue: string | undefined, sessionId: string) {
-  if (!rawValue) return 0;
-  const [countText, signature] = rawValue.split('.');
-  const count = Number.parseInt(countText || '', 10);
-  if (!Number.isFinite(count) || count < 0 || !signature) return 0;
-
-  const expected = signGuestUsage(sessionId, count);
-  const providedBuffer = Buffer.from(signature);
-  const expectedBuffer = Buffer.from(expected);
-  if (providedBuffer.length !== expectedBuffer.length) return 0;
-  if (!timingSafeEqual(providedBuffer, expectedBuffer)) return 0;
-  return count;
-}
-
-function appendSetCookie(res: NextApiResponse, cookie: string) {
-  const current = res.getHeader('Set-Cookie');
-  if (!current) {
-    res.setHeader('Set-Cookie', cookie);
-    return;
-  }
-  res.setHeader('Set-Cookie', Array.isArray(current) ? [...current, cookie] : [String(current), cookie]);
-}
-
-function setSignedGuestUsage(res: NextApiResponse, sessionId: string, count: number) {
-  const signature = signGuestUsage(sessionId, count);
-  appendSetCookie(res, `${GUEST_CHAT_QUOTA_COOKIE}=${count}.${signature}; ${getCookieAttributes()}`);
-}
-
-function ensureGuestSession(req: NextApiRequest, res: NextApiResponse) {
-  const existing = req.cookies[GUEST_SESSION_COOKIE];
-  if (existing) return existing;
-
-  const sessionId = randomUUID();
-  appendSetCookie(res, `${GUEST_SESSION_COOKIE}=${sessionId}; ${getCookieAttributes()}`);
-  return sessionId;
-}
-
-function shanghaiDayStartIso() {
-  const offsetMs = 8 * 60 * 60 * 1000;
-  const shanghaiNow = new Date(Date.now() + offsetMs);
-  shanghaiNow.setUTCHours(0, 0, 0, 0);
-  return new Date(shanghaiNow.getTime() - offsetMs).toISOString();
-}
-
-async function countUserMessagesToday(supabase: ReturnType<typeof getSupabaseAdmin>, userId: string) {
-  const { count, error } = await supabase
-    .from('messages')
-    .select('id, conversations!inner(user_id)', { count: 'exact', head: true })
-    .eq('role', 'user')
-    .eq('conversations.user_id', userId)
-    .gte('created_at', shanghaiDayStartIso());
-
-  if (error) {
-    console.error('[chat/stream] Daily quota count failed:', error);
-    return null;
-  }
-
-  return count || 0;
 }
 
 function buildEvidenceStatusInstruction(evidenceStatus?: RAGEvidenceStatus): string {
@@ -681,7 +603,7 @@ export default async function handler(
     if (rejectIfRateLimited(req, res, {
       namespace: 'chat-stream',
       key: session?.user?.email || getClientIp(req),
-      limit: session?.user?.email ? 60 : 15,
+      limit: AI_USAGE_LIMITS.perMinute,
       windowMs: 60 * 1000,
     })) {
       return;
@@ -763,27 +685,6 @@ export default async function handler(
       }
     }
 
-    if (session?.user?.email) {
-      if (!authenticatedUserId) {
-        return res.status(404).json({ error: 'User not found' });
-      }
-
-      const messagesToday = await countUserMessagesToday(supabaseMemory, authenticatedUserId);
-      if (messagesToday === null) {
-        return res.status(503).json({ error: 'Unable to check quota' });
-      }
-      if (messagesToday >= AUTH_DAILY_CHAT_LIMIT) {
-        return res.status(429).json({ error: 'Daily chat limit reached' });
-      }
-    } else {
-      // guestSessionId was already set above for RAG context lookup
-      const usedCount = readGuestUsage(req.cookies[GUEST_CHAT_QUOTA_COOKIE], guestSessionId || '');
-      if (usedCount >= GUEST_LIFETIME_CHAT_LIMIT) {
-        return res.status(429).json({ error: 'Guest chat limit reached' });
-      }
-      setSignedGuestUsage(res, guestSessionId || '', usedCount + 1);
-    }
-
     if (conversationId) {
       if (!session?.user?.email || !authenticatedUserId) {
         return res.status(401).json({ error: 'Unauthorized' });
@@ -799,6 +700,47 @@ export default async function handler(
       if (ownershipError || !ownedConversation) {
         return res.status(404).json({ error: 'Conversation not found' });
       }
+    }
+
+    const quotaActor = session?.user?.email
+      ? authenticatedUserId && actorKey('user', authenticatedUserId)
+      : guestSessionId && actorKey('guest', guestSessionId);
+    if (!quotaActor) return res.status(404).json({ error: 'User not found' });
+
+    try {
+      const minuteLimit = await consumePersistentRateLimit({ actorKey: quotaActor, scope: 'chat' });
+      if (!minuteLimit.allowed) {
+        res.setHeader('Retry-After', String(minuteLimit.retryAfterSeconds));
+        return res.status(429).json({
+          code: 'CHAT_RATE_LIMIT',
+          error: 'You are sending messages quickly. Please wait a minute and try again.',
+        });
+      }
+
+      const quota = await consumeAiQuota({
+        actorKey: quotaActor,
+        feature: 'chat',
+        windowKey: session?.user?.email ? `day:${shanghaiDayKey()}` : 'lifetime',
+        limit: session?.user?.email ? AI_USAGE_LIMITS.freeChatDaily : AI_USAGE_LIMITS.guestChatLifetime,
+      });
+      if (!quota.allowed) {
+        await trackServerEvent(req, 'quota:limit_reached', {
+          feature: 'chat',
+          auth_state: session?.user?.email ? 'authenticated' : 'guest',
+          period: session?.user?.email ? 'day' : 'lifetime',
+        }, { userId: authenticatedUserId, pagePath: '/chat' });
+        return res.status(429).json({
+          code: session?.user?.email ? 'DAILY_CHAT_LIMIT' : 'GUEST_CHAT_LIMIT',
+          error: session?.user?.email
+            ? 'You have used all 30 free messages for today. Your messages will refresh tomorrow.'
+            : 'You have used all 10 guest messages. Create a free account to get 30 messages each day.',
+          quota: { remaining: 0 },
+        });
+      }
+      res.setHeader('X-Qimi-Chat-Remaining', String(quota.remaining));
+    } catch (quotaError) {
+      console.error('[chat/stream] persistent quota failed:', quotaError);
+      return res.status(503).json({ error: 'Unable to check usage limits' });
     }
 
     // Build dynamic system prompt with module injection
@@ -944,6 +886,14 @@ export default async function handler(
           conversation_type: hadExistingConversation ? 'existing' : 'new',
           auth_state: 'authenticated',
           has_attachment: Array.isArray(attachments) && attachments.length > 0,
+          folder_key: requestedFolderKey || 'general',
+        }, { userId: savedChat.userId, pagePath: '/chat' });
+      }
+
+      if (savedChat) {
+        await trackServerEvent(req, 'chat:message_sent', {
+          auth_state: 'authenticated',
+          conversation_type: hadExistingConversation ? 'existing' : 'new',
           folder_key: requestedFolderKey || 'general',
         }, { userId: savedChat.userId, pagePath: '/chat' });
       }

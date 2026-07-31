@@ -408,7 +408,7 @@ export const useChatStore = create<ChatState & ChatActions>((set, get) => ({
       set(state => ({
         messages: state.messages.map(msg =>
           msg.id === aiMessageId
-            ? { ...msg, isStreaming: false, content: accumulated || `Error: ${errorMessage}` }
+            ? { ...msg, isStreaming: false, content: accumulated || errorMessage }
             : msg
         ),
         isStreaming: false,
