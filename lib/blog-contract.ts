@@ -1,26 +1,3 @@
-export const BLOG_STATUSES = ['draft', 'published', 'unpublished', 'archived'] as const;
-export type BlogStatus = (typeof BLOG_STATUSES)[number];
-
-export interface BlogArticleRow {
-  id: string;
-  slug: string;
-  title: string;
-  excerpt: string;
-  content_markdown: string;
-  status: BlogStatus;
-  category: string;
-  author: string;
-  image_url: string | null;
-  canonical_url: string | null;
-  seo_title: string | null;
-  seo_description: string | null;
-  is_public: boolean;
-  allow_indexing: boolean;
-  published_at: string | null;
-  created_at: string;
-  updated_at: string;
-}
-
 export interface AdhdFeedItem {
   id: string;
   slug: string;
@@ -35,36 +12,53 @@ export interface AdhdFeedItem {
   status: 'published';
 }
 
-export function plainText(value: string): string {
+export interface BlogFeedSource {
+  id: string;
+  slug: string;
+  title: string;
+  excerpt: string;
+  publishedAt: string;
+  updatedAt: string;
+  canonicalUrl: string;
+  imageUrl: string | null;
+}
+
+export function decodeHtmlEntities(value: string): string {
   return value
-    .replace(/<[^>]*>/g, ' ')
+    .replace(/&#x([0-9a-f]+);/gi, (_, code: string) => String.fromCodePoint(Number.parseInt(code, 16)))
+    .replace(/&#(\d+);/g, (_, code: string) => String.fromCodePoint(Number.parseInt(code, 10)))
     .replace(/&nbsp;/gi, ' ')
-    .replace(/&amp;/gi, '&')
+    .replace(/&quot;/gi, '"')
+    .replace(/&apos;|&#0?39;/gi, "'")
     .replace(/&lt;/gi, '<')
     .replace(/&gt;/gi, '>')
+    .replace(/&amp;/gi, '&');
+}
+
+export function plainText(html: string): string {
+  return decodeHtmlEntities(
+    html
+      .replace(/<style[\s\S]*?<\/style>/gi, ' ')
+      .replace(/<script[\s\S]*?<\/script>/gi, ' ')
+      .replace(/<[^>]+>/g, ' '),
+  )
     .replace(/[\u0000-\u001f\u007f]/g, ' ')
     .replace(/\s+/g, ' ')
     .trim();
 }
 
-export function isPublicArticle(row: BlogArticleRow, now = new Date()): boolean {
-  if (row.status !== 'published' || !row.is_public || !row.published_at) return false;
-  const publishedAt = Date.parse(row.published_at);
-  return Number.isFinite(publishedAt) && publishedAt <= now.getTime();
-}
-
-export function toAdhdFeedItem(row: BlogArticleRow, articleUrl: (slug: string) => string): AdhdFeedItem {
+export function toAdhdFeedItem(article: BlogFeedSource): AdhdFeedItem {
   return {
-    id: row.id,
-    slug: row.slug,
-    title: plainText(row.title),
-    excerpt: plainText(row.excerpt),
-    publishedAt: row.published_at!,
-    updatedAt: row.updated_at,
-    url: articleUrl(row.slug),
+    id: article.id,
+    slug: article.slug,
+    title: article.title,
+    excerpt: article.excerpt,
+    publishedAt: article.publishedAt,
+    updatedAt: article.updatedAt,
+    url: article.canonicalUrl,
     category: 'adhd',
     author: 'Qimi AI',
-    imageUrl: row.image_url,
+    imageUrl: article.imageUrl,
     status: 'published',
   };
 }

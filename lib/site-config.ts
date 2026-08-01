@@ -7,6 +7,8 @@ export const SITE_URL = (process.env.NEXT_PUBLIC_SITE_URL || DEFAULT_SITE_URL).r
 export const INDEXABLE_PUBLIC_ROUTES = new Set([
   '/',
   '/about',
+  '/blog',
+  '/blog/[slug]',
   '/privacy',
   '/terms',
 ]);
@@ -19,6 +21,10 @@ export const PUBLIC_ROUTE_METADATA: Record<string, { title: string; description:
   '/about': {
     title: 'Our Story | Qimi AI',
     description: 'Learn why Qimi AI was created to help parents turn complex ADHD questions and scattered advice into clear, practical next steps.',
+  },
+  '/blog': {
+    title: 'ADHD Blog | Qimi AI',
+    description: 'Evidence-informed ADHD articles and practical strategies for families.',
   },
   '/privacy': {
     title: 'Privacy Policy | Qimi AI',

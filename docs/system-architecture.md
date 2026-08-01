@@ -11,7 +11,7 @@
 
 This document was re-checked against:
 
-- Current repo reality in `/Users/jamesguu/qimi-ai-website/qimi-ai-website`
+- Current repo reality in `/Users/jamesguu/Library/CloudStorage/OneDrive-个人/work/Million Dollar Business/qimi-website`
 - The cross-platform product blueprint in `/Users/jamesguu/WeChatProjects/adhdhelper-cursor/docs/项目技术蓝图.md`
 - Official platform guidance for Vercel Next.js deployment, Vercel Cron, Supabase RLS, Supabase Next.js auth patterns, and Auth.js / NextAuth session handling
 

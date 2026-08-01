@@ -12,7 +12,7 @@ export default async function handler(req: NextApiRequest, res: NextApiResponse<
   try {
     const items = await listAdhdFeedItems(50);
     res.setHeader('Content-Type', 'application/json; charset=utf-8');
-    res.setHeader('Cache-Control', 'public, max-age=0, s-maxage=0, must-revalidate');
+    res.setHeader('Cache-Control', 'public, max-age=0, s-maxage=300, stale-while-revalidate=86400');
     return res.status(200).json({ items });
   } catch (error) {
     console.error('[public/content/adhd] Feed query failed', error);

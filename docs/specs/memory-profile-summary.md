@@ -35,9 +35,9 @@
 ### References
 
 - Cross-platform blueprint: `/Users/jamesguu/WeChatProjects/adhdhelper-cursor/docs/项目技术蓝图.md` § 6.3
-- System architecture: `/Users/jamesguu/qimi-ai-website/qimi-ai-website/docs/system-architecture.md`
-- Prompt contract: `/Users/jamesguu/qimi-ai-website/qimi-ai-website/lib/prompts.ts`
-- Family Profile spec: `/Users/jamesguu/qimi-ai-website/qimi-ai-website/docs/specs/family-profile.md`
+- System architecture: `/Users/jamesguu/Library/CloudStorage/OneDrive-个人/work/Million Dollar Business/qimi-website/docs/system-architecture.md`
+- Prompt contract: `/Users/jamesguu/Library/CloudStorage/OneDrive-个人/work/Million Dollar Business/qimi-website/lib/prompts.ts`
+- Family Profile spec: `/Users/jamesguu/Library/CloudStorage/OneDrive-个人/work/Million Dollar Business/qimi-website/docs/specs/family-profile.md`
 
 ### Current Implementation Snapshot
 

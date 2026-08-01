@@ -1,113 +1,121 @@
-import { getSupabaseAdmin } from './supabase';
 import { absoluteUrl } from './site-config';
-import {
-  BLOG_STATUSES,
-  isPublicArticle,
-  plainText,
-  toAdhdFeedItem as buildAdhdFeedItem,
-  type AdhdFeedItem,
-  type BlogArticleRow,
-  type BlogStatus,
-} from './blog-contract';
+import { decodeHtmlEntities, plainText, toAdhdFeedItem, type AdhdFeedItem } from './blog-contract';
 
-export { BLOG_STATUSES, isPublicArticle, plainText } from './blog-contract';
-export type { AdhdFeedItem, BlogArticleRow, BlogStatus } from './blog-contract';
+export { decodeHtmlEntities, plainText } from './blog-contract';
+export type { AdhdFeedItem } from './blog-contract';
+
+const WORDPRESS_SITE = process.env.WORDPRESS_SITE || 'qimiai.wordpress.com';
+const WORDPRESS_API = `https://public-api.wordpress.com/wp/v2/sites/${encodeURIComponent(WORDPRESS_SITE)}`;
+
+export interface WordPressTerm {
+  id: number;
+  name: string;
+  slug: string;
+  taxonomy: 'category' | 'post_tag';
+}
+
+interface WordPressPost {
+  id: number;
+  date: string;
+  modified: string;
+  slug: string;
+  title: { rendered: string };
+  content: { rendered: string; protected: boolean };
+  excerpt: { rendered: string; protected: boolean };
+  jetpack_featured_media_url?: string;
+  _embedded?: {
+    author?: Array<{ name: string }>;
+    'wp:term'?: WordPressTerm[][];
+  };
+}
 
 export interface PublicBlogArticle {
   id: string;
   slug: string;
   title: string;
   excerpt: string;
-  contentMarkdown: string;
+  contentHtml: string;
   category: string;
+  author: string;
   imageUrl: string | null;
   canonicalUrl: string;
   seoTitle: string;
   seoDescription: string;
   publishedAt: string;
   updatedAt: string;
+  terms: WordPressTerm[];
 }
 
-const PUBLIC_COLUMNS = 'id, slug, title, excerpt, content_markdown, status, category, author, image_url, canonical_url, seo_title, seo_description, is_public, allow_indexing, published_at, created_at, updated_at';
+function postTerms(post: WordPressPost): WordPressTerm[] {
+  return (post._embedded?.['wp:term']?.flat() || []).map((term) => ({
+    ...term,
+    name: decodeHtmlEntities(term.name),
+  }));
+}
 
 export function articleUrl(slug: string): string {
   return absoluteUrl(`/blog/${slug}`);
 }
 
-export function toPublicArticle(row: BlogArticleRow): PublicBlogArticle {
-  // The public route is the source of truth. A stored canonical value is retained
-  // for import compatibility but cannot make a Qimi article canonicalize elsewhere.
-  const canonical = articleUrl(row.slug);
+function toPublicArticle(post: WordPressPost): PublicBlogArticle {
+  const terms = postTerms(post);
+  const category = terms.find((term) => term.taxonomy === 'category' && term.slug !== 'uncategorized');
+  const title = plainText(post.title.rendered);
+  const excerpt = plainText(post.excerpt.rendered);
+
   return {
-    id: row.id,
-    slug: row.slug,
-    title: plainText(row.title),
-    excerpt: plainText(row.excerpt),
-    contentMarkdown: row.content_markdown,
-    category: plainText(row.category),
-    imageUrl: row.image_url,
-    canonicalUrl: canonical,
-    seoTitle: plainText(row.seo_title || row.title),
-    seoDescription: plainText(row.seo_description || row.excerpt),
-    publishedAt: row.published_at!,
-    updatedAt: row.updated_at,
+    id: String(post.id),
+    slug: post.slug,
+    title,
+    excerpt,
+    contentHtml: post.content.rendered,
+    category: category?.name || 'ADHD',
+    author: 'Qimi AI',
+    imageUrl: post.jetpack_featured_media_url || null,
+    canonicalUrl: articleUrl(post.slug),
+    seoTitle: `${title} | Qimi AI`,
+    seoDescription: excerpt.slice(0, 200),
+    publishedAt: post.date,
+    updatedAt: post.modified,
+    terms,
   };
 }
 
-export function toAdhdFeedItem(row: BlogArticleRow): AdhdFeedItem {
-  return buildAdhdFeedItem(row, articleUrl);
-}
-
-function publicQuery() {
-  return getSupabaseAdmin()
-    .from('blog_articles')
-    .select(PUBLIC_COLUMNS)
-    .eq('status', 'published')
-    .eq('is_public', true)
-    .lte('published_at', new Date().toISOString());
+async function wordpressFetch<T>(path: string, params: Record<string, string>): Promise<T> {
+  const url = new URL(`${WORDPRESS_API}${path}`);
+  Object.entries(params).forEach(([key, value]) => url.searchParams.set(key, value));
+  const response = await fetch(url, {
+    headers: { Accept: 'application/json' },
+    signal: AbortSignal.timeout(10_000),
+  });
+  if (!response.ok) throw new Error(`WordPress request failed with status ${response.status}`);
+  return response.json() as Promise<T>;
 }
 
 export async function listPublicArticles(limit = 50): Promise<PublicBlogArticle[]> {
-  const safeLimit = Math.max(0, Math.min(limit, 50));
-  const { data, error } = await publicQuery()
-    .order('published_at', { ascending: false })
-    .limit(safeLimit);
-  if (error) throw error;
-  return ((data || []) as unknown as BlogArticleRow[]).filter((row) => isPublicArticle(row)).map(toPublicArticle);
+  const posts = await wordpressFetch<WordPressPost[]>('/posts', {
+    per_page: String(Math.max(1, Math.min(limit, 100))),
+    _embed: '1',
+    status: 'publish',
+  });
+  return posts.map(toPublicArticle);
 }
 
-export async function listIndexableArticles(limit = 1000): Promise<PublicBlogArticle[]> {
-  const safeLimit = Math.max(0, Math.min(limit, 1000));
-  const { data, error } = await publicQuery()
-    .eq('allow_indexing', true)
-    .order('published_at', { ascending: false })
-    .limit(safeLimit);
-  if (error) throw error;
-  return ((data || []) as unknown as BlogArticleRow[]).filter((row) => isPublicArticle(row)).map(toPublicArticle);
-}
-
-export async function listAdhdFeedItems(limit = 50): Promise<AdhdFeedItem[]> {
-  const safeLimit = Math.max(0, Math.min(limit, 50));
-  const { data, error } = await publicQuery()
-    .eq('category', 'adhd')
-    .order('published_at', { ascending: false })
-    .limit(safeLimit);
-  if (error) throw error;
-  return ((data || []) as unknown as BlogArticleRow[]).filter((row) => isPublicArticle(row)).map(toAdhdFeedItem);
+export async function listIndexableArticles(limit = 100): Promise<PublicBlogArticle[]> {
+  return listPublicArticles(limit);
 }
 
 export async function getPublicArticleBySlug(slug: string): Promise<PublicBlogArticle | null> {
-  const { data, error } = await publicQuery().eq('slug', slug).maybeSingle();
-  if (error) throw error;
-  const row = data as unknown as BlogArticleRow | null;
-  return row && isPublicArticle(row) ? toPublicArticle(row) : null;
+  const posts = await wordpressFetch<WordPressPost[]>('/posts', {
+    slug,
+    per_page: '1',
+    _embed: '1',
+    status: 'publish',
+  });
+  return posts[0] ? toPublicArticle(posts[0]) : null;
 }
 
-export function isBlogAdmin(email: string | null | undefined): boolean {
-  if (!email) return false;
-  const allowed = (process.env.BLOG_ADMIN_EMAILS || '')
-    .split(',')
-    .map((item) => item.trim().toLowerCase())
-    .filter(Boolean);
-  return allowed.includes(email.trim().toLowerCase());
+export async function listAdhdFeedItems(limit = 50): Promise<AdhdFeedItem[]> {
+  const articles = await listPublicArticles(limit);
+  return articles.map(toAdhdFeedItem);
 }

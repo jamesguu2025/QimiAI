@@ -6,7 +6,7 @@ import Hero from '../components/Landing/Hero';
 import { PricingCard } from '../components/Landing/PricingCard';
 import { ArticleCard } from '../components/Landing/ArticleCard';
 import LandingHeader from '@/components/Landing/LandingHeader';
-import { SHOW_ADHD_INSIGHTS, SHOW_PRICING } from '@/components/Landing/landingVisibility';
+import { SHOW_ADHD_INSIGHTS_HOME, SHOW_PRICING } from '@/components/Landing/landingVisibility';
 import { trackClientEvent } from '@/lib/client-analytics';
 import { useAuthUIStore } from '@/stores/authUIStore';
 
@@ -105,7 +105,7 @@ export default function Home() {
         </div>
 
         {/* Resources Section */}
-        {SHOW_ADHD_INSIGHTS && <section id="resources" className="py-24 bg-white">
+        {SHOW_ADHD_INSIGHTS_HOME && <section id="resources" className="py-24 bg-white">
           <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
             <div className="flex items-center justify-between mb-12">
               <div>
@@ -205,6 +205,7 @@ export default function Home() {
             {/* Bottom: Legal + Copyright */}
             <div className="pt-6 flex flex-wrap justify-between items-center gap-4 text-[13px]">
               <div className="flex flex-wrap gap-4">
+                <a href="/blog" className="text-slate-400 hover:text-white transition-colors">ADHD Insights</a>
                 <a href="/privacy" className="text-slate-400 hover:text-white transition-colors">Privacy Policy</a>
                 <a href="/terms" className="text-slate-400 hover:text-white transition-colors">Terms of Service</a>
               </div>

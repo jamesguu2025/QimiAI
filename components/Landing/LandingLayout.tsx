@@ -29,6 +29,7 @@ export default function LandingLayout({ children }: LandingLayoutProps) {
 
           <div className="pt-6 flex flex-wrap justify-between items-center gap-4 text-[13px]">
             <div className="flex flex-wrap gap-4">
+              <a href="/blog" className="text-slate-400 hover:text-white transition-colors">ADHD Insights</a>
               <a href="/privacy" className="text-slate-400 hover:text-white transition-colors">Privacy Policy</a>
               <a href="/terms" className="text-slate-400 hover:text-white transition-colors">Terms of Service</a>
             </div>

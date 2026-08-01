@@ -26,12 +26,12 @@ If documents disagree, use this order:
 
 1. Real code and real runtime behavior in this repo
 2. Latest `agent-dev-sop` process rules under `/Users/jamesguu/Library/CloudStorage/OneDrive-个人/work/Million Dollar Business/agent-dev-sop/`
-3. `/Users/jamesguu/qimi-ai-website/qimi-ai-website/docs/formal-basis-entry.md`
-4. `/Users/jamesguu/qimi-ai-website/qimi-ai-website/docs/planning-review-rules.md`
-5. `/Users/jamesguu/qimi-ai-website/qimi-ai-website/docs/project-control.md`
-6. `/Users/jamesguu/qimi-ai-website/qimi-ai-website/docs/system-architecture.md`
-7. The relevant module spec under `/Users/jamesguu/qimi-ai-website/qimi-ai-website/docs/specs/`
-8. `/Users/jamesguu/qimi-ai-website/qimi-ai-website/docs/网页版开发计划-v2-垂直切片.md`
+3. `/Users/jamesguu/Library/CloudStorage/OneDrive-个人/work/Million Dollar Business/qimi-website/docs/formal-basis-entry.md`
+4. `/Users/jamesguu/Library/CloudStorage/OneDrive-个人/work/Million Dollar Business/qimi-website/docs/planning-review-rules.md`
+5. `/Users/jamesguu/Library/CloudStorage/OneDrive-个人/work/Million Dollar Business/qimi-website/docs/project-control.md`
+6. `/Users/jamesguu/Library/CloudStorage/OneDrive-个人/work/Million Dollar Business/qimi-website/docs/system-architecture.md`
+7. The relevant module spec under `/Users/jamesguu/Library/CloudStorage/OneDrive-个人/work/Million Dollar Business/qimi-website/docs/specs/`
+8. `/Users/jamesguu/Library/CloudStorage/OneDrive-个人/work/Million Dollar Business/qimi-website/docs/网页版开发计划-v2-垂直切片.md`
 9. Review notes and temporary docs
 
 Interpretation rules:

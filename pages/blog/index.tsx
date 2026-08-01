@@ -11,11 +11,11 @@ type Props = { articles: PublicBlogArticle[] };
 export const getServerSideProps: GetServerSideProps<Props> = async ({ res }) => {
   try {
     const articles = await listPublicArticles(50);
-    res.setHeader('Cache-Control', 'public, max-age=0, s-maxage=0, must-revalidate');
+    res.setHeader('Cache-Control', 'public, max-age=0, s-maxage=300, stale-while-revalidate=86400');
     return { props: { articles } };
   } catch (error) {
     console.error('[blog] Listing query failed', error);
-    res.statusCode = 503;
+    res.setHeader('Cache-Control', 'no-store');
     return { props: { articles: [] } };
   }
 };
@@ -40,7 +40,7 @@ export default function BlogPage({ articles }: Props) {
           </div>
 
           {articles.length === 0 ? (
-            <p className="rounded-2xl border border-slate-200 bg-white p-8 text-slate-600">No published articles are available yet.</p>
+            <p className="rounded-2xl border border-slate-200 bg-white p-8 text-slate-600">No published articles are available yet. Please check back soon.</p>
           ) : (
             <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
               {articles.map((article) => (

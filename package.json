@@ -18,7 +18,7 @@
     "test:security": "node --experimental-strip-types scripts/validate-mvp-security.mjs",
     "test:rag-evidence": "node --experimental-strip-types scripts/validate-rag-evidence-web.mjs",
     "test:blog": "node --experimental-strip-types scripts/test-blog-contract.mjs",
-    "build": "next build",
+    "build": "next build --webpack",
     "start": "next start -p 4000"
   },
   "dependencies": {

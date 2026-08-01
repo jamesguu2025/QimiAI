@@ -15,7 +15,7 @@
 
 This spec was written against:
 
-- The current repo state in `/Users/jamesguu/qimi-ai-website/qimi-ai-website`
+- The current repo state in `/Users/jamesguu/Library/CloudStorage/OneDrive-个人/work/Million Dollar Business/qimi-website`
 - `docs/project-control.md` for execution order and module status
 - `docs/system-architecture.md` for route ownership and shared layout rules
 - `docs/specs/compliance.md` for the already-implemented delete-account baseline

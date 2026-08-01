@@ -13,7 +13,7 @@ export default function GlobalSeo() {
   const pathname = router.pathname;
   const isIndexable = INDEXABLE_PUBLIC_ROUTES.has(pathname);
   const metadata = PUBLIC_ROUTE_METADATA[pathname];
-  const canonicalUrl = isIndexable ? absoluteUrl(pathname) : undefined;
+  const canonicalUrl = isIndexable && pathname !== '/blog/[slug]' ? absoluteUrl(pathname) : undefined;
 
   const organizationJsonLd = {
     '@context': 'https://schema.org',
@@ -45,10 +45,10 @@ export default function GlobalSeo() {
       {isIndexable ? (
         <>
           <meta name="robots" content="index, follow, max-image-preview:large" />
-          <link rel="canonical" href={canonicalUrl} />
+          {canonicalUrl && <link rel="canonical" href={canonicalUrl} />}
           <meta property="og:type" content="website" />
           <meta property="og:site_name" content={SITE_NAME} />
-          <meta property="og:url" content={canonicalUrl} />
+          {canonicalUrl && <meta property="og:url" content={canonicalUrl} />}
           {metadata && <meta property="og:title" content={metadata.title} />}
           {metadata && <meta property="og:description" content={metadata.description} />}
           <meta name="twitter:card" content="summary" />

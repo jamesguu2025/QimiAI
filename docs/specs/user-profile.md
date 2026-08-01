@@ -13,8 +13,8 @@
 
 This spec was re-checked against:
 
-- The current repo structure and scripts in `/Users/jamesguu/qimi-ai-website/qimi-ai-website`
-- The canonical Layer 1 architecture in `/Users/jamesguu/qimi-ai-website/qimi-ai-website/docs/system-architecture.md`
+- The current repo structure and scripts in `/Users/jamesguu/Library/CloudStorage/OneDrive-个人/work/Million Dollar Business/qimi-website`
+- The canonical Layer 1 architecture in `/Users/jamesguu/Library/CloudStorage/OneDrive-个人/work/Million Dollar Business/qimi-website/docs/system-architecture.md`
 - The cross-platform blueprint in `/Users/jamesguu/WeChatProjects/adhdhelper-cursor/docs/项目技术蓝图.md`
 - Official guidance for Auth.js / NextAuth protected routes and Supabase RLS
 

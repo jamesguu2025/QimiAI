@@ -14,8 +14,8 @@
 
 This spec was written against:
 
-- The canonical Layer 1 architecture in `/Users/jamesguu/qimi-ai-website/qimi-ai-website/docs/system-architecture.md`
-- The canonical project control document in `/Users/jamesguu/qimi-ai-website/qimi-ai-website/docs/project-control.md`
+- The canonical Layer 1 architecture in `/Users/jamesguu/Library/CloudStorage/OneDrive-个人/work/Million Dollar Business/qimi-website/docs/system-architecture.md`
+- The canonical project control document in `/Users/jamesguu/Library/CloudStorage/OneDrive-个人/work/Million Dollar Business/qimi-website/docs/project-control.md`
 - Existing quota assumptions in `growth-plan.md` and `report-analysis.md`
 - Existing product language in Settings and Landing FAQ referring to subscriptions
 - Mature industry practice for Stripe Checkout, Stripe Billing Portal, webhook-driven subscription sync, and server-owned billing mutations

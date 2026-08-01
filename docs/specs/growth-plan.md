@@ -14,10 +14,10 @@
 
 This spec was re-checked against:
 
-- The current repo structure and scripts in `/Users/jamesguu/qimi-ai-website/qimi-ai-website`
-- The canonical Layer 1 architecture in `/Users/jamesguu/qimi-ai-website/qimi-ai-website/docs/system-architecture.md`
+- The current repo structure and scripts in `/Users/jamesguu/Library/CloudStorage/OneDrive-个人/work/Million Dollar Business/qimi-website`
+- The canonical Layer 1 architecture in `/Users/jamesguu/Library/CloudStorage/OneDrive-个人/work/Million Dollar Business/qimi-website/docs/system-architecture.md`
 - The cross-platform blueprint in `/Users/jamesguu/WeChatProjects/adhdhelper-cursor/docs/项目技术蓝图.md`
-- Existing shared type definitions in `/Users/jamesguu/qimi-ai-website/qimi-ai-website/types/plan.ts`
+- Existing shared type definitions in `/Users/jamesguu/Library/CloudStorage/OneDrive-个人/work/Million Dollar Business/qimi-website/types/plan.ts`
 - Membership and billing are not implemented yet; there is no current `pages/api/user/subscription.ts` route and no `users.subscription_tier` column in the local initial schema.
 
 ### Current Implementation Snapshot

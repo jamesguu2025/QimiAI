@@ -2,6 +2,25 @@
 
 > Status: ACTIVE | Amended: 2026-07-26
 
+## Canonical Project Directory
+
+The only canonical Qimi website source directory is:
+
+```text
+/Users/jamesguu/Library/CloudStorage/OneDrive-个人/work/Million Dollar Business/qimi-website
+```
+
+Any legacy path may exist only as a symbolic link to this directory. It must not contain a second working copy.
+
+Local secrets and generated dependencies are intentionally kept outside OneDrive:
+
+```text
+/Users/jamesguu/.config/qimi-ai-website
+/Users/jamesguu/.cache/qimi-ai-website
+```
+
+The project may link to these local directories. Never replace those links with cloud-synced copies of production credentials.
+
 This project must not use production Supabase for routine local feature testing.
 
 ## SOP Evidence Status

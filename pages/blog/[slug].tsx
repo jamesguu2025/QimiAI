@@ -1,8 +1,6 @@
 import type { GetServerSideProps } from 'next';
 import Head from 'next/head';
 import Link from 'next/link';
-import ReactMarkdown from 'react-markdown';
-import remarkGfm from 'remark-gfm';
 import { BookOpen, Calendar } from 'lucide-react';
 import LandingLayout from '@/components/Landing/LandingLayout';
 import { getPublicArticleBySlug, type PublicBlogArticle } from '@/lib/blog';
@@ -16,7 +14,7 @@ export const getServerSideProps: GetServerSideProps<Props> = async ({ params, re
   try {
     const article = await getPublicArticleBySlug(slug);
     if (!article) return { notFound: true };
-    res.setHeader('Cache-Control', 'public, max-age=0, s-maxage=0, must-revalidate');
+    res.setHeader('Cache-Control', 'public, max-age=0, s-maxage=300, stale-while-revalidate=86400');
     return { props: { article } };
   } catch (error) {
     console.error('[blog/slug] Article query failed', error);
@@ -63,12 +61,16 @@ export default function BlogArticlePage({ article }: Props) {
             <p className="text-sm font-semibold uppercase tracking-wide text-primary-teal mb-3">{article.category}</p>
             <h1 className="text-3xl md:text-5xl font-bold text-slate-900 mb-4">{article.title}</h1>
             <p className="text-lg text-slate-600 mb-4">{article.excerpt}</p>
-            <time dateTime={article.publishedAt} className="inline-flex items-center gap-2 text-sm text-slate-500"><Calendar size={15} aria-hidden="true" />{new Date(article.publishedAt).toLocaleDateString('en-US', { dateStyle: 'long' })}</time>
+            <div className="flex flex-wrap items-center gap-4 text-sm text-slate-500">
+              <span>{article.author}</span>
+              <time dateTime={article.publishedAt} className="inline-flex items-center gap-2"><Calendar size={15} aria-hidden="true" />{new Date(article.publishedAt).toLocaleDateString('en-US', { dateStyle: 'long' })}</time>
+            </div>
           </header>
           {article.imageUrl ? <img src={article.imageUrl} alt="" className="w-full max-h-[28rem] object-cover rounded-2xl mb-8" /> : <div className="h-56 rounded-2xl mb-8 flex items-center justify-center bg-primary-teal/10"><BookOpen size={72} className="text-primary-teal" aria-hidden="true" /></div>}
-          <div className="bg-white rounded-2xl p-6 md:p-10 shadow-sm border border-slate-100 prose prose-lg max-w-none prose-headings:text-slate-900 prose-p:text-slate-700 prose-a:text-primary-purple prose-img:rounded-xl">
-            <ReactMarkdown remarkPlugins={[remarkGfm]} skipHtml>{article.contentMarkdown}</ReactMarkdown>
-          </div>
+          <div
+            className="bg-white rounded-2xl p-6 md:p-10 shadow-sm border border-slate-100 prose prose-lg max-w-none prose-headings:text-slate-900 prose-p:text-slate-700 prose-a:text-primary-purple prose-img:rounded-xl"
+            dangerouslySetInnerHTML={{ __html: article.contentHtml }}
+          />
         </article>
       </main>
     </LandingLayout>
