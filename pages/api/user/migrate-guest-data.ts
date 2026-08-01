@@ -121,6 +121,20 @@ export default async function handler(
       userId = existingUser.id;
     }
 
+    const { data: consent, error: consentError } = await supabase
+      .from('parental_consents')
+      .select('id')
+      .eq('user_id', userId)
+      .maybeSingle();
+
+    if (consentError) {
+      console.error('[migrate-guest-data] Consent lookup failed:', consentError);
+      return res.status(500).json({ error: 'Failed to verify consent' });
+    }
+    if (!consent) {
+      return res.status(403).json({ error: 'Consent is required before migration' });
+    }
+
     // Upsert child profile (birth date and challenges)
     if (childProfile) {
       const { name, birthYear, birthMonth, gender, challenges } = childProfile;
@@ -136,6 +150,15 @@ export default async function handler(
       if (gender !== undefined && ['boy', 'girl', 'other'].includes(gender)) upsertData.gender = gender;
       // Supabase handles JSONB serialization automatically - pass array directly
       if (challenges !== undefined) upsertData.challenges = challenges;
+      if (
+        typeof name === 'string' && name.trim() &&
+        Number.isInteger(birthYear) &&
+        Number.isInteger(birthMonth) &&
+        gender !== undefined && ['boy', 'girl', 'other'].includes(gender) &&
+        Array.isArray(challenges) && challenges.length > 0
+      ) {
+        upsertData.onboarding_completed_at = new Date().toISOString();
+      }
 
       const { error: upsertError } = await supabase
         .from('child_profiles')

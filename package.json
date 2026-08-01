@@ -2,6 +2,9 @@
   "name": "qimi-ai-website",
   "private": true,
   "version": "0.1.0",
+  "engines": {
+    "node": ">=20 <23"
+  },
   "scripts": {
     "dev": "next dev --webpack -p 4000",
     "dev:local": "npm run env:local && next dev --webpack -p 4000",
@@ -12,14 +15,19 @@
     "supabase:stop": "supabase stop",
     "supabase:reset": "supabase db reset",
     "verify:mvp-cleanup": "node scripts/verify-mvp-cleanup.mjs",
-    "build": "next build",
+    "test:security": "node --experimental-strip-types scripts/validate-mvp-security.mjs",
+    "test:rag-evidence": "node --experimental-strip-types scripts/validate-rag-evidence-web.mjs",
+    "test:blog": "node --experimental-strip-types scripts/test-blog-contract.mjs",
+    "build": "next build --webpack",
     "start": "next start -p 4000"
   },
   "dependencies": {
     "@supabase/supabase-js": "^2.93.2",
     "bcryptjs": "^3.0.3",
     "lucide-react": "^0.554.0",
-    "nodemailer": "^8.0.7",
+    "next": "^16.2.11",
+    "next-auth": "^4.24.15",
+    "nodemailer": "^9.0.3",
     "react": "18.2.0",
     "react-dom": "18.2.0",
     "react-markdown": "^10.1.0",
@@ -32,20 +40,32 @@
     "@types/node": "20.11.30",
     "@types/nodemailer": "^8.0.0",
     "@types/react": "18.2.66",
-    "@types/react-dom": "^19.2.3",
+    "@types/react-dom": "^18.2.25",
     "autoprefixer": "^10.4.22",
-    "next": "^16.1.1",
-    "next-auth": "^4.24.13",
-    "postcss": "^8.5.6",
-    "supabase": "^2.98.2",
+    "postcss": "^8.5.12",
+    "supabase": "^2.109.1",
     "tailwindcss": "^3.4.1",
     "typescript": "5.4.5"
   },
   "optionalDependencies": {
-    "@next/swc-darwin-arm64": "14.2.5",
-    "@next/swc-darwin-x64": "14.2.5",
-    "@next/swc-linux-x64-gnu": "14.2.5",
-    "@next/swc-linux-x64-musl": "14.2.5",
-    "@next/swc-win32-x64-msvc": "14.2.5"
+    "@next/swc-darwin-arm64": "16.2.11",
+    "@next/swc-darwin-x64": "16.2.11",
+    "@next/swc-linux-arm64-gnu": "16.2.11",
+    "@next/swc-linux-arm64-musl": "16.2.11",
+    "@next/swc-linux-x64-gnu": "16.2.11",
+    "@next/swc-linux-x64-musl": "16.2.11",
+    "@next/swc-win32-arm64-msvc": "16.2.11",
+    "@next/swc-win32-x64-msvc": "16.2.11"
+  },
+  "overrides": {
+    "postcss": "^8.5.12",
+    "preact": "^10.27.3",
+    "sharp": "^0.35.0",
+    "picomatch@2.3.1": "2.3.2",
+    "picomatch@4.0.3": "4.0.4",
+    "readdirp": {
+      "picomatch": "2.3.2"
+    },
+    "yaml@2.8.1": "2.8.3"
   }
 }

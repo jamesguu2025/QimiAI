@@ -4,6 +4,8 @@ import { authOptions } from '../auth/[...nextauth]';
 import { getPayloadSizeBytes, rejectIfRateLimited } from '../../../lib/rate-limit';
 import type { PlanCategory } from '../../../types/plan';
 import { PLAN_CATEGORIES } from '../../../types/plan';
+import { actorKey, consumePersistentRateLimit } from '../../../lib/ai-usage';
+import { getAnalyticsUserIdByEmail } from '../../../lib/analytics';
 
 type PlanDecision = {
   shouldPropose: boolean;
@@ -137,6 +139,15 @@ export default async function handler(req: NextApiRequest, res: NextApiResponse)
   }
 
   try {
+    const userId = await getAnalyticsUserIdByEmail(session.user.email);
+    if (!userId) return res.status(404).json({ error: 'User not found' });
+    const minuteLimit = await consumePersistentRateLimit({
+      actorKey: actorKey('user', userId), scope: 'plan_decision',
+    });
+    if (!minuteLimit.allowed) {
+      res.setHeader('Retry-After', String(minuteLimit.retryAfterSeconds));
+      return res.status(429).json({ error: 'Too many requests' });
+    }
     const decision = await evaluatePlanDecision(assistantContent.trim().slice(0, 8000));
     return res.status(200).json(decision);
   } catch (error) {

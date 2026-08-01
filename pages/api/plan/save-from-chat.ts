@@ -4,9 +4,11 @@ import { authOptions } from '../auth/[...nextauth]';
 import { getSupabaseAdmin } from '../../../lib/supabase';
 import type { ActionPlanItem, PlanCategory, PlanContentBlock, WeekDay } from '../../../types/plan';
 import { PLAN_CATEGORIES } from '../../../types/plan';
+import { PLAN_TITLE_MAX_LENGTH } from '../../../lib/plan-generation';
 import { extractMarkdownTables } from '../../../utils/markdown-tables';
 import { trackServerEvent } from '../../../lib/analytics';
 import { getPayloadSizeBytes, rejectIfRateLimited } from '../../../lib/rate-limit';
+import { actorKey, consumePersistentRateLimit, consumePlanAiQuota } from '../../../lib/ai-usage';
 
 type PlanItemRow = {
   id: string;
@@ -45,7 +47,6 @@ const DEEPSEEK_MODEL = process.env.DEEPSEEK_MODEL || 'deepseek-v4-flash';
 const DEEPSEEK_THINKING = { type: 'disabled' };
 const VALID_CATEGORIES = new Set(PLAN_CATEGORIES.map((category) => category.id));
 const UUID_REGEX = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
-const FREE_PLAN_LIMIT = 5;
 const HARD_BLOCK_FLAGS = new Set(['crisis']);
 const MEDICATION_DIRECTIVE_PATTERN = /\b(increase|decrease|raise|lower|reduce|stop|start|switch|change|double|halve|take|give)\b.*\b(\d+\s?mg|dose|dosage|tablet|pill|capsule)\b|(\d+\s?mg).*\b(increase|decrease|raise|lower|reduce|stop|start|switch|change|take|give)\b/i;
 const MAX_PAYLOAD_BYTES = 16 * 1024;
@@ -247,6 +248,7 @@ Rules:
 - If there is no concrete strategy, return hasActionableStrategy=false and category="none".
 - Use only these categories for saveable strategies: emotion, learning, exercise, nutrition, social, sleep, school.
 - strategySummary should be one concise sentence for card display.
+- painPoint is the saved plan title. Return a concise noun phrase of no more than ${PLAN_TITLE_MAX_LENGTH} characters; do not copy a full user sentence.
 - Safety flags may include: none, medical, diagnosis, medication, crisis, legal, not_child_related, too_vague.
 
 Output JSON shape:
@@ -360,7 +362,7 @@ function validateExtractedPlan(extracted: ExtractedPlan) {
   return {
     plan: {
       category: extracted.category,
-      painPoint: extracted.painPoint.trim().slice(0, 500),
+      painPoint: extracted.painPoint.trim().slice(0, PLAN_TITLE_MAX_LENGTH),
       explanationMarkdown: typeof extracted.explanationMarkdown === 'string'
         ? extracted.explanationMarkdown.trim().slice(0, 2000)
         : '',
@@ -386,6 +388,7 @@ async function findDuplicate(
       .from('plan_items')
       .select('id')
       .eq('user_id', userId)
+      .eq('legacy_composed_shadow', false)
       .eq('source_message_id', sourceMessageId)
       .maybeSingle();
 
@@ -398,6 +401,7 @@ async function findDuplicate(
     .from('plan_items')
     .select('id, pain_point, strategy, strategy_summary, intervention_blocks')
     .eq('user_id', userId)
+    .eq('legacy_composed_shadow', false)
     .eq('category', category);
 
   if (sourceConversationId) {
@@ -472,6 +476,23 @@ export default async function handler(req: NextApiRequest, res: NextApiResponse)
       assistantContent.trim()
     );
 
+    const planActor = actorKey('user', userId);
+    const minuteLimit = await consumePersistentRateLimit({ actorKey: planActor, scope: 'plan_ai' });
+    if (!minuteLimit.allowed) {
+      res.setHeader('Retry-After', String(minuteLimit.retryAfterSeconds));
+      return res.status(429).json({ error: 'Too many AI plan requests. Please wait a minute and try again.' });
+    }
+    const quota = await consumePlanAiQuota(userId);
+    if (!quota.allowed) {
+      await trackServerEvent(req, 'quota:limit_reached', {
+        feature: 'plan_ai', auth_state: 'authenticated', period: 'week',
+      }, { userId, pagePath: '/chat' });
+      return res.status(429).json({ error: 'Weekly AI plan limit reached', quota: { remaining: 0 } });
+    }
+    await trackServerEvent(req, 'plan:generation_started', {
+      generation_source: 'chat_save', source_count: 1,
+    }, { userId, pagePath: '/chat' });
+
     const extracted = await extractPlan(
       assistantContent.trim().slice(0, 8000),
       typeof userContext === 'string' ? userContext.trim().slice(0, 1000) : undefined
@@ -513,22 +534,6 @@ export default async function handler(req: NextApiRequest, res: NextApiResponse)
           ? 'This suggestion is already saved.'
           : 'This suggestion already looks saved.',
         duplicate,
-      });
-    }
-
-    const { count, error: countError } = await supabase
-      .from('plan_items')
-      .select('id', { count: 'exact', head: true })
-      .eq('user_id', userId);
-
-    if (countError) {
-      console.error('[plan/save-from-chat] quota count error:', countError);
-      return res.status(500).json({ error: 'Failed to check plan limit' });
-    }
-
-    if ((count || 0) >= FREE_PLAN_LIMIT) {
-      return res.status(403).json({
-        error: 'Free plan limit reached. Upgrade to Pro for unlimited items.',
       });
     }
 
@@ -579,7 +584,11 @@ export default async function handler(req: NextApiRequest, res: NextApiResponse)
       category: plan.category,
     }, { userId, pagePath: '/chat' });
 
-    return res.status(201).json({ item: mapPlanItem(savedRow), safetyFlags: plan.safetyFlags });
+    await trackServerEvent(req, 'plan:generation_completed', {
+      generation_source: 'chat_save', source_count: 1, remaining: quota.remaining,
+    }, { userId, pagePath: '/chat' });
+
+    return res.status(201).json({ item: mapPlanItem(savedRow), safetyFlags: plan.safetyFlags, quota: { remaining: quota.remaining } });
   } catch (error) {
     console.error('[plan/save-from-chat] unexpected error:', error);
     return res.status(500).json({ error: 'Failed to save plan item' });

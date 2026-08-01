@@ -8,6 +8,8 @@
 > Branch: `feature/compliance` or current working branch
 > Scope: Six minimum-viable compliance items required before public launch. No over-engineering.
 
+> **Local reset privilege correction, 2026-07-26:** RLS bypass and SQL table privileges are separate PostgreSQL controls. Current API routes use the server-only `service_role` client, so versioned migrations must explicitly grant that role the required table and sequence privileges after a clean local reset. Migration `20260726000200_restore_service_role_privileges.sql` grants server access to current public tables and establishes matching default privileges for future public-schema tables. Browser roles do not receive this grant, and ownership checks in API routes remain mandatory.
+
 ---
 
 ## 0. Planning Baseline

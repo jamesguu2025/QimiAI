@@ -8,6 +8,7 @@ const sections = [
       'Account information such as email address, display name, sign-in provider, and profile image when available.',
       'Child and family profile information provided by an adult user, including child name or nickname, birth year and month, gender, and initial concerns.',
       'Chat messages, conversation titles, topic folders, attachments metadata, and AI-generated conversation context.',
+      'Before sign-in, temporary guest chat and child-profile context may be kept in the current browser tab so the trial works across page refreshes. Sensitive guest content is removed from persistent local browser storage and is cleared after successful account migration.',
       'AI-extracted family memory items and short profile summaries that help Qimi personalize future support.',
       'Limited product analytics events, such as landing CTA clicks, onboarding step completion/dropoff, chat send milestones, memory extraction counts, growth-plan save actions, contact-form submission status, and chat error metadata.',
       'Consent records, including the exact consent text, timestamp, method/version, IP address, and user agent where available.',

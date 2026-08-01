@@ -4,7 +4,7 @@
 2026-03-14
 
 ## Review Scope
-- Target document: `/Users/jamesguu/qimi-ai-website/qimi-ai-website/docs/specs/memory-profile-summary.md`
+- Target document: `/Users/jamesguu/Library/CloudStorage/OneDrive-个人/work/Million Dollar Business/qimi-website/docs/specs/memory-profile-summary.md`
 - Review type: self-review + second-pass review
 - Constraint: this pass did not use a separate review agent session, so strict SOP cross-agent review is still pending
 

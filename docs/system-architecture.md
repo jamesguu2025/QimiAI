@@ -1,6 +1,6 @@
 # System Architecture Design — Qimi AI English Web Version
 
-> Status: APPROVED — 2026-02-21 | Amended: 2026-02-27 (mood-tracking archived) | Amended: 2026-03-16 (unified sidebar, Dashboard hub, route restructure) | Amended: 2026-05-06 (current route/layout/migration reality + SOP v2.4 note) | Amended: 2026-05-27 (MVP/post-MVP route and module status alignment) | Self-reviewed: 2026-03-16 | Second-pass reviewed: 2026-03-16 (P0: 0, P1: 0 after fixes)
+> Status: APPROVED — 2026-02-21 | Amended: 2026-02-27 (mood-tracking archived) | Amended: 2026-03-16 (unified sidebar, Dashboard hub, route restructure) | Amended: 2026-05-06 (current route/layout/migration reality + SOP v2.4 note) | Amended: 2026-05-27 (MVP/post-MVP route and module status alignment) | Amended: 2026-06-10 (Chat RAG answer-time context boundary) | Self-reviewed: 2026-03-16 | Second-pass reviewed: 2026-03-16 (P0: 0, P1: 0 after fixes)
 > Created: 2026-02-21
 > Context: Phase 1 Layer 1 of Agent Development SOP
 > Scope: Canonical Layer 1 architecture for the web app. All module specs must follow this document unless it is explicitly amended.
@@ -11,7 +11,7 @@
 
 This document was re-checked against:
 
-- Current repo reality in `/Users/jamesguu/qimi-ai-website/qimi-ai-website`
+- Current repo reality in `/Users/jamesguu/Library/CloudStorage/OneDrive-个人/work/Million Dollar Business/qimi-website`
 - The cross-platform product blueprint in `/Users/jamesguu/WeChatProjects/adhdhelper-cursor/docs/项目技术蓝图.md`
 - Official platform guidance for Vercel Next.js deployment, Vercel Cron, Supabase RLS, Supabase Next.js auth patterns, and Auth.js / NextAuth session handling
 
@@ -27,7 +27,8 @@ This document was re-checked against:
 - Keep Crisis Calm archived/deferred from MVP, but retain its historical spec and prototype for a possible future reopen.
 - Keep Membership/Billing as a required post-MVP business module. It is not implemented in the MVP.
 - Do not introduce a Feedback Ticket/Admin workflow for MVP; Contact Us remains the support path.
-- Chat file/image upload UI may remain as a coming-soon affordance, but file, image, and report interpretation are not active MVP capabilities.
+- Chat file/image upload UI is hidden for MVP. File, image, and report upload/interpretation require a later authenticated private-storage, validation, malware-scanning, retention, deletion, and consent design.
+- Chat RAG answer quality may use server-side Supabase context rows for same-topic answer-time paper grounding. This is not a Paper Topics feature and must not expose a public paper browser, bulk abstracts, or a standalone research search surface.
 
 ### Current Implementation Notes
 
@@ -52,11 +53,13 @@ This document was re-checked against:
 - Browser reads use the public Supabase client with the anon key
 - Sensitive writes and privileged reads go through API routes with `getServerSession()` plus `getSupabaseAdmin()`
 - All user-owned tables still require RLS, even if the first implementation uses server-side admin access
+- Server-side RAG context rows, if added, are internal answer-time support data. They must be scoped to the owning conversation/user or guest session, protected by RLS plus API ownership checks, and excluded from public paper browsing APIs.
 
 ### Storage boundary
 
 - Persistent uploads should use Supabase Storage
 - Vercel filesystem is treated as ephemeral and must not be used for durable app data
+- Vercel function memory must not be used as the durable source for chat/RAG session context. Use Supabase for any reusable answer-time RAG context that must survive a request boundary.
 
 ### API response convention
 
@@ -377,12 +380,13 @@ When a guest user registers or logs in, all temporary data collected during the 
 |----------------|-------|-----------|----------|
 | Landing page (`/`) | Full | Full | Full |
 | Blog (`/blog`) | Full | Full | Full |
-| Chat (`/chat`) | 10 messages lifetime | 50 msg/day | Future billing decision |
+| Chat (`/chat`) | 10 messages lifetime | 30 msg/day (Asia/Shanghai reset) | Future billing decision |
 | RAG research mode | No | 5 queries/day | Unlimited |
 | Paper Topics / Research Browser | No | No | No *(deferred; not in Web MVP)* |
 | ~~Mood tracking (`/mood`)~~ | ~~No~~ | ~~Full~~ | ~~Full~~ *(ARCHIVED)* |
 | Crisis calm (`/calm`) | Archived/deferred | Archived/deferred | Archived/deferred |
-| Growth plan (`/plan`) | No | Full (max 5 items) | Full (unlimited) |
+| Growth plan storage (`/plan`) | No | Save/view/edit/delete open; normal abuse controls apply | Future billing decision |
+| AI plan operations | No | 10/week shared by Generate, Regenerate, and AI-assisted Save from Chat | Future billing decision |
 | Report analysis (`/reports`) | No | P1/Post-MVP, not in current MVP | Future billing decision |
 | Dashboard (`/dashboard`) | No | Full | Full |
 | Family profile (`/family`) | No | Full | Full |
@@ -422,7 +426,8 @@ if (quota.messagesUsed >= quota.messagesLimit) {
 ### Special Cases
 
 - **Crisis calm** (`/calm`): archived/deferred. If reopened later, the access model should be refreshed before implementation.
-- **Chat guest mode**: permanent 10-message trial allowance. The current client-side counter is only a UX control; production enforcement should add server-side quota/rate limiting for cost-bearing chat calls.
+- **Chat guest mode**: permanent 10-message trial allowance, enforced by a Supabase atomic counter keyed to a server-issued HttpOnly guest identifier. A normal browser/computer restart does not reset it; clearing site data or changing browser/device creates a new identifier, which is an accepted MVP limitation.
+- **AI quota authority**: Supabase server-side atomic counters are the source of truth. Client counters and badges are display/fuse controls only. Guest/free cost-bearing endpoints also use a persistent 5-request-per-minute bucket; ordinary non-AI plan storage operations retain payload, ownership, and general abuse controls but do not consume AI quota.
 - **Stripe subscription check**: Not implemented yet. Current schema has no `users.subscription_tier` column and no `GET /api/user/subscription` route. For now, all registered users are treated as Free tier. Pro features must not be treated as enforceable until the membership-billing module creates the billing schema/API.
 
 ---

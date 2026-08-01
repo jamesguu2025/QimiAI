@@ -1,7 +1,7 @@
 import { signIn } from 'next-auth/react';
 import { useRouter } from 'next/router';
 import { useState, useEffect } from 'react';
-import { BarChart3, Brain, ListChecks, Mail, Lock, MessageCircle, User, Eye, EyeOff, X } from 'lucide-react';
+import { BarChart3, Brain, ListChecks, Mail, Lock, User, Eye, EyeOff, X } from 'lucide-react';
 import { PARENTAL_CONSENT_TEXT } from '@/lib/compliance/consent';
 import { trackClientEvent } from '@/lib/client-analytics';
 
@@ -14,10 +14,9 @@ interface LoginModalProps {
 
 function UnlockBenefitsPanel() {
   const benefits = [
-    { label: 'Continue this chat', icon: MessageCircle },
-    { label: 'Remember your family', icon: Brain },
-    { label: "Save plans you've made", icon: ListChecks },
-    { label: 'Track progress over time', icon: BarChart3 },
+    { label: 'Skip retelling your story', icon: Brain },
+    { label: 'Walk away with a real plan', icon: ListChecks },
+    { label: 'See your child actually grow', icon: BarChart3 },
   ];
 
   return (

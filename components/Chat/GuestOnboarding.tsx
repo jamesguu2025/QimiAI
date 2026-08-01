@@ -35,7 +35,7 @@ const SUB_BUBBLE_POSITIONS = [
 ];
 
 // 挑战分类配置 - 对齐小程序 9 大类
-const CATEGORIES = [
+export const ONBOARDING_CATEGORIES = [
   {
     id: 'emotion',
     name: 'Emotions',
@@ -218,11 +218,18 @@ const QUESTION_TEMPLATES: Record<string, string[]> = {
   avoids_sports: ['How do I help my child who avoids PE because they feel embarrassed or left behind?', 'How can I build movement confidence when sports have become a source of shame?'],
 };
 
-interface SelectedChallenge {
+export interface SelectedChallenge {
   id: string;
   name: string;
   categoryId: string;
   categoryName: string;
+}
+
+export interface OnboardingInitialData {
+  childName?: string;
+  childBirthday?: { year?: number; month?: number };
+  gender?: 'boy' | 'girl' | 'other';
+  challenges?: SelectedChallenge[];
 }
 
 interface GuestOnboardingProps {
@@ -234,21 +241,30 @@ interface GuestOnboardingProps {
     firstQuestion: string;
   }) => void;
   onLogin?: () => void;
+  initialData?: OnboardingInitialData;
+  includeFirstQuestion?: boolean;
+  analyticsMode?: 'guest' | 'registered';
 }
 
-export default function GuestOnboarding({ onComplete, onLogin }: GuestOnboardingProps) {
+export default function GuestOnboarding({
+  onComplete,
+  onLogin,
+  initialData,
+  includeFirstQuestion = true,
+  analyticsMode = 'guest',
+}: GuestOnboardingProps) {
   const [currentStep, setCurrentStep] = useState(1);
 
   // 步骤1：孩子基本信息
-  const [childName, setChildName] = useState('');
-  const [selectedGender, setSelectedGender] = useState<'boy' | 'girl' | 'other' | null>(null);
-  const [selectedYear, setSelectedYear] = useState<number | null>(null);
-  const [selectedMonth, setSelectedMonth] = useState<number | null>(null);
+  const [childName, setChildName] = useState(initialData?.childName || '');
+  const [selectedGender, setSelectedGender] = useState<'boy' | 'girl' | 'other' | null>(initialData?.gender || null);
+  const [selectedYear, setSelectedYear] = useState<number | null>(initialData?.childBirthday?.year || null);
+  const [selectedMonth, setSelectedMonth] = useState<number | null>(initialData?.childBirthday?.month || null);
   const [showYearPicker, setShowYearPicker] = useState(false);
   const [showMonthPicker, setShowMonthPicker] = useState(false);
 
   // 步骤2：挑战选择
-  const [selectedChallenges, setSelectedChallenges] = useState<SelectedChallenge[]>([]);
+  const [selectedChallenges, setSelectedChallenges] = useState<SelectedChallenge[]>(initialData?.challenges || []);
   const [expandedCategory, setExpandedCategory] = useState<string | null>(null);
 
   // 步骤3：问题选择
@@ -311,6 +327,7 @@ export default function GuestOnboarding({ onComplete, onLogin }: GuestOnboarding
       step_number: stepNumber,
       step_key: completedStepKey,
       selected_count: selectedCount,
+      mode: analyticsMode,
     });
     setStepStartedAt(Date.now());
   };
@@ -354,6 +371,19 @@ export default function GuestOnboarding({ onComplete, onLogin }: GuestOnboarding
   const goToStep3 = () => {
     if (canContinueStep2) {
       trackStepComplete(2, 'challenges', selectedChallenges.length);
+
+      if (!includeFirstQuestion && selectedYear && selectedMonth) {
+        completedRef.current = true;
+        onComplete({
+          childName: childName.trim(),
+          childBirthday: { year: selectedYear, month: selectedMonth },
+          gender: selectedGender!,
+          challenges: selectedChallenges,
+          firstQuestion: '',
+        });
+        return;
+      }
+
       setCurrentStep(3);
       setIsLoadingQuestions(true);
 
@@ -393,7 +423,8 @@ export default function GuestOnboarding({ onComplete, onLogin }: GuestOnboarding
   };
 
   // 进度条
-  const progress = (currentStep / 3) * 100;
+  const totalSteps = includeFirstQuestion ? 3 : 2;
+  const progress = (currentStep / totalSteps) * 100;
 
   useEffect(() => {
     return () => {
@@ -404,6 +435,7 @@ export default function GuestOnboarding({ onComplete, onLogin }: GuestOnboarding
         step_key: state.stepKey,
         time_on_step_ms: Date.now() - state.stepStartedAt,
         last_valid_state: state.isValid,
+        mode: analyticsMode,
       }, { keepalive: true });
     };
   }, []);
@@ -547,7 +579,7 @@ export default function GuestOnboarding({ onComplete, onLogin }: GuestOnboarding
             </div>
 
             <p className="text-center text-xs text-slate-400 mb-4">
-              Step 1 of 3
+              Step 1 of {totalSteps}
             </p>
 
             {/* 继续按钮 - 渐变边框+渐变文字样式 */}
@@ -628,7 +660,9 @@ export default function GuestOnboarding({ onComplete, onLogin }: GuestOnboarding
                   border: '2px solid #e2e8f0',
                 }}
               >
-                <span className={canContinueStep2 ? 'bg-gradient-to-r from-primary-teal to-primary-purple bg-clip-text text-transparent' : 'text-slate-400'}>Next</span>
+                <span className={canContinueStep2 ? 'bg-gradient-to-r from-primary-teal to-primary-purple bg-clip-text text-transparent' : 'text-slate-400'}>
+                  {includeFirstQuestion ? 'Next' : 'Save and continue'}
+                </span>
                 <ChevronRight size={18} className={canContinueStep2 ? 'text-primary-purple' : 'text-slate-400'} />
               </button>
             </div>
@@ -691,7 +725,7 @@ export default function GuestOnboarding({ onComplete, onLogin }: GuestOnboarding
               .bubble-float-3 { animation: float-3 10s ease-in-out infinite; }
             `}</style>
 
-            {CATEGORIES.map((category, index) => {
+            {ONBOARDING_CATEGORIES.map((category, index) => {
               const pos = BUBBLE_POSITIONS[index];
               const hasSelection = categoryHasSelection(category.id);
               const floatClass = `bubble-float-${(index % 3) + 1}`;
@@ -815,7 +849,7 @@ export default function GuestOnboarding({ onComplete, onLogin }: GuestOnboarding
                   </button>
                 </div>
                 <h2 className="text-xl font-bold text-white text-center">
-                  {CATEGORIES.find(c => c.id === expandedCategory)?.name}
+                  {ONBOARDING_CATEGORIES.find(c => c.id === expandedCategory)?.name}
                 </h2>
                 <p className="text-white/70 text-center text-sm">
                   Select specific challenges
@@ -824,10 +858,10 @@ export default function GuestOnboarding({ onComplete, onLogin }: GuestOnboarding
 
               {/* 子气泡区域 - 限制最大宽度 */}
               <div className="flex-1 relative max-w-xl mx-auto w-full">
-                {CATEGORIES.find(c => c.id === expandedCategory)?.subItems.map((item, index) => {
+                {ONBOARDING_CATEGORIES.find(c => c.id === expandedCategory)?.subItems.map((item, index) => {
                   const pos = SUB_BUBBLE_POSITIONS[index % SUB_BUBBLE_POSITIONS.length];
                   const isSelected = selectedChallenges.some(c => c.id === item.id);
-                  const category = CATEGORIES.find(c => c.id === expandedCategory)!;
+                  const category = ONBOARDING_CATEGORIES.find(c => c.id === expandedCategory)!;
 
                   return (
                     <div

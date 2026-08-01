@@ -5,6 +5,10 @@ import type { NextApiRequest, NextApiResponse } from 'next';
 import { getServerSession } from 'next-auth';
 import { authOptions } from '../auth/[...nextauth]';
 import { getSupabaseAdmin } from '../../../lib/supabase';
+import { getPayloadSizeBytes, rejectIfRateLimited } from '../../../lib/rate-limit';
+import { isTopicFolder, normalizeTopicFolder } from '../../../types/chat';
+
+const MAX_PAYLOAD_BYTES = 4 * 1024;
 
 export default async function handler(
   req: NextApiRequest,
@@ -77,7 +81,6 @@ export default async function handler(
         title: c.title,
         folderKey: c.folder_key,
         messageCount: c.message_count,
-        lastMessage: c.last_message,
         isPinned: c.is_pinned || false,
         createdAt: c.created_at,
         updatedAt: c.updated_at,
@@ -86,15 +89,30 @@ export default async function handler(
       return res.status(200).json({ conversations: formattedConversations });
 
     } else if (req.method === 'POST') {
+      if (getPayloadSizeBytes(req) > MAX_PAYLOAD_BYTES) {
+        return res.status(413).json({ error: 'Payload too large' });
+      }
+      if (rejectIfRateLimited(req, res, {
+        namespace: 'conversation-create',
+        key: userId,
+        limit: 30,
+        windowMs: 10 * 60 * 1000,
+      })) return;
+
       // Create new conversation
       const { title, folderKey } = req.body;
+      const cleanTitle = typeof title === 'string' ? title.replace(/\s+/g, ' ').trim() : '';
+      if (cleanTitle.length > 120) return res.status(400).json({ error: 'Title is too long' });
+      if (folderKey !== undefined && folderKey !== null && !isTopicFolder(folderKey)) {
+        return res.status(400).json({ error: 'Invalid folder' });
+      }
 
       const { data: conversation, error } = await supabase
         .from('conversations')
         .insert({
           user_id: userId,
-          title: title || 'New Conversation',
-          folder_key: folderKey || null,
+          title: cleanTitle || 'New Conversation',
+          folder_key: folderKey ? normalizeTopicFolder(folderKey) : null,
         })
         .select()
         .single();
@@ -111,7 +129,6 @@ export default async function handler(
         title: conversation.title,
         folderKey: conversation.folder_key,
         messageCount: conversation.message_count,
-        lastMessage: conversation.last_message,
         isPinned: conversation.is_pinned || false,
         createdAt: conversation.created_at,
         updatedAt: conversation.updated_at,
@@ -126,8 +143,7 @@ export default async function handler(
   } catch (error) {
     console.error('[conversations] API error:', error);
     return res.status(500).json({
-      error: 'Internal server error',
-      message: error instanceof Error ? error.message : 'Unknown error'
+      error: 'Internal server error'
     });
   }
 }

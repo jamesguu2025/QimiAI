@@ -1,8 +1,8 @@
-import React from 'react';
 import Link from 'next/link';
-import { ArrowRight, Clock, BookOpen, Users, Lightbulb, FileText } from 'lucide-react';
+import { ArrowRight, BookOpen, Bookmark, LayoutList, MessageCircle } from 'lucide-react';
 import { Session } from 'next-auth';
 import { trackClientEvent } from '@/lib/client-analytics';
+import ProductDemo from './ProductDemo';
 
 interface HeroProps {
   session: Session | null;
@@ -12,40 +12,33 @@ interface HeroProps {
 
 const getFeatures = (paperCount: number) => [
   {
-    icon: Clock,
-    title: '24/7 Parenting Coach',
-    description: 'Late-night anxiety, sudden meltdowns — expert support whenever you need it.',
+    icon: MessageCircle,
+    title: 'Guided Conversations',
+    description: 'Work through one parenting challenge at a time and identify practical options.',
     iconColor: 'text-blue-500',
     iconBg: 'bg-blue-500/10',
   },
   {
     icon: BookOpen,
-    title: 'Expert Knowledge Base',
+    title: 'Evidence-Informed Guidance',
     stat: paperCount > 0 ? `${paperCount.toLocaleString()}+ Studies` : '10,000+ Studies',
-    description: 'Every recommendation backed by peer-reviewed ADHD research.',
+    description: 'Relevant ADHD research helps ground the conversation and its sources remain reviewable.',
     iconColor: 'text-purple-500',
     iconBg: 'bg-purple-500/10',
   },
   {
-    icon: Users,
-    title: 'Personalized Plans',
-    description: 'A growth plan unique to your family, precisely matched to your child.',
+    icon: Bookmark,
+    title: 'Saved Strategies',
+    description: 'Keep the ideas that matter so useful context is not lost between conversations.',
     iconColor: 'text-primary-teal',
     iconBg: 'bg-primary-teal/10',
   },
   {
-    icon: Lightbulb,
-    title: 'Adaptive Intelligence',
-    description: 'The more you use it, the smarter it gets — every suggestion more precise.',
+    icon: LayoutList,
+    title: 'Visual Growth Plans',
+    description: 'Organize selected saved strategies into one clear, source-backed plan.',
     iconColor: 'text-orange-500',
     iconBg: 'bg-orange-500/10',
-  },
-  {
-    icon: FileText,
-    title: 'Progress Tracking',
-    description: 'Upload reports, AI extracts structured insights — data at a glance.',
-    iconColor: 'text-pink-500',
-    iconBg: 'bg-pink-500/10',
   },
 ];
 
@@ -96,8 +89,8 @@ const Hero = ({ session, userCount = 0, paperCount = 0 }: HeroProps) => {
           </div>
         </div>
 
-        {/* Right: Stats + Preview + CTA */}
-        <div className="flex flex-col items-center lg:items-end gap-6">
+        {/* Right: Stats + Product demo + CTA */}
+        <div className="flex flex-col items-center lg:items-end gap-6 lg:w-[520px]">
           {/* User Stats Badge */}
           {userCount > 0 && (
             <div className="inline-flex items-center gap-2 px-4 py-2 bg-white/80 backdrop-blur-sm border border-slate-200 rounded-full text-sm text-slate-600">
@@ -108,14 +101,7 @@ const Hero = ({ session, userCount = 0, paperCount = 0 }: HeroProps) => {
             </div>
           )}
 
-          {/* Dashboard Preview Card */}
-          <div className="bg-white rounded-3xl p-4 shadow-[0_8px_32px_rgba(0,0,0,0.08)] border border-slate-100">
-            <img
-              src="/dashboard-preview.png"
-              alt="Qimi AI Dashboard"
-              className="w-[280px] lg:w-[320px] rounded-2xl"
-            />
-          </div>
+          <ProductDemo />
 
           {/* CTA Button */}
           <Link
@@ -128,12 +114,12 @@ const Hero = ({ session, userCount = 0, paperCount = 0 }: HeroProps) => {
             })}
             className="group inline-flex items-center justify-center gap-2.5 px-9 py-4 bg-slate-900 text-white text-base font-semibold rounded-full transition-all duration-200 hover:bg-slate-800 hover:-translate-y-0.5 hover:shadow-[0_8px_24px_rgba(0,0,0,0.15)] w-full max-w-[280px]"
           >
-            {session ? 'Continue to Chat' : 'Get Started'}
+            {session ? 'Continue with Qimi' : 'Ask Qimi your first question'}
             <ArrowRight size={20} className="group-hover:translate-x-1 transition-transform" />
           </Link>
 
           <p className="text-[13px] text-slate-400 text-center w-full max-w-[280px]">
-            Free to start, no credit card required
+            Bring one real situation. Leave with clearer next steps.
           </p>
         </div>
       </div>

@@ -36,9 +36,9 @@ Before starting any new architecture document, spec, review note, or planning up
 - `/Users/jamesguu/Library/CloudStorage/OneDrive-个人/work/Million Dollar Business/agent-dev-sop/02-规划者手册.md`
 - `/Users/jamesguu/Library/CloudStorage/OneDrive-个人/work/Million Dollar Business/agent-dev-sop/07-架构质量标准(AQS).md`
 - `/Users/jamesguu/Library/CloudStorage/OneDrive-个人/work/Million Dollar Business/agent-dev-sop/08-设计阶段循证Gate(EBG).md`
-- `/Users/jamesguu/qimi-ai-website/qimi-ai-website/docs/formal-basis-entry.md`
-- `/Users/jamesguu/qimi-ai-website/qimi-ai-website/docs/planning-review-rules.md`
-- `/Users/jamesguu/qimi-ai-website/qimi-ai-website/docs/project-control.md`
+- `/Users/jamesguu/Library/CloudStorage/OneDrive-个人/work/Million Dollar Business/qimi-website/docs/formal-basis-entry.md`
+- `/Users/jamesguu/Library/CloudStorage/OneDrive-个人/work/Million Dollar Business/qimi-website/docs/planning-review-rules.md`
+- `/Users/jamesguu/Library/CloudStorage/OneDrive-个人/work/Million Dollar Business/qimi-website/docs/project-control.md`
 
 Treat this as a required checklist gate. No new documentation pass should begin without checking it.
 
@@ -50,8 +50,8 @@ When planning or reviewing, use this priority order:
 
 1. Real code and real deployed architecture in this repo
 2. Latest `agent-dev-sop` process rules
-3. `/Users/jamesguu/qimi-ai-website/qimi-ai-website/docs/formal-basis-entry.md`
-4. `/Users/jamesguu/qimi-ai-website/qimi-ai-website/docs/project-control.md`
+3. `/Users/jamesguu/Library/CloudStorage/OneDrive-个人/work/Million Dollar Business/qimi-website/docs/formal-basis-entry.md`
+4. `/Users/jamesguu/Library/CloudStorage/OneDrive-个人/work/Million Dollar Business/qimi-website/docs/project-control.md`
 5. The canonical web planning docs in `docs/`
 6. Official vendor docs and verified external evidence
 7. The cross-platform blueprint in `/Users/jamesguu/WeChatProjects/adhdhelper-cursor/docs/项目技术蓝图.md`
@@ -61,7 +61,7 @@ If a document disagrees with the real repo, the document must be corrected or ex
 
 ### Formal Basis Rule
 
-- The project-level formal basis entry is `/Users/jamesguu/qimi-ai-website/qimi-ai-website/docs/formal-basis-entry.md`
+- The project-level formal basis entry is `/Users/jamesguu/Library/CloudStorage/OneDrive-个人/work/Million Dollar Business/qimi-website/docs/formal-basis-entry.md`
 - Legacy, historical, and reference-only materials must not be treated as equal to canonical specs
 - If a historical insight needs to survive, it must be copied into a canonical doc first
 

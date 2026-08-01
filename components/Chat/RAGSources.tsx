@@ -37,7 +37,7 @@ export function RAGSources({ sources }: RAGSourcesProps) {
           <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 5l7 7-7 7" />
         </svg>
         <span className="font-medium">
-          Based on {sources.length} research {sources.length === 1 ? 'paper' : 'papers'}
+          Research sources for this answer
         </span>
       </button>
 

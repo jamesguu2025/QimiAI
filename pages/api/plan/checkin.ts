@@ -3,6 +3,7 @@ import { getServerSession } from 'next-auth';
 import { authOptions } from '../auth/[...nextauth]';
 import { getSupabaseAdmin } from '../../../lib/supabase';
 import type { ActionPlanItem, PlanCategory, PlanContentBlock, WeekDay } from '../../../types/plan';
+import { trackServerEvent } from '../../../lib/analytics';
 
 type PlanItemRow = {
   id: string;
@@ -140,6 +141,11 @@ export default async function handler(req: NextApiRequest, res: NextApiResponse)
       console.error('[plan/checkin] update error:', error);
       return res.status(500).json({ error: 'Failed to check in' });
     }
+
+    await trackServerEvent(req, 'plan:item_checked_in', {
+      category: (data as PlanItemRow).category,
+      checked_in: true,
+    }, { userId: user!.id, userEmail: session.user.email, pagePath: '/plan' });
 
     return res.status(200).json({ item: mapPlanItem(data as PlanItemRow) });
   } catch (error) {

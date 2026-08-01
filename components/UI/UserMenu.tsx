@@ -3,6 +3,7 @@ import { signOut, useSession } from 'next-auth/react';
 import Link from 'next/link';
 import {
   LayoutDashboard,
+  BookOpen,
   Settings,
   LogOut,
   ChevronDown,
@@ -87,6 +88,17 @@ export default function UserMenu() {
               <LayoutDashboard size={18} className="text-slate-500 group-hover:text-primary-purple" />
               <span className="text-sm text-slate-700 group-hover:text-slate-900 font-medium">
                 Dashboard
+              </span>
+            </Link>
+
+            <Link
+              href="/blog"
+              className="flex items-center gap-3 px-4 py-2.5 hover:bg-slate-50 transition-colors group"
+              onClick={() => setIsOpen(false)}
+            >
+              <BookOpen size={18} className="text-slate-500 group-hover:text-primary-purple" />
+              <span className="text-sm text-slate-700 group-hover:text-slate-900 font-medium">
+                ADHD Insights
               </span>
             </Link>
 

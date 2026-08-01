@@ -5,8 +5,8 @@ interface PlanSummaryProps {
 
 export default function PlanSummary({ totalItems, starredCount }: PlanSummaryProps) {
   const stats = [
-    { label: 'Total Items', value: totalItems, accent: 'text-slate-900' },
-    { label: 'Starred', value: starredCount, accent: 'text-primary-teal' },
+    { label: 'Saved Sources', value: totalItems, accent: 'text-slate-900' },
+    { label: 'Starred Sources', value: starredCount, accent: 'text-primary-teal' },
   ];
 
   return (

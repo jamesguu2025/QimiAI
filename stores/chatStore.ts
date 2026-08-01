@@ -23,15 +23,54 @@ const WELCOME_MESSAGE: Message = {
 };
 
 /** Local cache constants */
-const CACHE_KEY = 'qimi_conversations_cache';
+const CACHE_KEY = 'qimi_conversations_cache_v2';
+const LEGACY_CACHE_KEY = 'qimi_conversations_cache';
 const CACHE_TIMESTAMP_KEY = 'qimi_conversations_cache_timestamp';
 const CACHE_TTL = 5 * 60 * 1000; // 5 minutes
+const MAX_HISTORY_MESSAGES = 10;
+const MAX_HISTORY_SOURCES_PER_MESSAGE = 5;
+const MAX_HISTORY_SOURCE_SNIPPET_CHARS = 240;
+const MAX_HISTORY_AFFILIATION_CHARS = 160;
+
+function trimAuthorDetails(source: RAGSource) {
+  const authorsDetailed = (source as any).authors_detailed;
+  if (!Array.isArray(authorsDetailed) || authorsDetailed.length === 0) return undefined;
+
+  return authorsDetailed.slice(0, 3).map((author) => {
+    const affiliations = Array.isArray(author.affiliations) && author.affiliations.length > 0
+      ? author.affiliations
+      : author.affiliation
+        ? [author.affiliation]
+        : [];
+    return {
+      name: author.name,
+      lastname: author.lastname,
+      firstname: author.firstname,
+      initials: author.initials,
+      affiliation: affiliations[0]?.slice(0, MAX_HISTORY_AFFILIATION_CHARS),
+    };
+  });
+}
+
+function trimHistorySources(sources?: RAGSource[]) {
+  if (!Array.isArray(sources) || sources.length === 0) return undefined;
+
+  return sources.slice(0, MAX_HISTORY_SOURCES_PER_MESSAGE).map(source => ({
+    ...source,
+    snippet: source.snippet
+      ? source.snippet.slice(0, MAX_HISTORY_SOURCE_SNIPPET_CHARS)
+      : source.snippet,
+    authors_detailed: trimAuthorDetails(source),
+  }));
+}
 
 /** Save conversations to localStorage cache */
 function saveConversationsToCache(conversations: Conversation[]): void {
   if (typeof window === 'undefined') return;
   try {
-    localStorage.setItem(CACHE_KEY, JSON.stringify(conversations));
+    const cacheSafeConversations = conversations.map(({ lastMessage: _lastMessage, ...conversation }) => conversation);
+    localStorage.removeItem(LEGACY_CACHE_KEY);
+    localStorage.setItem(CACHE_KEY, JSON.stringify(cacheSafeConversations));
     localStorage.setItem(CACHE_TIMESTAMP_KEY, Date.now().toString());
   } catch (error) {
     console.warn('[chatStore] Failed to save to cache:', error);
@@ -42,6 +81,7 @@ function saveConversationsToCache(conversations: Conversation[]): void {
 function loadConversationsFromCache(): { conversations: Conversation[]; isStale: boolean } | null {
   if (typeof window === 'undefined') return null;
   try {
+    localStorage.removeItem(LEGACY_CACHE_KEY);
     const cached = localStorage.getItem(CACHE_KEY);
     const timestamp = localStorage.getItem(CACHE_TIMESTAMP_KEY);
 
@@ -59,10 +99,11 @@ function loadConversationsFromCache(): { conversations: Conversation[]; isStale:
 }
 
 /** Clear localStorage cache */
-function clearConversationsCache(): void {
+export function clearConversationsCache(): void {
   if (typeof window === 'undefined') return;
   try {
     localStorage.removeItem(CACHE_KEY);
+    localStorage.removeItem(LEGACY_CACHE_KEY);
     localStorage.removeItem(CACHE_TIMESTAMP_KEY);
   } catch (error) {
     console.warn('[chatStore] Failed to clear cache:', error);
@@ -195,10 +236,11 @@ export const useChatStore = create<ChatState & ChatActions>((set, get) => ({
     const { messages } = get();
     const conversationHistory = messages
       .filter(msg => msg.id !== 'welcome' && msg.id !== userMessage.id && msg.id !== aiMessageId)
+      .slice(-MAX_HISTORY_MESSAGES)
       .map(msg => ({
         role: msg.role,
         content: msg.content,
-        sources: msg.sources,
+        sources: trimHistorySources(msg.sources),
       }));
 
     try {
@@ -366,7 +408,7 @@ export const useChatStore = create<ChatState & ChatActions>((set, get) => ({
       set(state => ({
         messages: state.messages.map(msg =>
           msg.id === aiMessageId
-            ? { ...msg, isStreaming: false, content: accumulated || `Error: ${errorMessage}` }
+            ? { ...msg, isStreaming: false, content: accumulated || errorMessage }
             : msg
         ),
         isStreaming: false,

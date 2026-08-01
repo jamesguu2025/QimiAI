@@ -3,8 +3,11 @@ import { getServerSession } from 'next-auth';
 import { authOptions } from '../auth/[...nextauth]';
 import { getSupabaseAdmin } from '../../../lib/supabase';
 import { getPayloadSizeBytes, rejectIfRateLimited } from '../../../lib/rate-limit';
+import { actorKey, consumePersistentRateLimit, consumePlanAiQuota } from '../../../lib/ai-usage';
+import { trackServerEvent } from '../../../lib/analytics';
 import type { PlanCategory, PlanContentBlock } from '../../../types/plan';
 import { PLAN_CATEGORIES } from '../../../types/plan';
+import { PLAN_TITLE_MAX_LENGTH } from '../../../lib/plan-generation';
 import { extractMarkdownTables } from '../../../utils/markdown-tables';
 
 const DEEPSEEK_API_KEY = process.env.DEEPSEEK_API_KEY;
@@ -214,7 +217,7 @@ Rules:
 - Safety flags may include: none, medical, diagnosis, medication, crisis, legal, not_child_related, too_vague.
 
 Field rules:
-- "painPoint": a SHORT noun phrase (max 60 chars) naming the core issue — like a card title. Examples: "Bedtime routine resistance", "Homework avoidance", "Discolored toenail concern". Do NOT write a full sentence or include "Parent concerned about..." framing.
+- "painPoint": a SHORT noun phrase (max ${PLAN_TITLE_MAX_LENGTH} chars) naming the core issue — like a card title. Examples: "Bedtime routine resistance", "Homework avoidance", "Discolored toenail concern". Do NOT write a full sentence or include "Parent concerned about..." framing.
 - "strategySummary": one concise sentence for card display.
 - "explanationMarkdown": optional context that explains why the plan may help. Keep useful Markdown but omit generic empathy.
 - "interventionBlocks": the concrete saved plan details. Preserve tables when the assistant used or implied step/schedule/phase structure.
@@ -336,7 +339,7 @@ function validateDraft(draft: ExtractedPlanDraft) {
   const safeBlocks = interventionBlocks.length > 0
     ? interventionBlocks
     : [{ contentMarkdown: strategySummary }];
-  const painPoint = painPointValue.trim().slice(0, 500);
+  const painPoint = painPointValue.trim().slice(0, PLAN_TITLE_MAX_LENGTH);
 
   return {
     draft: {
@@ -369,6 +372,7 @@ async function findDuplicate(
       .from('plan_items')
       .select('id')
       .eq('user_id', userId)
+      .eq('legacy_composed_shadow', false)
       .eq('source_message_id', sourceMessageId)
       .maybeSingle();
 
@@ -381,6 +385,7 @@ async function findDuplicate(
     .from('plan_items')
     .select('id, pain_point, strategy, strategy_summary, intervention_blocks')
     .eq('user_id', userId)
+    .eq('legacy_composed_shadow', false)
     .eq('category', category);
 
   if (sourceConversationId) {
@@ -457,6 +462,20 @@ export default async function handler(req: NextApiRequest, res: NextApiResponse)
       assistantContent.trim()
     );
 
+    const planActor = actorKey('user', userId);
+    const minuteLimit = await consumePersistentRateLimit({ actorKey: planActor, scope: 'plan_ai' });
+    if (!minuteLimit.allowed) {
+      res.setHeader('Retry-After', String(minuteLimit.retryAfterSeconds));
+      return res.status(429).json({ error: 'Too many AI plan requests. Please wait a minute and try again.' });
+    }
+    const quota = await consumePlanAiQuota(userId);
+    if (!quota.allowed) {
+      await trackServerEvent(req, 'quota:limit_reached', {
+        feature: 'plan_ai', auth_state: 'authenticated', period: 'week',
+      }, { userId, pagePath: '/chat' });
+      return res.status(429).json({ error: 'Weekly AI plan limit reached', quota: { remaining: 0 } });
+    }
+
     const extracted = await extractDraft(
       assistantContent.trim().slice(0, 8000),
       typeof userContext === 'string' ? userContext.trim().slice(0, 1000) : undefined
@@ -507,6 +526,7 @@ export default async function handler(req: NextApiRequest, res: NextApiResponse)
         sourceTime,
       },
       duplicate,
+      quota: { remaining: quota.remaining },
     });
   } catch (error) {
     console.error('[plan/extract-from-chat] error:', error);

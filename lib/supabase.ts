@@ -16,6 +16,10 @@ if (!supabaseAnonKey) {
   throw new Error('Missing NEXT_PUBLIC_SUPABASE_ANON_KEY environment variable');
 }
 
+if (process.env.NODE_ENV === 'production' && !supabaseServiceKey) {
+  throw new Error('Missing SUPABASE_SERVICE_ROLE_KEY in production');
+}
+
 /**
  * Supabase client for browser/client-side use
  * Uses anon key - safe to expose in browser

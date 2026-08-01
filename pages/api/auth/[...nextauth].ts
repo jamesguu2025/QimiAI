@@ -3,10 +3,15 @@ import GoogleProvider from 'next-auth/providers/google';
 import CredentialsProvider from 'next-auth/providers/credentials';
 import bcrypt from 'bcryptjs';
 import { getSupabaseAdmin } from '@/lib/supabase';
+import { checkRateLimit, resetRateLimit } from '@/lib/rate-limit';
 
 // 兼容你当前在 Vercel 中的变量命名（驼峰/大小写差异）
 const GOOGLE_CLIENT_ID = process.env.GOOGLE_CLIENT_ID || process.env.Google_Client_ID || process.env.GOOGLE_CLIENTId || '';
 const GOOGLE_CLIENT_SECRET = process.env.GOOGLE_CLIENT_SECRET || process.env.Google_Client_secret || process.env.GOOGLE_CLIENTSecret || '';
+
+if (process.env.NODE_ENV === 'production' && !process.env.NEXTAUTH_SECRET) {
+  throw new Error('Missing NEXTAUTH_SECRET in production');
+}
 
 // 创建 providers 数组，避免 undefined 值
 const providers: AuthOptions['providers'] = [];
@@ -19,9 +24,26 @@ providers.push(
       email: { label: 'Email', type: 'email', placeholder: 'your@email.com' },
       password: { label: 'Password', type: 'password' },
     },
-    async authorize(credentials) {
-      if (!credentials?.email || !credentials?.password) {
+    async authorize(credentials, req) {
+      const normalizedEmail = credentials?.email?.toLowerCase().trim() || '';
+      const password = credentials?.password || '';
+      if (!normalizedEmail || !password || normalizedEmail.length > 254 || password.length > 128) {
         throw new Error('请输入邮箱和密码');
+      }
+
+      const forwardedFor = req.headers?.['x-forwarded-for'];
+      const clientIp = typeof forwardedFor === 'string'
+        ? forwardedFor.split(',')[0].trim()
+        : 'unknown';
+      const rateLimitKey = `${normalizedEmail}:${clientIp}`;
+      const attempt = checkRateLimit({
+        namespace: 'credentials-login',
+        key: rateLimitKey,
+        limit: 10,
+        windowMs: 15 * 60 * 1000,
+      });
+      if (attempt.limited) {
+        throw new Error('尝试次数过多，请稍后再试');
       }
 
       const supabase = getSupabaseAdmin();
@@ -30,7 +52,7 @@ providers.push(
       const { data: user, error } = await supabase
         .from('users')
         .select('id, email, name, avatar_url, password_hash')
-        .eq('email', credentials.email.toLowerCase())
+        .eq('email', normalizedEmail)
         .single();
 
       if (error || !user) {
@@ -38,14 +60,16 @@ providers.push(
       }
 
       if (!user.password_hash) {
-        throw new Error('该账户使用第三方登录，请使用 Google 登录');
+        throw new Error('邮箱或密码错误，或请使用原注册方式');
       }
 
       // 验证密码
-      const isValid = await bcrypt.compare(credentials.password, user.password_hash);
+      const isValid = await bcrypt.compare(password, user.password_hash);
       if (!isValid) {
         throw new Error('邮箱或密码错误');
       }
+
+      resetRateLimit('credentials-login', rateLimitKey);
 
       return {
         id: user.id,

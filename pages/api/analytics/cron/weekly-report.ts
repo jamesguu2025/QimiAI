@@ -22,11 +22,20 @@ const FUNNEL_EVENTS = [
   'onboarding:step_complete',
   'onboarding:step_dropoff',
   'chat:first_message_sent',
+  'chat:message_sent',
+  'chat:history_viewed',
   'chat:message_count_milestone_reach',
   'memory:fact_extracted',
   'plan:save_prompt_show',
   'plan:save_prompt_click',
   'plan:item_saved',
+  'plan:library_viewed',
+  'plan:generation_started',
+  'plan:generation_completed',
+  'plan:generation_failed',
+  'plan:composed_saved',
+  'plan:item_checked_in',
+  'quota:limit_reached',
   'contact:form_submitted',
   'chat:error',
 ];
@@ -121,6 +130,55 @@ function pct(numerator: number, denominator: number) {
   return `${Math.round((numerator / denominator) * 100)}%`;
 }
 
+const RETENTION_START_EVENTS = new Set(['auth:signup_success', 'chat:first_message_sent']);
+const RETENTION_RETURN_EVENTS = new Set([
+  'chat:message_sent', 'plan:item_saved', 'plan:composed_saved',
+  'plan:item_checked_in', 'plan:generation_completed',
+]);
+
+function shanghaiDateKey(value: string) {
+  return new Intl.DateTimeFormat('en-CA', {
+    timeZone: 'Asia/Shanghai', year: 'numeric', month: '2-digit', day: '2-digit',
+  }).format(new Date(value));
+}
+
+function addDays(day: string, amount: number) {
+  const date = new Date(`${day}T04:00:00.000Z`);
+  date.setUTCDate(date.getUTCDate() + amount);
+  return date.toISOString().slice(0, 10);
+}
+
+function retention(rows: AnalyticsEventRow[], lagDays: number) {
+  const starts = new Map<string, Set<string>>();
+  const active = new Map<string, Set<string>>();
+  for (const row of rows) {
+    if (!row.user_id) continue;
+    const day = shanghaiDateKey(row.created_at);
+    if (RETENTION_START_EVENTS.has(row.event_name)) {
+      if (!starts.has(day)) starts.set(day, new Set());
+      starts.get(day)!.add(row.user_id);
+    }
+    if (RETENTION_RETURN_EVENTS.has(row.event_name)) {
+      if (!active.has(day)) active.set(day, new Set());
+      active.get(day)!.add(row.user_id);
+    }
+  }
+  const observedThrough = rows.reduce((latest, row) => {
+    const day = shanghaiDateKey(row.created_at);
+    return day > latest ? day : latest;
+  }, '');
+  let eligible = 0;
+  let returned = 0;
+  for (const [day, users] of starts) {
+    const returnDay = addDays(day, lagDays);
+    if (!observedThrough || returnDay > observedThrough) continue;
+    const returnUsers = active.get(returnDay) || new Set<string>();
+    eligible += users.size;
+    for (const user of users) if (returnUsers.has(user)) returned += 1;
+  }
+  return { eligible, returned, label: pct(returned, eligible) };
+}
+
 function escapeHtml(value: string) {
   return value
     .replace(/&/g, '&amp;')
@@ -165,7 +223,7 @@ function funnelRow(label: string, value: number, max: number, subtext = '') {
     </tr>`;
 }
 
-function buildReport(rows: AnalyticsEventRow[], previousRows: AnalyticsEventRow[], start: Date, end: Date) {
+function buildReport(rows: AnalyticsEventRow[], previousRows: AnalyticsEventRow[], start: Date, end: Date, allRows: AnalyticsEventRow[]) {
   const counts = countByEvent(rows);
   const previousCounts = countByEvent(previousRows);
   const firstChatActors = countUniqueActors(rows, 'chat:first_message_sent');
@@ -201,6 +259,8 @@ function buildReport(rows: AnalyticsEventRow[], previousRows: AnalyticsEventRow[
     memoryExtracted,
     1
   );
+  const d1 = retention(allRows, 1);
+  const d7 = retention(allRows, 7);
 
   const lines = [
     `Qimi Analytics Weekly Report`,
@@ -219,6 +279,10 @@ function buildReport(rows: AnalyticsEventRow[], previousRows: AnalyticsEventRow[
     `- Chat milestone 5: ${milestone5}`,
     `- Chat milestone 10: ${milestone10}`,
     `- Memory extracted: ${memoryExtracted}`,
+    '',
+    'Registered-user retention',
+    `- D1: ${d1.label} (${d1.returned}/${d1.eligible} eligible starters)`,
+    `- D7: ${d7.label} (${d7.returned}/${d7.eligible} eligible starters)`,
     '',
     'Growth Plan',
     `- Save prompt shown: ${saveShown}`,
@@ -255,9 +319,9 @@ function buildReport(rows: AnalyticsEventRow[], previousRows: AnalyticsEventRow[
               <td style="padding:20px 24px 8px;background:#f8fafc;">
                 <table role="presentation" width="100%" cellspacing="0" cellpadding="0" style="border-collapse:collapse;">
                   <tr>
-                    ${metricCard('Landing CTA', landingClicks, `${trend(landingClicks, previousCounts['landing:cta_click'] || 0)} vs previous`)}
                     ${metricCard('First Chats', firstChats, `${firstChatActors} unique actors`, '#4f46e5')}
-                    ${metricCard('Plan Saved', saved, `${pct(saved, Math.max(saveClicked, 1))} of clicks`, '#7c3aed')}
+                    ${metricCard('D1 Retention', d1.label, `${d1.returned}/${d1.eligible} registered starters`)}
+                    ${metricCard('D7 Retention', d7.label, `${d7.returned}/${d7.eligible} registered starters`, '#7c3aed')}
                   </tr>
                 </table>
               </td>
@@ -346,6 +410,7 @@ export default async function handler(req: NextApiRequest, res: NextApiResponse)
   const { data, error } = await supabase
     .from('analytics_events')
     .select('event_name, user_id, anonymous_id, session_id, properties, created_at')
+    .eq('is_internal', false)
     .gte('created_at', previousStart.toISOString())
     .lt('created_at', end.toISOString())
     .order('created_at', { ascending: false })
@@ -359,7 +424,7 @@ export default async function handler(req: NextApiRequest, res: NextApiResponse)
   const rows = (data || []) as AnalyticsEventRow[];
   const currentRows = rows.filter((row) => new Date(row.created_at) >= start);
   const previousRows = rows.filter((row) => new Date(row.created_at) < start);
-  const report = buildReport(currentRows, previousRows, start, end);
+  const report = buildReport(currentRows, previousRows, start, end, rows);
   const dryRun = req.query.dryRun === '1' || req.query.dryRun === 'true';
 
   if (!dryRun) {

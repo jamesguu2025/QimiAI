@@ -1,8 +1,8 @@
 # Module Spec: Onboarding
 
-> Status: DOCUMENTED — 2026-05-19
+> Status: IMPLEMENTED AND HUMAN-ACCEPTED, 2026-07-27
 > Module: onboarding
-> Routes: `/chat`, `/consent`, `/family`
+> Routes: `/chat`, `/onboarding`, `/consent`, `/family`
 > Primary component: `components/Chat/GuestOnboarding.tsx`
 > Storage: guest browser `localStorage` key `qimi_guest_data`, then Supabase `child_profiles`
 > Scope: current 3-step onboarding, guest/registered consistency, guest data migration, adult confirmation / consent gate relationship, Family Profile read path, MVP boundaries.
@@ -24,6 +24,25 @@ Canonical inputs:
 - Current code listed in "Current Code Facts" below.
 
 Local testing rule: database-backed acceptance must use local Supabase first, not production Supabase.
+
+### 0.1 Registered user fallback amendment, 2026-07-26
+
+This amendment supersedes the earlier MVP decision that registered-first users should only use `/family` and should not receive onboarding.
+
+Current code treats an authenticated session as sufficient to suppress onboarding. A logged-in user with no `child_profiles` row therefore reaches the application without the profile context that guest users must provide. This is a real activation gap and must be closed before public MVP launch.
+
+Accepted target behavior:
+
+1. Consent remains the first logged-in gate because Qimi must not persist child or family information before the adult confirmation is recorded.
+2. After consent, the server determines whether onboarding is complete. Browser storage and the mere presence of a session are not authoritative.
+3. A logged-in user without completed onboarding is routed to `/onboarding` with a validated `returnTo` path.
+4. Existing durable profile values are pre-populated. The user is asked only for missing required values and may review values already present.
+5. Guest migration and registered onboarding write the same `child_profiles` fields and the same `SelectedChallenge[]` structure.
+6. Completion is recorded explicitly in durable storage. It is not inferred forever from one optional field or from an empty challenge list.
+7. `/onboarding` and `/consent` are excluded from their own redirect guards. Temporary status-check failures must not create a redirect loop. Consent remains required, while a temporary onboarding-status failure should fail open with retry telemetry because onboarding is an activation requirement, not an authorization boundary.
+8. The registered fallback collects only profile context. It must not automatically send a recommended chat question when the user was originally trying to open Dashboard, Family Profile, or Growth Plan.
+
+Technical implementation is complete in the worktree. The feature is not merge-ready until the functional acceptance plan and human acceptance are complete.
 
 ---
 
@@ -108,16 +127,21 @@ The flow matches the mini-program blueprint's core shape: full-screen step repla
 
 ### Registered-First Flow
 
-Current code does not run `GuestOnboarding` for already logged-in users. Registered-first users can still populate the same durable child profile fields through `/family`.
+Authenticated users now have a server-authoritative fallback:
 
-MVP decision:
+```text
+logged-in user opens an app page
+  -> AppLayout verifies consent
+  -> AppLayout checks /api/onboarding/status
+  -> incomplete users go to /onboarding with returnTo
+  -> existing child profile values are pre-populated
+  -> user completes child info and challenge selection
+  -> /api/onboarding/complete verifies session and consent
+  -> child_profiles is upserted with onboarding_completed_at
+  -> user returns to the original app page
+```
 
-- Guest and registered users share the same data contract and final durable storage, not the same visible first-run screen.
-- Guest-first users use `GuestOnboarding` on `/chat`, then migrate into `child_profiles`.
-- Registered-first users use `/family` to set or update basic child info.
-- Do not add a second registered-only onboarding wizard for MVP unless there is a later product decision to reuse `GuestOnboarding` after login.
-
-Consistency rule: if a registered onboarding screen is added later, it must write the same fields into `child_profiles` and reuse the same `SelectedChallenge` structure. It must not introduce a parallel profile schema.
+Guest and registered users reuse `GuestOnboarding`, the same durable profile fields, and the same `SelectedChallenge` structure. Registered onboarding omits the recommended first-question step so visiting Dashboard or another app page does not trigger an unsolicited AI call.
 
 ---
 
@@ -142,7 +166,7 @@ These are required to complete the current guest onboarding:
 |---|---|---|
 | `childAge` | `qimi_guest_data.childAge` only | Derived from birthday; do not persist as durable source of truth |
 | `chatHistory[]` | `qimi_guest_data.chatHistory`, then `conversations` + `messages` | Migrated only if at least one user message exists |
-| `messageCount` | `qimi_guest_data.messageCount` | Guest quota/counting only. MVP quota decision: guest users receive a permanent 10-message trial allowance; registered users should receive 50 chat messages per day once server-side account quota is implemented. |
+| `messageCount` | `qimi_guest_data.messageCount` | Legacy guest display counter only. The server is authoritative. MVP quota decision: guests receive a permanent 10-message trial allowance, and registered users receive 30 chat messages per Asia/Shanghai day. |
 | `createdAt`, `lastVisit` | `qimi_guest_data` | Guest lifecycle metadata |
 | `parental_consents.*` | Supabase `parental_consents` | Consent audit, not child profile |
 
@@ -224,7 +248,6 @@ Out of scope:
 
 - Complex multi-child profile management.
 - Multiple child selector, switching, per-child conversation routing, or per-child memory partition.
-- A separate registered-only onboarding wizard.
 - Editable onboarding challenge selector in `/family`.
 - Diagnostic intake, symptom scoring, medication dosage intake, report upload, school data, or exact date of birth inside onboarding.
 - Treating onboarding challenges as diagnosis or medical assessment.
@@ -266,7 +289,7 @@ Behavior:
 - TypeScript check passes if run for the branch acceptance scope.
 - Local Supabase is used for database-backed migration tests.
 - `child_profiles` remains one row per user and stores challenges as JSONB `SelectedChallenge[]`.
-- Consent table and ownership-scoped RLS policies remain active after local reset.
+- Consent table and ownership-scoped RLS policies remain active after non-destructive local migration application.
 
 ### Functional Acceptance Plan
 
@@ -282,12 +305,20 @@ Behavior:
 - After login, guest chat history appears in saved conversations without duplicate migrations after refresh/re-login.
 - `/family` edits child basic info without changing challenge tags.
 - `/family` shows onboarding challenges as read-only tags, or the empty state if no challenges were recorded.
+- Logged-in user with consent but no completed profile is routed to `/onboarding`.
+- Logged-in user without consent is routed to `/consent` first and then to `/onboarding`.
+- Existing durable profile values are pre-populated in registered onboarding.
+- Registered completion persists across refresh and browser restart.
+- Completed users are not redirected back to onboarding.
 
 ### Human Acceptance
 
 - Human tester verifies the guest-first path end to end: onboarding -> first AI answer -> signup/login -> consent if needed -> migrated Family Profile -> migrated conversation.
-- Human tester verifies registered-first path: login -> consent if missing -> `/family` basic info entry -> no duplicate onboarding wizard.
+- Human tester verifies registered-first path: login -> consent if missing -> registered onboarding -> original destination.
+- Human tester verifies an existing completed user is not asked to onboard again.
 - Human tester confirms onboarding copy asks for nickname/approximate age and does not request unnecessary sensitive data.
+
+Acceptance record, 2026-07-27: the product owner confirmed the registered onboarding fallback and guest onboarding path both work as expected in local testing.
 
 ---
 
@@ -304,7 +335,7 @@ Behavior:
 2. Decide whether `hasCompletedOnboarding()` should require all MVP required fields instead of only `childAge`; current implementation uses `childAge` as the completion marker.
 3. Decide whether to add the missing mini-program `family` challenge category to Web or formally document the 9-category Web subset as intentional.
 4. Add focused regression coverage for guest onboarding completion and guest migration idempotency when the next implementation pass touches this area.
-5. Consider a future registered-first onboarding reuse only if activation metrics show `/family` completion is too low; do not build it for MVP by default.
+5. Add focused registered onboarding browser coverage after human acceptance confirms the final copy and navigation.
 
 ---
 
@@ -316,12 +347,12 @@ Behavior:
 - [PASS] Authorization: server routes resolve the session user and write by that user; RLS cleanup migration scopes `child_profiles` by `auth.uid() = user_id`.
 - [PASS] Data minimization: onboarding avoids exact DOB, reports, school, address, and diagnostic intake.
 - [PASS] Consent boundary: adult confirmation is recorded separately in `parental_consents`.
-- [EXCEPTION] Rate limiting: this spec introduces no new endpoint. Existing chat/auth rate limiting remains outside this documentation task.
+- [PASS] Cost boundary: registered onboarding does not call the AI provider and therefore does not consume an AI allowance.
 
 ### Architecture
 
 - [PASS] Layering: onboarding UI, guest storage, migration API, Family Profile read model, and consent gate are documented as separate responsibilities.
-- [PASS] Navigation: onboarding is reached through `/chat`; durable profile review/edit is `/family`; consent is `/consent`.
+- [PASS] Navigation: guest onboarding is reached through `/chat`; registered fallback is `/onboarding`; durable profile review/edit is `/family`; consent is `/consent`.
 - [PASS] Idempotency: migration lock and server duplicate checks are documented as required behavior.
 - [PASS] Formal basis: current code is first priority, with external evidence only used for design principles.
 
@@ -334,11 +365,11 @@ Behavior:
 ### Technical Stack
 
 - [PASS] Uses existing Next.js Pages Router, NextAuth session checks, Supabase admin API routes, and existing migrations.
-- [PASS] No new dependency, service, feature flag, or schema is proposed by this spec.
+- [PASS] No new dependency or service is introduced. Completion state is added through a forward-only Supabase migration.
 
 ### Reverse Check
 
-- [PASS] MVP fit: one child, short onboarding, no registered-only wizard, no complex profile tree.
+- [PASS] MVP fit: one child, short registered fallback, and no complex profile tree.
 - [PASS] MVD: new spec is justified because onboarding crosses chat, guest storage, migration, Family Profile, and Compliance; no existing single spec owns the whole boundary.
 - [PASS] No migration or irreversible data operation is introduced by this documentation task.
 

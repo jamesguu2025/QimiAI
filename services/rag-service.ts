@@ -11,11 +11,31 @@
  * 参考: docs/PROMPT_SYSTEM_ARCHITECTURE.md 第8.4节
  */
 
+import { linkMatchedPlainAuthorYearRefs } from '../utils/source-reconciliation';
+import {
+  groupEvidenceForInjection,
+  classifyEvidenceForQuestion,
+  describeEvidenceEn,
+  buildRelevanceGatePrompt,
+  parseRelevanceGateAssessments,
+  type EvidenceGroups,
+  type InterventionMatch,
+  type QuestionSpecificity,
+} from '../lib/rag-evidence';
+
 // RAG API configuration
 const RAG_API_BASE = process.env.RAG_API_BASE || 'http://47.110.88.11:8000';
 
 // 智能摘要开关（双LLM架构）
 const ENABLE_SMART_SUMMARY = process.env.ENABLE_SMART_SUMMARY === 'true';
+
+// 证据重排/分层注入开关（默认开启，可秒回滚为旧的平铺行为）
+// 移植自小程序 rag-service.js；见 lib/rag-evidence.ts。
+const ENABLE_EVIDENCE_RERANK = process.env.RAG_EVIDENCE_RERANK !== 'false';
+
+// 跨领域相关性闸门开关（两段式检索的 stage-1）。默认开启，可秒回滚。
+// LLM-as-judge，纯函数在 lib/rag-evidence.ts；fail-open，绝不因判官出错阻断回答。
+const ENABLE_RELEVANCE_GATE = process.env.RAG_RELEVANCE_GATE !== 'false';
 
 // DeepSeek API configuration (for summarization LLM)
 const DEEPSEEK_API_KEY = process.env.DEEPSEEK_API_KEY;
@@ -26,6 +46,15 @@ const DEEPSEEK_THINKING = { type: 'disabled' };
 /**
  * Paper result from RAG API
  */
+export interface AuthorDetailed {
+  name?: string;
+  lastname?: string;
+  firstname?: string;
+  initials?: string;
+  affiliation?: string;
+  affiliations?: string[];
+}
+
 export interface PaperResult {
   idx: number;
   score: number;
@@ -41,6 +70,33 @@ export interface PaperResult {
   doi?: string;
   domain?: string;
   topic?: string;
+  topics?: string[];
+  pub_date?: string | null;
+  is_retracted?: boolean;
+  is_high_evidence?: boolean;
+  correction_status?: string | null;
+  journal_iso_abbr?: string | null;
+  nlm_unique_id?: string | null;
+  date_revised?: string | null;
+  source?: string | null;
+  language?: string | null;
+  mesh_terms?: unknown;
+  keywords?: unknown;
+  publication_types?: string[] | null;
+  chemicals?: unknown;
+  grants?: unknown;
+  coi_statement?: string | null;
+  group_authors?: string[] | null;
+  authors_detailed?: AuthorDetailed[] | null;
+  journal_country?: string | null;
+  databanks?: unknown;
+  llm_reason?: string | null;
+  llm_confidence?: number | string | null;
+  llm_category?: string | null;
+  rag_relevance_score?: number | null;
+  rag_intervention_match?: InterventionMatch;
+  rag_question_specificity?: QuestionSpecificity;
+  rag_relevance_reason?: string;
 }
 
 function getPaperUrl(paper: PaperResult): string {
@@ -48,6 +104,42 @@ function getPaperUrl(paper: PaperResult): string {
   if (paper.doi) return `https://doi.org/${paper.doi}`;
   if (paper.pmid) return `https://pubmed.ncbi.nlm.nih.gov/${paper.pmid}`;
   return '';
+}
+
+function isRetractedPaper(paper: PaperResult): boolean {
+  const haystack = [
+    paper.title,
+    paper.abstract,
+    paper.journal,
+    ...(paper.types || []),
+  ].filter(Boolean).join(' ').toLowerCase();
+
+  return /\bretraction\b|\bretracted\b|撤稿/.test(haystack);
+}
+
+function filterUsablePapers(papers: PaperResult[]): PaperResult[] {
+  const usable = papers.filter(paper => !isRetractedPaper(paper));
+  if (usable.length !== papers.length) {
+    console.warn(`[RAG] Filtered ${papers.length - usable.length} retracted paper(s) from retrieved results`);
+  }
+  return usable;
+}
+
+function formatAuthorAffiliations(authorsDetailed?: AuthorDetailed[] | null): string {
+  if (!Array.isArray(authorsDetailed) || authorsDetailed.length === 0) return '';
+  return authorsDetailed
+    .map((author) => {
+      const name = author.name || [author.firstname, author.lastname].filter(Boolean).join(' ');
+      const affiliations = Array.isArray(author.affiliations) && author.affiliations.length > 0
+        ? author.affiliations
+        : author.affiliation
+          ? [author.affiliation]
+          : [];
+      if (!name || affiliations.length === 0) return '';
+      return `${name}: ${affiliations.join(' | ')}`;
+    })
+    .filter(Boolean)
+    .join('; ');
 }
 
 /**
@@ -89,7 +181,7 @@ export async function searchPapers(options: SearchOptions): Promise<PaperResult[
     }
 
     const papers: PaperResult[] = await response.json();
-    return papers;
+    return filterUsablePapers(papers);
   } catch (error) {
     console.error('[RAG Service] Search failed:', error);
     throw error;
@@ -101,18 +193,39 @@ export async function searchPapers(options: SearchOptions): Promise<PaperResult[
  *
  * Converts paper results into a formatted string that the LLM can understand
  */
-export function formatPapersForLLM(papers: PaperResult[]): string {
+export function formatPapersForLLM(
+  papers: PaperResult[],
+  userQuestion?: string,
+  evidenceGroups?: EvidenceGroups<PaperResult> | null,
+): string {
   if (papers.length === 0) {
     return 'No relevant research papers found for this query.';
   }
 
-  const sections: string[] = [
-    `Found ${papers.length} relevant research papers:`,
-    '',
-  ];
+  const primaryKeys = new Set(
+    (evidenceGroups?.primary || []).map(p => p.pmid || p.doi || p.title || '')
+  );
+  const paperKey = (p: PaperResult) => p.pmid || p.doi || p.title || '';
+
+  const sections: string[] = evidenceGroups
+    ? [
+        `Found ${papers.length} relevant research papers, sorted and tiered by evidence strength.`,
+        'Build the core answer from PRIMARY papers; treat SUPPORTING papers as background or adjacent evidence only.',
+        '',
+      ]
+    : [
+        `Found ${papers.length} relevant research papers:`,
+        '',
+      ];
 
   papers.forEach((paper, index) => {
     sections.push(`## Paper ${index + 1}: ${paper.title}`);
+
+    if (evidenceGroups) {
+      const tier = primaryKeys.has(paperKey(paper)) ? 'PRIMARY' : 'SUPPORTING';
+      sections.push(`**Evidence Tier**: ${tier} — ${describeEvidenceEn(classifyEvidenceForQuestion(paper, userQuestion || ''))}`);
+    }
+
     sections.push(`**Year**: ${paper.year}`);
     sections.push(`**Journal**: ${paper.journal}`);
 
@@ -122,6 +235,11 @@ export function formatPapersForLLM(papers: PaperResult[]): string {
 
     if (paper.authors && paper.authors.length > 0) {
       sections.push(`**Authors**: ${paper.authors.slice(0, 3).join(', ')}${paper.authors.length > 3 ? ' et al.' : ''}`);
+    }
+
+    const affiliations = formatAuthorAffiliations(paper.authors_detailed);
+    if (affiliations) {
+      sections.push(`**Author Affiliations**: ${affiliations}`);
     }
 
     sections.push(`**Relevance Score**: ${(paper.score * 100).toFixed(1)}%`);
@@ -209,9 +327,70 @@ export interface RAGToolCallResult {
     year?: number | string;
     journal?: string;
     authors?: string[];
+    authors_detailed?: AuthorDetailed[] | null;
+    journal_country?: string | null;
     doi?: string;
     pmid?: string;
   }>;
+  papers?: PaperResult[]; // Full paper data for server-side context persistence
+  evidenceStatus?: RAGEvidenceStatus;
+}
+
+export type RAGEvidenceStatus = 'direct' | 'indirect_only' | 'none_found' | 'retrieval_failed';
+
+/**
+ * Unified anti-drift citation policy for retrieved research.
+ *
+ * Keep this as the single source of truth for RAG faithfulness rules. The chat
+ * endpoint and the smart-summary LLM both use this wording so citation behavior
+ * does not drift across retrieval paths.
+ */
+export function buildRagCitationRule(sourceCount?: number): string {
+  const paperLabel = sourceCount === 1 ? 'paper' : 'papers';
+  const countLine = sourceCount && sourceCount > 0
+    ? `You have ${sourceCount} retrieved research ${paperLabel}. Use them, but faithfulness comes first.`
+    : 'Use retrieved research only when it is actually provided. Faithfulness comes first.';
+
+  return `RAG citation policy — faithful, calibrated, no invented evidence.
+
+${countLine}
+
+Non-negotiable source rules:
+- Use only information present in the retrieved title, abstract, authors, author affiliations, year, journal, DOI, PMID, or source URL.
+- Do not invent or fill in missing institutions, sample sizes, effect sizes, mechanisms, protocols, percentages, diagnoses, or outcomes.
+- Practical unsourced schedules, durations, and observation windows must be labeled as practical starting estimates, not research-derived parameters.
+- Practical plans may include simple timing, but every unsourced timing must state the reasoning basis, such as tolerance, habit-building, and observing trends. Do not present practical tracking windows as evidence-backed improvement timelines.
+- Do not shorten or reinterpret research durations. If a study used 12 weeks or 26 weeks, keep that exact duration tied to that study and do not present a different expected improvement window.
+- Do not attach exact week ranges to parent/therapist anecdotal experience unless a retrieved source states that range. Use qualitative wording instead, such as "some families report gradual changes, while others see little change."
+- Do not put exact week ranges in "reasonable to hope for", "what to expect", or expected-benefits tables unless a current retrieved source directly supports the exact range and the citation is in the same row or paragraph.
+- If an abstract does not state a detail, omit it. If the detail is important, write that it was not available in the retrieved abstract.
+- Do not swap findings across papers. A parameter, population, reflex type, intervention, or outcome belongs only to the paper that explicitly states it.
+- Do not cite papers just to reach a citation count. Cite fewer papers when fewer are directly relevant.
+- Never use retracted papers as supporting evidence. If a retrieved item is a retraction notice, ignore it as evidence and say the evidence base is weaker if that matters.
+
+Evidence calibration:
+- Direct evidence: the paper directly studied the user-relevant question. You may cite it as direct support.
+- Indirect evidence: the paper studied a nearby construct or population. Say it is indirect and explain the practical inference cautiously.
+- Mechanistic or practical judgment: no retrieved paper directly supports the claim. Label it as practical judgment or a mechanism-based guess, not research-backed advice.
+- Weak but directly relevant evidence (small pilot / feasibility study, case report, small sample): cite it rather than dropping it, but present it transparently so the parent can weigh it. Say what it is, what it suggests (e.g. relevant population, promising direction), and its limits (preliminary, small sample, not powered to prove effectiveness, not yet generalizable). Do not restate a feasibility / acceptability / adherence finding as a proven effect on the child's learning or development, and do not silently omit a directly relevant study.
+- Correlation stays correlation. Do not upgrade associations into causal claims unless the abstract supports that design and conclusion.
+- For primitive reflex integration, sensory integration, vestibular training, semantic networks, ADHD, reading, writing, posture, and child-development claims: do not claim a direct causal pathway unless a retrieved study directly tested that exact pathway. Default to "early", "indirect", "mixed", or "not directly established" when appropriate.
+- Do not link ADHD brain imaging, frontoparietal networks, frontal lobe findings, brainstem findings, or attention-network abnormalities to retained/unintegrated primitive reflexes unless the retrieved paper directly measured primitive reflexes in that same study. If a paper is only about ADHD neural connectivity, cite it only for ADHD neural connectivity.
+- Do not infer a specific child's brain-network structure, connection efficiency, or causal bottleneck from one parent example. You may describe it as a possible hypothesis and suggest observation or professional assessment.
+- When the parent asks you to confirm a causal model, separate "what the observation supports" from "what remains a hypothesis." Do not say the chain is accurate, established, or direct unless the retrieved papers establish that exact chain.
+- For child-specific or family-education cases involving behavior, learning, discipline, motivation, homework, routines, emotion, sleep, social relationships, school fit, language, attention, sensory/motor patterns, development, regression, asymmetry, primitive reflexes, sensory integration, or unclear cause, do not let research retrieval override layered formulation. Give a bounded first read, name the possible layers, ask the 1-2 most diagnostic missing questions, and avoid a full plan until the likely bottleneck is clearer.
+- Do not reduce a complex child/family presentation to one surface label such as motivation, behavior, attention, bad habits, parenting style, sensory seeking, primitive reflexes, anxiety, or weak muscles. Separate what the observation supports from what still needs assessment.
+- For collapsed arches that appear seated but collapse standing, do not conclude "bones and ligaments are normal" from text alone. Say it may fit a flexible arch pattern and ask whether the arch appears on tiptoe plus whether there is pain, limping, tight calves/heel cords, frequent falls, or broader one-sided weakness.
+- Medical, medication, diagnosis, emergency, and safety-sensitive topics require extra caution. Do not imply the parent can self-diagnose or change treatment based on retrieved papers.
+
+Citation style:
+- Prefer 1-3 directly relevant clickable Markdown citations in the body for evidence-based claims.
+- Hedge with words, not by dropping the citation. When a paper in the citation-handle list supports a claim, cite it with its clickable handle even if the evidence is weak, mixed, or indirect — put the caution in the sentence itself ("a small study suggests X, though findings are not consistent [handle]"). Only fall back to an unlinked "one retrieved study" when no specific handle in the list actually applies; do not use the unlinked phrasing as a way to avoid citing a paper you were given.
+- When using an author-year citation, link it to the matching source URL when available. Use the exact citation handles and source URLs shown in the retrieved context; do not write plain "Author et al., Year" text.
+- If you use a Markdown evidence table with a "Study" column, every author-year value in that column must be a clickable Markdown citation from the current source list. If you cannot link it, use "one retrieved study" instead of the author-year.
+- If you cannot attach the source URL, do not use an author-year citation. Write "one retrieved study", "one earlier source", or "the retrieved review" instead.
+- Mention limitations plainly: small sample, narrow population, indirect evidence, mixed findings, or missing product-specific evidence.
+- It is acceptable to say "I do not see direct evidence in the retrieved papers" when that is true.`;
 }
 
 function toRAGSource(paper: PaperResult) {
@@ -222,9 +401,30 @@ function toRAGSource(paper: PaperResult) {
     year: paper.year,
     journal: paper.journal,
     authors: paper.authors,
+    authors_detailed: paper.authors_detailed,
+    journal_country: paper.journal_country,
     doi: paper.doi,
     pmid: paper.pmid,
   };
+}
+
+function buildCitationHandles(sources: RAGToolCallResult['sources']): string {
+  return sources
+    .filter(source => source.url)
+    .map((source, index) => {
+      const firstAuthor = Array.isArray(source.authors) && source.authors.length > 0
+        ? source.authors[0]
+        : Array.isArray(source.authors_detailed) && source.authors_detailed.length > 0
+          ? source.authors_detailed[0]?.lastname || source.authors_detailed[0]?.name
+          : null;
+      const familyName = firstAuthor?.trim().split(/\s+/)[0]?.replace(/[^a-z-]/gi, '');
+      const year = source.year ? String(source.year) : null;
+      const label = familyName && year
+        ? `${familyName} et al. (${year})`
+        : `Source ${index + 1}`;
+      return `${index + 1}. [${label}](${source.url}) — ${source.title}`;
+    })
+    .join('\n');
 }
 
 /**
@@ -279,60 +479,113 @@ export async function executeRAGToolCall(toolCall: {
 }
 
 /**
- * 智能摘要：将多篇论文的核心发现综合成 500-800 字的摘要
+ * Smart summary: condense retrieved abstracts without adding unsupported claims.
  *
- * 双LLM架构中的第一个LLM，负责：
- * 1. 提取与问题最相关的 3-5 个核心发现
- * 2. 每个发现标注来源（作者/机构 + 年份）
- * 3. 保留关键数据（样本量、效果百分比等）
- * 4. 语言通俗，家长能听懂
- * 5. 如果研究有局限性，诚实告知
+ * First LLM in the two-LLM RAG path. It should reduce token load while
+ * preserving source fidelity. It must not infer missing details from titles,
+ * prior knowledge, or general ADHD expertise.
  *
  * @param papers - 论文列表
  * @param userQuestion - 用户问题
- * @returns 综合摘要文本，失败返回 null（降级到原始格式化）
+ * @returns English evidence summary, or null to fall back to raw formatting.
  */
 export async function summarizePapers(
   papers: PaperResult[],
-  userQuestion: string
+  userQuestion: string,
+  citationHandles?: string,
+  sources?: RAGToolCallResult['sources'],
+  evidenceGroups?: EvidenceGroups<PaperResult> | null,
 ): Promise<string | null> {
   const startTime = Date.now();
 
   try {
-    console.log(`[RAG] 开始为 ${papers.length} 篇论文生成综合摘要`);
+    if (papers.length === 0) {
+      console.warn('[RAG] Smart summary skipped: no papers retrieved');
+      return null;
+    }
 
-    // 构建论文内容（每篇提取关键信息）
+    console.log(`[RAG] Starting smart summary for ${papers.length} papers`);
+
+    const primaryKeys = new Set(
+      (evidenceGroups?.primary || []).map(p => p.pmid || p.doi || p.title || '')
+    );
+    const paperKey = (p: PaperResult) => p.pmid || p.doi || p.title || '';
+
+    // Feed full abstracts, not extracted sentence fragments. Fragment picking was
+    // a known source of citation drift in the mini-program RAG path.
     const papersText = papers.map((paper, i) => {
-      const year = paper.year || '近年';
-      const authors = paper.authors?.join(', ') || '研究团队';
-      const title = paper.title || '相关研究';
+      const year = paper.year || 'recent year';
+      const authors = paper.authors?.join(', ') || 'authors not provided';
+      const affiliations = formatAuthorAffiliations(paper.authors_detailed) || 'author affiliations not provided';
+      const title = paper.title || 'Untitled study';
+      const journal = paper.journal || 'journal not provided';
       const content = paper.abstract || '';
-      const sourceUrl = getPaperUrl(paper) || '未提供';
+      const sourceUrl = getPaperUrl(paper) || 'source URL not provided';
+      const identifier = paper.pmid ? `PMID: ${paper.pmid}` : paper.doi ? `DOI: ${paper.doi}` : 'PMID/DOI not provided';
 
-      return `【论文 ${i + 1}】
-标题: ${title}
-作者: ${authors}
-年份: ${year}
-原文链接: ${sourceUrl}
-内容摘要: ${content.substring(0, 2000)}${content.length > 2000 ? '...' : ''}`;
+      // Evidence positioning (ported rerank/tiering). Tells the summarizer which
+      // papers may back the core answer vs. which are background/adjacent only.
+      const evidenceLine = evidenceGroups
+        ? `Evidence tier: ${primaryKeys.has(paperKey(paper)) ? 'PRIMARY' : 'SUPPORTING'} — ${describeEvidenceEn(classifyEvidenceForQuestion(paper, userQuestion))}\n`
+        : '';
+
+      return `Paper ${i + 1}
+Title: ${title}
+${evidenceLine}Authors: ${authors}
+Author Affiliations: ${affiliations}
+Year: ${year}
+Journal: ${journal}
+Source URL: ${sourceUrl}
+Identifier: ${identifier}
+Abstract:
+${content.substring(0, 4000)}${content.length > 4000 ? '\n[Abstract truncated after 4000 characters.]' : ''}`;
     }).join('\n\n---\n\n');
 
-    const prompt = `你是一个科研文献阅读助手。请综合以下 ${papers.length} 篇论文，针对用户问题生成一篇 500-800 字的综合摘要。
+    const evidenceTierInstruction = evidenceGroups
+      ? `
 
-用户问题：${userQuestion}
+Evidence-tier discipline (each paper is pre-labeled PRIMARY or SUPPORTING):
+- Build the core answer from PRIMARY papers. Cite them as direct support only when population, age, and outcome match the user's child.
+- SUPPORTING papers are background or adjacent evidence. You may use them for context or next-step direction, but do not present them as direct evidence for the core question.
+- If there is no PRIMARY paper, say the direct evidence is limited rather than upgrading a SUPPORTING paper into a direct answer.
+${evidenceGroups.primary.length === 0 ? '- There is no PRIMARY paper in this set. Do not conclude that the named intervention is likely or unlikely to work. State only that its effect is not established for the exact question.' : ''}`
+      : '';
 
-要求：
-1. 提取与问题最相关的 3-5 个核心发现
-2. 每个发现必须标注来源（作者/机构 + 年份）
-3. 保留关键数据（样本量、效果百分比等）
-4. 语言通俗，家长能听懂
-5. 如果研究有局限性（样本小、只针对特定人群等），要诚实告知
-6. 引用具体论文时保留可点击 Markdown 链接，例如 [作者 2024](https://...)
+    const prompt = `You are an evidence summarization assistant for Qimi AI.
 
-论文内容：
+Your job is to summarize retrieved ADHD and child-development research for a parent-facing assistant. Write in English.
+
+User question:
+${userQuestion}
+
+${buildRagCitationRule(papers.length)}${evidenceTierInstruction}
+
+Guardrail-over-agreement rule:
+- Do not validate unsupported parent conclusions.
+- If the parent's premise is unsupported by the evidence, note the gap respectfully.
+- Do not agree with a claim just because it sounds confident.
+
+Exact-number-source discipline:
+- Concrete numbers (sample sizes, percentages, effect sizes, frequencies, durations) must come from the abstracts.
+- If a number is not stated, do not invent or approximate it.
+- Label practical estimates explicitly.
+
+Summary requirements:
+1. Extract only the 3-5 findings most relevant to the user question.
+2. For each finding, name the source naturally with author/team and year, linked in Markdown when a source URL is available.
+3. If citation handles are provided below, copy those handles exactly instead of writing plain author-year text.
+4. Preserve concrete numbers only when the abstract explicitly states them.
+5. Do not add institutions, mechanisms, sample sizes, or effect sizes unless the abstract states them.
+6. Say when evidence is direct, indirect, early, mixed, or not specific to the user's exact question.
+7. Keep it concise and practical for English-speaking parents.
+8. Output 350-650 words. No title, no preface, no JSON.
+
+Citation handles to copy exactly:
+${citationHandles || 'No citation handles available.'}
+
+Retrieved papers:
 ${papersText}
-
-请直接输出综合摘要，不需要标题或前言。`;
+`;
 
     // 调用 DeepSeek API 生成摘要
     const response = await fetch(`${DEEPSEEK_API_BASE}/chat/completions`, {
@@ -344,8 +597,8 @@ ${papersText}
       body: JSON.stringify({
         model: DEEPSEEK_MODEL,
         messages: [{ role: 'user', content: prompt }],
-        max_tokens: 2000,  // 综合摘要 800 字 + buffer
-        temperature: 0.3,  // 低温度，更稳定
+        max_tokens: 1800,
+        temperature: 0.2,
         stream: false,
         thinking: DEEPSEEK_THINKING,
       }),
@@ -357,22 +610,90 @@ ${papersText}
     }
 
     const data = await response.json();
-    const summary = data.choices?.[0]?.message?.content;
+    let summary = data.choices?.[0]?.message?.content;
 
     if (!summary) {
       throw new Error('Empty response from LLM');
     }
 
+    if (sources && sources.length > 0) {
+      summary = linkMatchedPlainAuthorYearRefs(summary, sources);
+    }
+
     const duration = Date.now() - startTime;
-    console.log(`[RAG] ✅ 综合摘要生成成功，长度: ${summary.length} 字符，耗时: ${duration}ms`);
+    console.log(`[RAG] ✅ Smart summary generated, length: ${summary.length} chars, duration: ${duration}ms`);
 
     return summary;
 
   } catch (error) {
     const duration = Date.now() - startTime;
-    console.error(`[RAG] ❌ 综合摘要生成失败（耗时 ${duration}ms）:`, error);
+    console.error(`[RAG] ❌ Smart summary failed (${duration}ms):`, error);
 
     return null;  // 返回 null 触发降级到旧逻辑
+  }
+}
+
+/**
+ * Cross-domain relevance gate (stage-1 of two-stage retrieval).
+ *
+ * Drops papers the LLM judge marks as clearly off-domain BEFORE evidence tiering,
+ * so an off-domain systematic review can no longer be promoted to PRIMARY.
+ * Fail-open on every path: no key, error, timeout, unparseable output, or an
+ * empty result all fall back to returning the papers unchanged.
+ */
+async function applyRelevanceGate(question: string, papers: PaperResult[]): Promise<PaperResult[]> {
+  if (!ENABLE_RELEVANCE_GATE || !DEEPSEEK_API_KEY || !question?.trim() || papers.length <= 1) {
+    return papers;
+  }
+
+  try {
+    const prompt = buildRelevanceGatePrompt(question, papers);
+    const response = await fetch(`${DEEPSEEK_API_BASE}/chat/completions`, {
+      method: 'POST',
+      headers: {
+        'Content-Type': 'application/json',
+        'Authorization': `Bearer ${DEEPSEEK_API_KEY}`,
+      },
+      body: JSON.stringify({
+        model: DEEPSEEK_MODEL,
+        messages: [{ role: 'user', content: prompt }],
+        max_tokens: 900,
+        temperature: 0,
+        stream: false,
+        thinking: DEEPSEEK_THINKING,
+        response_format: { type: 'json_object' },
+      }),
+      signal: AbortSignal.timeout(8000),
+    });
+
+    if (!response.ok) throw new Error(`relevance gate API error: ${response.status}`);
+
+    const data = await response.json();
+    const raw = data.choices?.[0]?.message?.content || '';
+    const assessments = parseRelevanceGateAssessments(raw, papers.length);
+    const assessed = papers.map((paper, i) => ({
+      ...paper,
+      rag_relevance_score: assessments[i].relevanceScore,
+      rag_intervention_match: assessments[i].interventionMatch,
+      rag_question_specificity: assessments[i].questionSpecificity,
+      rag_relevance_reason: assessments[i].reason,
+    }));
+    const kept = assessed.filter((_, i) => assessments[i].keep);
+    const dropped = papers.length - kept.length;
+
+    // Guard: never let the gate empty the whole set. Preserve the assessments so
+    // all candidates remain injectable as cautious supporting evidence.
+    if (kept.length === 0) {
+      console.warn('[RAG] Relevance gate would drop all papers; ignoring gate (fail-open)');
+      return assessed;
+    }
+    if (dropped > 0) {
+      console.log(`[RAG] Relevance gate dropped ${dropped}/${papers.length} off-domain paper(s)`);
+    }
+    return kept;
+  } catch (error) {
+    console.warn('[RAG] Relevance gate failed; keeping all papers (fail-open):', error instanceof Error ? error.message : error);
+    return papers;
   }
 }
 
@@ -391,26 +712,73 @@ export async function executeRAGWithSmartSummary(
   topK: number = 10
 ): Promise<RAGToolCallResult & { summaryMode: 'smart' | 'raw' }> {
   // 1. 执行搜索
-  const papers = await searchPapers({ query, top_k: topK });
+  const retrievedPapers = await searchPapers({ query, top_k: topK });
 
-  // 2. 转换为前端显示格式
+  if (retrievedPapers.length === 0) {
+    return {
+      formattedText: `No relevant research papers were retrieved for this query.\n\n${buildRagCitationRule(0)}\n\nAnswer from general knowledge only. Do not cite named studies, sample sizes, effect sizes, or source links for this turn.`,
+      sources: [],
+      papers: retrievedPapers,
+      evidenceStatus: 'none_found',
+      summaryMode: 'raw',
+    };
+  }
+
+  // 2. 相关性闸门（两段式 stage-1）：先剔除明显跨领域的论文，
+  // 否则跑题的系统综述会在下一步被顶成主证据。
+  const gatedPapers = await applyRelevanceGate(userQuestion, retrievedPapers);
+
+  // 3. 证据重排 + 分层（移植自小程序）。语义相似度 ≠ 证据强度：
+  // 把低外推/跑题论文压到补充层或剔除，把强证据顶到主证据层。
+  const evidenceGroups: EvidenceGroups<PaperResult> | null =
+    ENABLE_EVIDENCE_RERANK && userQuestion
+      ? groupEvidenceForInjection(gatedPapers, userQuestion)
+      : null;
+
+  // 注入用论文：重排后取 主证据 + 补充证据（也顺带裁掉 cap 之外的噪声）。
+  const papers = evidenceGroups
+    ? [...evidenceGroups.primary, ...evidenceGroups.supporting]
+    : gatedPapers;
+  const hasDirectPicoMatch = papers.some(paper =>
+    paper.rag_relevance_score === 3 &&
+    (paper.rag_intervention_match === 'exact' || paper.rag_intervention_match === 'not_applicable')
+  );
+  const hasRelevanceAssessment = papers.some(paper => paper.rag_relevance_score !== null && paper.rag_relevance_score !== undefined);
+  const evidenceStatus: RAGEvidenceStatus = hasDirectPicoMatch || (!hasRelevanceAssessment && (evidenceGroups?.primary.length || 0) > 0)
+    ? 'direct'
+    : papers.length > 0
+      ? 'indirect_only'
+      : 'none_found';
+
+  if (evidenceGroups) {
+    console.log(
+      `[RAG] 证据分层: 主证据 ${evidenceGroups.primary.length} 篇, 补充 ${evidenceGroups.supporting.length} 篇, ` +
+        `检索 ${retrievedPapers.length} 篇, 过闸后 ${gatedPapers.length} 篇 (问题类型=${evidenceGroups.questionType})`
+    );
+  }
+
+  // 4. 转换为前端显示格式（已按证据排序）
   const sources = papers.map(toRAGSource);
+
   const sourceLinks = sources
     .filter(source => source.url)
     .map((source, index) => `${index + 1}. [${source.title}](${source.url})`)
     .join('\n');
+  const citationHandles = buildCitationHandles(sources);
 
-  // 3. 根据开关决定使用哪种模式
+  // 4. 根据开关决定使用哪种模式
   if (ENABLE_SMART_SUMMARY && userQuestion) {
     console.log('[RAG] 🚀 智能摘要已启用，开始生成综合摘要...');
 
-    const summary = await summarizePapers(papers, userQuestion);
+    const summary = await summarizePapers(papers, userQuestion, citationHandles, sources, evidenceGroups);
 
     if (summary) {
       console.log('[RAG] ✅ 智能摘要生成成功');
       return {
-        formattedText: `Research support: found ${papers.length} relevant ADHD studies.\n\n${summary}\n\nClickable source links:\n${sourceLinks || 'No source links available.'}`,
+        formattedText: `Research support: found ${papers.length} relevant research ${papers.length === 1 ? 'study' : 'studies'}.\nEvidence status for the exact user question: ${evidenceStatus}.\n\n${summary}\n\nCitation handles to copy exactly when citing in the answer:\n${citationHandles || 'No citation handles available.'}\n\nClickable source links:\n${sourceLinks || 'No source links available.'}`,
         sources,
+        papers,
+        evidenceStatus,
         summaryMode: 'smart',
       };
     }
@@ -419,8 +787,8 @@ export async function executeRAGWithSmartSummary(
     console.warn('[RAG] ⚠️ 智能摘要生成失败，降级到原始格式化');
   }
 
-  // 4. 原始模式：完整论文内容
-  const formattedResults = formatPapersForLLM(papers);
+  // 5. 原始模式：完整论文内容（分层标注证据定位）
+  const formattedResults = formatPapersForLLM(papers, userQuestion, evidenceGroups);
   const topicDistribution = analyzePaperTopics(papers);
   const topicsInfo = Object.entries(topicDistribution)
     .sort(([, a], [, b]) => b - a)
@@ -428,8 +796,10 @@ export async function executeRAGWithSmartSummary(
     .join(', ');
 
   return {
-    formattedText: `${formattedResults}\n\n**Clickable Source Links**:\n${sourceLinks || 'No source links available.'}\n\n**Topic Distribution**: ${topicsInfo}`,
+    formattedText: `${formattedResults}\n\n**Citation Handles To Copy Exactly**:\n${citationHandles || 'No citation handles available.'}\n\n**Clickable Source Links**:\n${sourceLinks || 'No source links available.'}\n\n**Topic Distribution**: ${topicsInfo}`,
     sources,
+    papers,
+    evidenceStatus,
     summaryMode: 'raw',
   };
 }

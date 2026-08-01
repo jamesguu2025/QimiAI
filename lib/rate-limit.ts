@@ -51,6 +51,10 @@ export function checkRateLimit({ namespace, key, limit, windowMs }: RateLimitOpt
   };
 }
 
+export function resetRateLimit(namespace: string, key?: string | null) {
+  buckets.delete(`${namespace}:${key || 'unknown'}`);
+}
+
 export function rejectIfRateLimited(
   req: NextApiRequest,
   res: NextApiResponse,

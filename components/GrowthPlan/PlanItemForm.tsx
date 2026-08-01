@@ -1,6 +1,7 @@
 import { useEffect, useState } from 'react';
 import type { ActionPlanItem, PlanCategory } from '@/types/plan';
 import { PLAN_CATEGORIES } from '@/types/plan';
+import { PLAN_TITLE_MAX_LENGTH } from '@/lib/plan-generation';
 
 interface PlanItemFormProps {
   initialValues?: Partial<ActionPlanItem>;
@@ -29,6 +30,7 @@ export default function PlanItemForm({ initialValues, onSubmit, onCancel, isSubm
     const nextErrors: FieldErrors = {};
     if (!category) nextErrors.category = 'Choose a category.';
     if (!painPoint.trim()) nextErrors.painPoint = 'Describe the challenge.';
+    if (painPoint.trim().length > PLAN_TITLE_MAX_LENGTH) nextErrors.painPoint = `Keep the plan title to ${PLAN_TITLE_MAX_LENGTH} characters or fewer.`;
     if (!strategy.trim()) nextErrors.strategy = 'Describe the strategy.';
     setErrors(nextErrors);
     return Object.keys(nextErrors).length === 0;
@@ -73,18 +75,19 @@ export default function PlanItemForm({ initialValues, onSubmit, onCancel, isSubm
 
         <div>
           <label htmlFor="plan-pain-point" className="block text-sm font-semibold text-slate-700">
-            What challenge does your child face?
+            Plan title ({painPoint.length}/{PLAN_TITLE_MAX_LENGTH})
           </label>
-          <textarea
+          <input
+            type="text"
             id="plan-pain-point"
             value={painPoint}
-            rows={3}
+            maxLength={PLAN_TITLE_MAX_LENGTH}
             onChange={(event) => {
               setPainPoint(event.target.value);
               setErrors((current) => ({ ...current, painPoint: undefined }));
             }}
-            className="mt-1 w-full resize-none rounded-lg border border-slate-200 px-3 py-2 text-sm text-slate-800 outline-none transition-colors focus:border-primary-teal focus:ring-2 focus:ring-primary-teal/15"
-            placeholder="Example: My child melts down after school."
+            className="mt-1 w-full rounded-lg border border-slate-200 px-3 py-2 text-sm text-slate-800 outline-none transition-colors focus:border-primary-teal focus:ring-2 focus:ring-primary-teal/15"
+            placeholder="Example: After-school calming routine"
           />
           {errors.painPoint && <p className="mt-1 text-xs text-red-600">{errors.painPoint}</p>}
         </div>

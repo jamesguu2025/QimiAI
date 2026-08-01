@@ -5,6 +5,9 @@ import type { NextApiRequest, NextApiResponse } from 'next';
 import { getServerSession } from 'next-auth';
 import { authOptions } from '../../auth/[...nextauth]';
 import { getSupabaseAdmin } from '../../../../lib/supabase';
+import { getPayloadSizeBytes, rejectIfRateLimited } from '../../../../lib/rate-limit';
+
+const UUID_REGEX = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
 
 export default async function handler(
   req: NextApiRequest,
@@ -12,7 +15,7 @@ export default async function handler(
 ) {
   const { id } = req.query;
 
-  if (!id || typeof id !== 'string') {
+  if (!id || typeof id !== 'string' || !UUID_REGEX.test(id)) {
     return res.status(400).json({ error: 'Conversation ID is required' });
   }
 
@@ -53,15 +56,29 @@ export default async function handler(
     }
 
     if (req.method === 'POST') {
+      if (getPayloadSizeBytes(req) > 64 * 1024) return res.status(413).json({ error: 'Payload too large' });
+      if (rejectIfRateLimited(req, res, {
+        namespace: 'message-create',
+        key: userId,
+        limit: 120,
+        windowMs: 10 * 60 * 1000,
+      })) return;
+
       // Add message to conversation
       const { role, content, sources, attachments } = req.body;
 
-      if (!role || !content) {
+      if (!role || typeof content !== 'string' || !content.trim() || content.length > 20_000) {
         return res.status(400).json({ error: 'Role and content are required' });
       }
 
       if (role !== 'user' && role !== 'assistant') {
         return res.status(400).json({ error: 'Role must be "user" or "assistant"' });
+      }
+      if (sources !== undefined && sources !== null && (!Array.isArray(sources) || sources.length > 20)) {
+        return res.status(400).json({ error: 'Invalid sources' });
+      }
+      if (attachments !== undefined && attachments !== null && (!Array.isArray(attachments) || attachments.length > 5)) {
+        return res.status(400).json({ error: 'Invalid attachments' });
       }
 
       const { data: message, error: msgError } = await supabase
@@ -69,7 +86,7 @@ export default async function handler(
         .insert({
           conversation_id: id,
           role,
-          content,
+          content: content.trim(),
           sources: sources || null,
           attachments: attachments || null,
         })
@@ -123,8 +140,7 @@ export default async function handler(
   } catch (error) {
     console.error('[messages] API error:', error);
     return res.status(500).json({
-      error: 'Internal server error',
-      message: error instanceof Error ? error.message : 'Unknown error'
+      error: 'Internal server error'
     });
   }
 }

@@ -5,9 +5,11 @@ import { Menu } from 'lucide-react';
 import { SmartDrawer } from '../Chat/SmartDrawer';
 import UserMenu from '../UI/UserMenu';
 import { useAuthUIStore } from '../../stores/authUIStore';
+import guestStorage from '../../utils/guest-storage';
 
 interface AppLayoutProps {
     children: React.ReactNode;
+    topBanner?: React.ReactNode;
     fullScreen?: boolean;
     onNewChat?: () => void;
     onSelectConversation?: (id: string) => void;
@@ -21,6 +23,7 @@ interface AppLayoutProps {
 
 const AppLayout: React.FC<AppLayoutProps> = ({
     children,
+    topBanner,
     fullScreen = false,
     onNewChat,
     onSelectConversation,
@@ -29,7 +32,7 @@ const AppLayout: React.FC<AppLayoutProps> = ({
     onSelectTopic
 }) => {
     const router = useRouter();
-    const { data: session } = useSession();
+    const { data: session, status: sessionStatus } = useSession();
     const { openLoginModal } = useAuthUIStore();
     const [drawerOpen, setDrawerOpen] = useState(false);
     const [drawerCollapsed, setDrawerCollapsed] = useState(false);
@@ -60,30 +63,53 @@ const AppLayout: React.FC<AppLayoutProps> = ({
     );
 
     useEffect(() => {
-        if (!session || router.pathname === '/consent') return;
+        if (
+            sessionStatus === 'loading' ||
+            !session ||
+            router.pathname === '/consent' ||
+            router.pathname === '/onboarding'
+        ) return;
 
         let cancelled = false;
 
-        async function checkConsent() {
+        async function checkAccountGates() {
             try {
                 const response = await fetch('/api/compliance/consent-status');
                 if (!response.ok) return;
 
                 const data = await response.json();
                 if (!cancelled && data.hasConsent === false) {
-                    router.push(`/consent?returnTo=${encodeURIComponent(router.asPath)}`);
+                    router.replace(`/consent?returnTo=${encodeURIComponent(router.asPath)}`);
+                    return;
+                }
+
+                // The chat page owns guest-to-account migration. Let it finish before
+                // deciding that a registered profile is missing.
+                if (router.pathname === '/chat' && guestStorage.get()) {
+                    return;
+                }
+
+                const onboardingResponse = await fetch('/api/onboarding/status');
+                if (!onboardingResponse.ok) {
+                    console.error('[AppLayout] Onboarding status check failed:', onboardingResponse.status);
+                    return;
+                }
+
+                const onboarding = await onboardingResponse.json();
+                if (!cancelled && onboarding.completed === false) {
+                    router.replace(`/onboarding?returnTo=${encodeURIComponent(router.asPath)}`);
                 }
             } catch (error) {
-                console.error('[AppLayout] Consent check failed:', error);
+                console.error('[AppLayout] Account gate check failed:', error);
             }
         }
 
-        checkConsent();
+        checkAccountGates();
 
         return () => {
             cancelled = true;
         };
-    }, [session, router.pathname, router.asPath]);
+    }, [session, sessionStatus, router.pathname, router.asPath]);
 
     // Touch gesture handlers for swipe-to-open (mobile)
     const handleTouchStart = (e: React.TouchEvent) => {
@@ -139,6 +165,8 @@ const AppLayout: React.FC<AppLayoutProps> = ({
                         {headerAccountControl}
                     </div>
                 </div>
+
+                {topBanner}
 
                 {/* Main Content */}
                 <main className={`flex-1 flex flex-col min-h-0 ${fullScreen ? '' : 'overflow-y-auto p-4 lg:p-8'}`}>

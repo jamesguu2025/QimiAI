@@ -45,9 +45,9 @@ Public launch requires zero `BLOCKED` rows for required launch items.
 | Adult consent record | Yes | IMPLEMENTED | Signup and OAuth paths store exact consent text, timestamp, method/version, user id, user agent, and IP where available. |
 | Privacy Policy | Yes | IMPLEMENTED | `/privacy` accurately describes account data, child/family profile, chat messages, AI-extracted memory, AI vendors, retention, deletion, parent rights, and contact. Final business contact details remain a launch checklist item. |
 | Terms of Service | Yes | IMPLEMENTED | `/terms` states service scope, AI limitations, medical disclaimer, adult responsibility, acceptable use, deletion, availability, and general dispute wording. |
-| Medical disclaimer and safety positioning | Yes | BLOCKED | AI/product copy avoids diagnosis/treatment claims, includes not-medical-advice disclaimer, and crisis/emergency copy does not overpromise. |
-| Account deletion | Yes | PARTIAL | `/settings` and `POST /api/user/delete-account` delete user-owned data through cascade and sign the user out; local Supabase verification recorded. |
-| RLS / data isolation | Yes | BLOCKED | Versioned migration removes broad `USING (true)` policies for user-owned tables and uses `auth.uid()` ownership checks where client-side access can occur. |
+| Medical disclaimer and safety positioning | Yes | IMPLEMENTED | AI/product copy avoids diagnosis/treatment claims, includes not-medical-advice disclaimer, and crisis/emergency copy does not overpromise. |
+| Account deletion | Yes | IMPLEMENTED | `/settings` and `POST /api/user/delete-account` delete account-owned data through database cascade, clear guest/conversation browser caches, and sign the user out; local Supabase verification recorded. |
+| RLS / data isolation | Yes | IMPLEMENTED | Versioned migration removes broad `USING (true)` policies for user-owned tables and uses `auth.uid()` ownership checks where client-side access can occur. The active local schema was re-audited on 2026-07-24. |
 | FTC Health Breach analysis | Yes | MVP-CONDITIONAL | Current Qimi has health-adjacent family support data but no health-record imports, connected-device imports, provider integrations, or PHR aggregation. Revisit if those features are added or if a security incident occurs. |
 | CCPA/CPRA threshold watch | Deferred with ADR | DEFERRED WITH ADR | ADR records current threshold status, revisit triggers, and child-data sale/share prohibition. |
 | HIPAA scope | Deferred with ADR | DEFERRED WITH ADR | ADR records current non-covered-entity/non-business-associate assumption and triggers for revisit. |
@@ -68,16 +68,16 @@ Public launch requires zero `BLOCKED` rows for required launch items.
 
 ### ADR-COMP-002: Privacy and AI processor disclosure
 
-- Status: `BLOCKED`
-- Decision needed: publish accurate `/privacy` copy for collected data, AI processing, retention, deletion, and parent rights.
-- Current risk: footer/auth copy can link to planned routes that are not yet implemented.
+- Status: `IMPLEMENTED`
+- Decision: publish and maintain accurate `/privacy` copy for collected data, AI processing, retention, deletion, and parent rights.
+- Current control: `/privacy` is implemented and linked from product flows; processor and retention copy must be updated when the data flow changes.
 - Required evidence: real code data-flow audit plus current third-party provider list.
 - Revisit trigger: any new AI vendor, upload pipeline, analytics provider, payment provider, or data retention change.
 
 ### ADR-COMP-003: Medical and regulatory positioning
 
-- Status: `BLOCKED`
-- Decision needed: keep Qimi positioned as education/support, not diagnosis, treatment, prevention, cure, or substitute clinical judgment.
+- Status: `IMPLEMENTED`
+- Decision: keep Qimi positioned as education/support, not diagnosis, treatment, prevention, cure, or substitute clinical judgment.
 - Required evidence: FDA intended-use guidance, product copy audit, prompt audit.
 - Revisit trigger: any feature that interprets reports diagnostically, creates treatment plans, recommends medication, triages emergencies, or claims clinical outcomes.
 
@@ -180,3 +180,80 @@ Technical checks completed:
 - Consent API smoke test: unauthenticated `consent-status` returns 401; authenticated test user transitions from `hasConsent:false` to `hasConsent:true` after POST; database row includes method/version/text/timestamp.
 
 Gate status is `MVP-CONDITIONAL` for a parent/adult-directed launch. Remaining practical launch guardrails are final business contact details when available, continued no-sale/no-share posture, no child accounts, and no health-record/device/provider integrations.
+
+---
+
+## 8. Pre-launch Security Recheck — 2026-07-24
+
+Scope: local-only technical acceptance for the MVP generation being tested. Production Supabase was not accessed or changed.
+
+### Technical acceptance evidence
+
+| Control | Result | Evidence |
+|---|---|---|
+| Authentication and production secrets | PASS | Protected plan, conversation, consent, and account APIs require a server session. `NEXTAUTH_SECRET` and the Supabase service-role key fail closed in production; the guest-usage cookie signer no longer has a production fallback secret. |
+| Database isolation | PASS | All 11 public tables have RLS enabled. Active `pg_policies` contains zero broad `USING (true)` or `WITH CHECK (true)` policies. An authenticated ownership check returned the test user's composed plan and no other user's plan; anonymous access returned no rows. |
+| Input and abuse controls | PASS (MVP) | Public and sensitive mutation endpoints have payload limits, length/type validation, and rate limiting. API smoke checks verified unauthorized responses, oversized signup rejection, invalid subscription rejection, and limiter behavior. |
+| Sensitive browser storage | PASS | Conversation previews are removed from persistent `localStorage`; guest profile/chat data uses session-scoped storage and is cleared during account deletion. |
+| Error and cache behavior | PASS | Sensitive APIs return generic client errors and `Cache-Control: private, no-store, max-age=0`; logs avoid chat/profile content. |
+| Browser response hardening | PASS | CSP frame/object restrictions, `DENY` framing, MIME sniffing protection, restrictive permissions policy, referrer policy, and production HSTS are configured. |
+| Dependency and build chain | PASS | Runtime dependencies are correctly classified, Next/NextAuth and transitive vulnerable packages were upgraded/overridden, `npm audit` and `npm audit --omit=dev` report zero vulnerabilities, and deployment uses the lockfile via `npm ci --legacy-peer-deps`. |
+| Migration safety | PASS | The composed-plan topic migration executes successfully and is stable on replay. The legacy row is retained as an API-hidden rollback shadow; deletion cascade was verified locally. The unsafe standalone `supabase/schema.sql` snapshot now fails closed and directs operators to versioned migrations. |
+| Technical verification | PASS | `npx tsc --noEmit`, `npm run build`, `npm run verify:mvp-cleanup`, plan-generation validation, `npm run test:security`, migration replay, RLS inspection, and `git diff --check` passed. |
+
+### Residual MVP launch conditions
+
+1. Rate limits are process-local. Before meaningful public traffic or multi-instance scaling, enable Vercel Firewall/rate-limit rules or move counters to a durable shared store. Until then, API quotas and the current limiter reduce abuse but do not provide a distributed guarantee.
+2. Confirm production environment values at deployment (`NEXTAUTH_SECRET`, `NEXTAUTH_URL`, Supabase URL/service-role key, OAuth secrets, AI provider key, and `CRON_SECRET`) without printing them into logs. Apply database migrations only after a backup and staging validation.
+3. Human acceptance remains required for signup/consent, cross-account isolation, account deletion, plan save/load, and mobile UI against the exact deployment candidate.
+4. Final business identity/contact wording and jurisdiction-specific launch scope require owner/counsel confirmation. This engineering gate is not legal advice.
+
+Conclusion: no known P0/P1 code security blocker remains in the locally tested MVP generation. Public launch remains `MVP-CONDITIONAL` until the operational and human acceptance items above are confirmed.
+
+---
+
+## 9. Industry Security Process Cross-check - 2026-07-24
+
+This cross-check updates the launch gate against current official and industry-standard security process sources.
+
+### Search Ledger
+
+| Source | Current guidance used | Qimi SOP implication |
+|---|---|---|
+| NIST Cybersecurity Framework 2.0, https://www.nist.gov/cyberframework | Use six continuous functions: Govern, Identify, Protect, Detect, Respond, Recover. | Security acceptance cannot stop at pre-release testing; it must also check monitoring, response, and recovery readiness. |
+| NIST SP 800-218 SSDF v1.1, https://csrc.nist.gov/pubs/sp/800/218/final | Secure software work should prepare the organization, protect software, produce well-secured software, and respond to vulnerabilities. | Require evidence for dependency hygiene, secrets, build/release integrity, vulnerability response, and post-release remediation. |
+| OWASP ASVS 5.0.0, https://owasp.org/www-project-application-security-verification-standard/ | ASVS is the technical verification standard for web application security controls. | Use ASVS/API/LLM checklists as the control source, not just an informal "security pass." |
+| OWASP Top 10 2025, https://owasp.org/Top10/ | Current web risk awareness list starts with broken access control, security misconfiguration, supply chain failures, cryptographic failures, injection, insecure design, auth failures, integrity failures, logging/alerting failures, and exceptional-condition handling. | Keep access control, config, supply chain, logging, and error handling as launch-blocking categories for sensitive-data features. |
+| OWASP API Security Top 10 2023, https://owasp.org/API-Security/ | API risks include object-level authorization, auth, property-level authorization, resource consumption, business-flow abuse, SSRF, misconfiguration, inventory, and unsafe API consumption. | API release checks must test cross-user object access, payload/rate limits, third-party calls, and undocumented endpoints. |
+| OWASP Top 10 for LLM Applications 2025, https://genai.owasp.org/llm-top-10/ | LLM/GenAI risks include prompt injection, sensitive information disclosure, supply chain, data/model poisoning, improper output handling, excessive agency, and overreliance. | AI plan/RAG/chat releases must check prompt injection, source grounding, sensitive disclosure, action limits, and user-facing uncertainty. |
+| OWASP Secrets Management Cheat Sheet, https://cheatsheetseries.owasp.org/cheatsheets/Secrets_Management_Cheat_Sheet.html | Secrets need lifecycle management: creation, rotation, revocation, expiration, auditing, least privilege, and no plaintext logging. | Production launch requires a secret inventory and rotation/revocation plan, not just "env vars exist." |
+| OWASP Logging Cheat Sheet, https://cheatsheetseries.owasp.org/cheatsheets/Logging_Cheat_Sheet.html | Log security events, but exclude passwords, tokens, session identifiers, secrets, and sensitive personal data. | Security logging must be present and privacy-preserving. Chat/child/family content should not appear in logs. |
+| CISA Secure by Design / Secure by Default, https://www.cisa.gov/securebydesign | Product vendors should carry more security responsibility and ship safer defaults. | Default production behavior must fail closed for missing secrets and unsafe config; users/operators should not need to remember hidden hardening steps. |
+
+### Required SOP update
+
+`docs/project-control.md` now includes a dedicated "Security Release Gate Rule" with the following sequence:
+
+1. Govern and scope.
+2. Identify attack surface.
+3. Protect by design.
+4. Verify implementation.
+5. Detect and operate.
+6. Respond and recover.
+7. Human acceptance.
+8. Merge, deploy, or carry forward.
+
+### Additional checks to add for future releases
+
+The current MVP pass covered the high-risk code path for this launch candidate. Future sensitive-data releases should additionally require:
+
+- A route/API inventory artifact for the changed slice.
+- A data classification table for child/family/profile/chat/plan/report/billing data.
+- A secret inventory with rotation owner and revocation method.
+- A distributed rate-limit or WAF verification step for public production traffic.
+- A restore drill or at least backup/restore evidence before production migrations.
+- A DAST-style unauthenticated/authenticated smoke pass against staging before production.
+- LLM-specific prompt-injection and sensitive-disclosure regression prompts for AI features.
+- Security event logging checks for auth failures, authorization failures, rate-limit hits, deletion/export, and provider failures.
+
+Conclusion: Qimi's current MVP security pass aligns with the core technical controls, but the SOP needed a clearer release-gate order covering operation, incident response, and recovery. That update has been made in `docs/project-control.md`.

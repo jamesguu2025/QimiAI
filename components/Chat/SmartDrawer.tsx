@@ -23,6 +23,7 @@ import {
   X,
   Edit3,
   Pin,
+  MoreVertical,
   LucideIcon
 } from 'lucide-react';
 import { useRouter } from 'next/router';
@@ -475,12 +476,6 @@ const ConversationItem: React.FC<ConversationItemProps> = ({
     setEditTitle(conversation.title);
   }, [conversation.title]);
 
-  const handleDeleteClick = (e: React.MouseEvent) => {
-    e.stopPropagation();
-    e.preventDefault();
-    setShowConfirm(true);
-  };
-
   const handleConfirmDelete = async () => {
     setIsDeleting(true);
     try {
@@ -506,6 +501,14 @@ const ConversationItem: React.FC<ConversationItemProps> = ({
 
   // 长按hook
   const longPressHandlers = useLongPress(handleLongPress, onClick, { delay: 500 });
+
+  // 点击三点按钮打开重命名/删除菜单（桌面端主入口，所有宽度可用）
+  const handleKebabClick = (e: React.MouseEvent) => {
+    e.stopPropagation();
+    const rect = (e.currentTarget as HTMLElement).getBoundingClientRect();
+    setContextMenuPosition({ x: rect.left, y: rect.bottom + 4 });
+    setShowContextMenu(true);
+  };
 
   // 从上下文菜单触发删除
   const handleDeleteFromMenu = () => {
@@ -610,32 +613,16 @@ const ConversationItem: React.FC<ConversationItemProps> = ({
           </span>
         )}
 
-        {/* 桌面端hover显示编辑和删除按钮 - 只在lg+显示，且上下文菜单未打开时 */}
-        {!isEditing && !showContextMenu && (
-          <>
-            <button
-              onClick={(e) => {
-                e.stopPropagation();
-                handleStartRename();
-              }}
-              className="p-1 rounded transition-all hidden lg:block opacity-0 group-hover:opacity-100 hover:bg-slate-200"
-              title="Rename"
-            >
-              <Edit3 size={14} className="text-slate-400 hover:text-slate-600" />
-            </button>
-            <button
-              onClick={handleDeleteClick}
-              disabled={isDeleting}
-              className={`p-1 rounded transition-all hidden lg:block ${
-                isDeleting
-                  ? 'opacity-100 bg-slate-100'
-                  : 'opacity-0 group-hover:opacity-100 hover:bg-slate-200'
-              }`}
-              title="Delete"
-            >
-              <Trash2 size={14} className="text-slate-400 hover:text-red-500" />
-            </button>
-          </>
+        {/* 三点选项按钮：所有宽度可见，点击打开重命名/删除菜单 */}
+        {!isEditing && (
+          <button
+            onClick={handleKebabClick}
+            aria-label="Conversation options"
+            title="Options"
+            className="flex-shrink-0 rounded p-1 text-slate-400 opacity-70 transition-colors hover:bg-slate-200 hover:text-slate-600 hover:opacity-100"
+          >
+            <MoreVertical size={16} />
+          </button>
         )}
       </div>
 

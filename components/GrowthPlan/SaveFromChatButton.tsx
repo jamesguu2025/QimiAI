@@ -1,5 +1,6 @@
 import { useEffect, useState } from 'react';
-import { BookmarkPlus, Check } from 'lucide-react';
+import Link from 'next/link';
+import { ArrowRight, BookmarkPlus, Check } from 'lucide-react';
 import { useSession } from 'next-auth/react';
 import { useAuthUIStore } from '@/stores/authUIStore';
 import { trackClientEvent } from '@/lib/client-analytics';
@@ -102,9 +103,18 @@ export default function SaveFromChatButton({
 
   if (saved) {
     return (
-      <div className="mt-3 inline-flex items-center gap-1.5 rounded-lg bg-emerald-50 px-3 py-1.5 text-xs font-semibold text-emerald-700">
-        <Check className="h-3.5 w-3.5" />
-        Saved to Growth Plan
+      <div className="mt-3 flex flex-wrap items-center gap-2">
+        <div className="inline-flex items-center gap-1.5 rounded-lg bg-emerald-50 px-3 py-1.5 text-xs font-semibold text-emerald-700">
+          <Check className="h-3.5 w-3.5" />
+          Saved to Growth Plan
+        </div>
+        <Link
+          href="/plan"
+          className="inline-flex items-center gap-1.5 rounded-lg border border-primary-purple/20 bg-white px-3 py-1.5 text-xs font-semibold text-primary-purple transition-colors hover:border-primary-purple/40 hover:bg-primary-purple/5"
+        >
+          View and Compose Plans
+          <ArrowRight className="h-3.5 w-3.5" />
+        </Link>
       </div>
     );
   }

@@ -1,6 +1,7 @@
 import type { AppProps } from 'next/app';
 import { SessionProvider } from 'next-auth/react';
 import LoginModal from '@/components/Auth/LoginModal';
+import GlobalSeo from '@/components/SEO/GlobalSeo';
 import { useAuthUIStore } from '@/stores/authUIStore';
 import '../styles/globals.css';
 
@@ -19,6 +20,7 @@ function GlobalLoginModal() {
 export default function App({ Component, pageProps }: AppProps) {
   return (
     <SessionProvider>
+      <GlobalSeo />
       <main>
         <Component {...pageProps} />
         <GlobalLoginModal />
