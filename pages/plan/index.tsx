@@ -329,8 +329,18 @@ export default function GrowthPlanPage() {
     );
   }
 
+  const planQuotaBanner = typeof quota?.planAi?.remaining === 'number' ? (
+    <div className={`flex-shrink-0 border-b px-4 py-2 ${quota.planAi.remaining === 0 ? 'border-red-100 bg-red-50' : 'border-teal-100 bg-teal-50'}`}>
+      <div className={`mx-auto flex max-w-3xl items-center justify-center text-sm font-medium ${quota.planAi.remaining === 0 ? 'text-red-700' : 'text-teal-700'}`}>
+        {quota.planAi.remaining === 0
+          ? 'Weekly AI limit reached'
+          : `${quota.planAi.remaining} AI plan use${quota.planAi.remaining === 1 ? '' : 's'} left this week`}
+      </div>
+    </div>
+  ) : null;
+
   return (
-    <AppLayout>
+    <AppLayout topBanner={planQuotaBanner}>
       <Head><title>Growth Plan - Qimi AI</title></Head>
 
       <main className="mx-auto w-full min-w-0 max-w-4xl py-6 sm:py-8">

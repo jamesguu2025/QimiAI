@@ -1,5 +1,5 @@
 import { useState } from 'react';
-import { ChevronDown, Layers3, Trash2 } from 'lucide-react';
+import { ChevronDown, FileText, Layers3, RefreshCcw, Trash2 } from 'lucide-react';
 import ReactMarkdown from 'react-markdown';
 import remarkGfm from 'remark-gfm';
 import CategoryIcon from '@/components/GrowthPlan/CategoryIcon';
@@ -14,6 +14,26 @@ type ComposedPlanLibraryProps = {
 };
 
 const CATEGORY_BY_TITLE = new Map(PLAN_CATEGORIES.map((category) => [category.name.toLowerCase(), category]));
+
+function getSupportingSectionVisual(title?: string) {
+  const normalized = (title || '').toLowerCase();
+  if (normalized.includes('review') || normalized.includes('adjust')) {
+    return {
+      className: 'bg-amber-100 text-amber-700',
+      icon: <RefreshCcw className="h-3.5 w-3.5" />,
+    };
+  }
+  if (normalized.includes('source')) {
+    return {
+      className: 'bg-violet-100 text-violet-700',
+      icon: <FileText className="h-3.5 w-3.5" />,
+    };
+  }
+  return {
+    className: 'bg-slate-100 text-slate-500',
+    icon: <Layers3 className="h-3.5 w-3.5" />,
+  };
+}
 
 export default function ComposedPlanLibrary({ plans, openPlanId, onOpenPlan, onDelete }: ComposedPlanLibraryProps) {
   const [openSections, setOpenSections] = useState<Record<string, string[]>>({});
@@ -101,6 +121,7 @@ export default function ComposedPlanLibrary({ plans, openPlanId, onOpenPlan, onD
                   const sectionKey = `${block.title || 'section'}-${index}`;
                   const sectionOpen = (openSections[plan.id] || []).includes(sectionKey);
                   const category = CATEGORY_BY_TITLE.get((block.title || '').toLowerCase());
+                  const supportingVisual = getSupportingSectionVisual(block.title);
                   return (
                     <section key={sectionKey} className="overflow-hidden rounded-xl border border-slate-200 bg-white">
                       <button type="button" onClick={() => toggleSection(plan.id, sectionKey)} aria-expanded={sectionOpen} className="flex w-full items-center justify-between gap-3 px-4 py-3 text-left hover:bg-slate-50">
@@ -109,7 +130,11 @@ export default function ComposedPlanLibrary({ plans, openPlanId, onOpenPlan, onD
                             <span className="inline-flex h-7 w-7 flex-none items-center justify-center rounded-lg text-white" style={{ backgroundColor: category.color }}>
                               <CategoryIcon category={category.id as PlanCategory} className="h-3.5 w-3.5" />
                             </span>
-                          ) : <span className="inline-flex h-7 w-7 flex-none items-center justify-center rounded-lg bg-slate-100 text-slate-500"><Layers3 className="h-3.5 w-3.5" /></span>}
+                          ) : (
+                            <span className={`inline-flex h-7 w-7 flex-none items-center justify-center rounded-lg ${supportingVisual.className}`}>
+                              {supportingVisual.icon}
+                            </span>
+                          )}
                           <span className="truncate text-sm font-semibold text-slate-800">{block.title || `Plan section ${index + 1}`}</span>
                         </span>
                         <ChevronDown className={`h-4 w-4 flex-none text-slate-400 transition-transform ${sectionOpen ? 'rotate-180' : ''}`} />

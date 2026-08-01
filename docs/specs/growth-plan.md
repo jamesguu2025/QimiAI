@@ -1748,3 +1748,82 @@ Known-record repair:
 - A follow-up, record-scoped migration moves the complete existing Markdown rows from the overloaded `Social Skills` table into `Learning Strategies` (school check-in, recap, reminder wall), `Social Skills` (go-to phrases, role-play), and `School Communication` (teacher accommodation). The exercise, review, and source blocks remain intact. No empty Emotional Support section is created because the saved plan contains no standalone emotional-support action.
 
 This slice does not implement daily completion records, outcome measures, plan versions, or PDF export. Those remain governed by the deferred tracking model and PDF acceptance gate.
+
+### 10.26 Multi-Topic Format Reliability Hardening (2026-07-31)
+
+Human testing reproduced `The generated plan format was incomplete` for a multi-topic composition. Runtime evidence showed that the provider returned all required topic blocks, but at least one later table used a non-canonical header. The previous diagnostic reported only the first table, which was valid, so it could not identify the failing block.
+
+Minimum correction:
+
+1. Request the provider's supported JSON Output mode while retaining deterministic server validation. JSON syntax enforcement does not replace semantic or source-fidelity validation.
+2. Canonicalize only a finite allowlist of clearly equivalent table-header aliases before validation. Unknown columns remain invalid.
+3. Validate every topic table independently. Diagnostic logs report only safe block labels, canonical column labels, structural error codes, attempt state, and a request correlation ID. They do not contain plan text, source text, child information, email, or raw user identifiers.
+4. Keep one bounded internal format retry. It belongs to the original Compose action and does not consume a second product allowance.
+5. Once the first provider request is transmitted, the user action remains counted even if final format validation fails because provider cost may already have occurred. Automatic quota refunds are not part of this correction.
+6. Add deterministic fixtures for multi-topic tables with different optional columns, supported aliases, and rejected unknown columns.
+
+Alternatives:
+
+| Option | Decision | Reason |
+|---|---|---|
+| Accept any table that contains `What to do` | Rejected | It would allow provider-created fields to bypass the closed-world display contract. |
+| Use provider strict tool-schema mode | Rejected for MVP | The current provider documents strict tool schemas as Beta. JSON Output plus local validation is stable and sufficient for this boundary. |
+| Replace Markdown blocks with a new structured row datastore | Deferred | It is a valid longer-term architecture if failures remain after this correction, but it expands the accepted model, renderer, and persistence contract. |
+| Refund every failed format attempt | Rejected | The external call may already have incurred cost and the current quota contract counts one transmitted user action once. |
+
+Search Ledger, accessed 2026-07-31:
+
+| Decision ID | Query | Result | Source URL |
+|---|---|---|---|
+| ADR-GP-26-1 | DeepSeek JSON Output response_format json_object official | Found | https://api-docs.deepseek.com/guides/json_mode |
+| ADR-GP-26-2 | OWASP input validation allowlist normalization canonicalization | Found(partial) | https://cheatsheetseries.owasp.org/cheatsheets/Input_Validation_Cheat_Sheet.html |
+| ADR-GP-26-3 | AWS bounded retries idempotent API mature practice | Found(partial) | https://aws.amazon.com/builders-library/making-retries-safe-with-idempotent-APIs/ |
+| ADR-GP-26-3 | OWASP API unrestricted resource consumption operation limits third-party cost | Found(partial) | https://owasp.org/API-Security/editions/2023/en/0xa4-unrestricted-resource-consumption/ |
+| ADR-GP-26-4 | OWASP logging sensitive health data event attributes | Found | https://cheatsheetseries.owasp.org/cheatsheets/Logging_Cheat_Sheet.html |
+| ADR-GP-26-4 | OpenTelemetry handling sensitive data minimization | Found | https://opentelemetry.io/docs/security/handling-sensitive-data/ |
+
+ADR-lite:
+
+| Decision ID | Decision | Risk | External Evidence | Local Evidence | Supported Claim | Unsupported Gap | Status | Confirmation |
+|---|---|---|---|---|---|---|---|---|
+| ADR-GP-26-1 | Enable provider JSON Output and retain local semantic validation | Normal | Provider official documentation, direct | Current route requests plain text JSON and already validates parsed drafts | JSON Output enforces valid JSON syntax; local validation remains necessary for business semantics | It does not enforce Markdown table semantics | Accepted | The configured endpoint accepted JSON Output and returned the expected parsed object; targeted contract test and production build passed |
+| ADR-GP-26-2 | Normalize a finite alias allowlist, then apply the existing canonical-header allowlist | Normal | OWASP standard guidance, indirect | Authenticated runtime log reproduced a valid first table plus a rejected later table | Normalize before allowlist validation; unknown values remain rejected | Exact Qimi aliases are an internal compatibility choice | Accepted | Alias and unknown-column regression fixtures passed |
+| ADR-GP-26-3 | Permit one internal retry under one user action and one quota consumption | High, cost | AWS and OWASP guidance, indirect | The current route consumes quota once before a bounded format retry | Bound retries and prevent duplicate user-side effects or costs | The exact retry count is an internal product parameter | Accepted | Existing quota placement plus route review and regression test |
+| ADR-GP-26-4 | Log all table shapes with safe labels and a request correlation ID, without individualized content | High, privacy | OWASP and OpenTelemetry guidance, direct for minimization | Current diagnostic logs only the first table and may include raw model titles | Capture enough event metadata for diagnosis while excluding health and family content | Exact log field names are internal | Accepted | Shape helper fixture, log-field code review, and production build passed |
+
+AQS and MVD result:
+
+- Security: PASS. Unknown columns remain fail-closed, source-fidelity auditing remains unchanged, and no individualized content is added to logs.
+- Architecture: PASS. The existing normalizer, validator, route, and deterministic script are extended. No dependency, database change, queue, service, feature flag, or new persistence model is introduced.
+- Engineering quality: MACHINE PASS. The targeted script, configured-provider JSON Output probe, and production build succeed. Authenticated human replay remains the functional acceptance step.
+- Reversibility: PASS. The correction is code-only and can be reverted by its exact commit.
+- Minimum documentation: PASS. This section extends the existing canonical Growth Plan specification instead of creating a new review document.
+
+Authenticated replay finding:
+
+- A second human replay passed presentation validation but failed source coverage because the deterministic quantity checker treated a `12 week` research duration inside `Why this may help` as a required family plan quantity. It also reduced the actionable `4 to 6 week` range to only `6 week` during normalization.
+- The correction separates operational source fields from explanation and evidence only blocks for omission checking. Saved titles, summaries, and actionable detail blocks remain inside the closed world operational boundary. Evidence only content still remains available to the semantic auditor for detecting unsupported claims, but its study durations, sample sizes, citations, and research descriptions are not required plan actions.
+- Quantity comparison now preserves complete ranges and treats equivalent forms such as `4 to 6 weeks` written with a separator or with the word `to` as the same fact. A missing operational range still fails validation.
+- Deterministic fixtures cover both the excluded `12 week` research duration and the required `4 to 6 week` home trial. The plan generation contract test, production build, and MVP security smoke test pass. A new authenticated human replay remains required before commit.
+- The next authenticated replay exposed a separate presentation classification defect. Both required topic action tables were valid, while `Review and adjust` used its own three column review table. The validator had applied action table headers to every Markdown table on the page. Action table normalization and canonical header validation now apply only to `Plan at a glance`, `Additional items`, and the exact topic blocks. A review table retains its own source backed headings and remains subject to deterministic review checks, source coverage, semantic fidelity audit, and general content safety validation.
+- A regression fixture confirms that review specific table headings are accepted while an unknown column in a topic action table remains rejected. The plan generation contract test and production build pass after this correction.
+- The following authenticated replay passed deterministic presentation and source coverage, then exposed semantic auditor false positives. The auditor rejected explicit source instructions moved from `Observation and Tracking` or `Keep a simple home log` into `Track`, and rejected explicit `Reassessment` content grouped under `Review and adjust`. These moves are already permitted by the closed world transformation contract and do not create a new metric or intervention.
+- Semantic audit reconciliation now dismisses only those narrow placement claims when deterministic source evidence confirms an explicit observation, note, log, record, tracking, check in, review, or reassessment instruction. Review quantities in the candidate must be drawn from the source. Claims involving a new reward, consequence, medication, dose, schedule, frequency, or target remain rejected.
+- Real omissions remain blocking. In the same replay, a later retry omitted the school source `Watch for` content, and that candidate remains rejected. Regression fixtures cover the exact review placement and tracking placement false positives plus a new reward negative control. The plan generation contract test, production build, and MVP security smoke test pass after this correction.
+- One more authenticated replay showed the auditor describing the same source backed reassessment as a structural change because the candidate merged a separate `Reassessment` block into a review table and displayed a `Step` column. Pure block, table, column, placement, merge, deduplication, and structure complaints no longer have veto power when the review fact exists in the operational source and every candidate review quantity is drawn from that source. The exception remains closed to any new reward, consequence, medication, dose, schedule, frequency, target, actor, role, risk, symptom, or intervention.
+- An exact regression fixture covers the observed auditor message. A full external provider replay using structure equivalent synthetic data, with no real family information and no database write, passed presentation validation, deterministic source coverage, and semantic audit. The production build and MVP security smoke test also pass. The final authenticated human replay remains the acceptance gate.
+- Human review of the first successful draft exposed a presentation defect: `Review and adjust` repeated the complete action table and displayed malformed Markdown pipes. Review presentation is now deterministic rather than provider authored. The server removes any provider supplied review block and reconstructs it only from operational Saved Plan blocks explicitly titled Review, Reassessment, Watch for, or Needs adjustment. If no dedicated block exists, it may use an explicit review statement from an operational source field. Evidence only sections remain excluded.
+- When multiple sources contribute review content, the block uses each Saved Plan title as a small heading. Explicit review rows are removed from the Topic action tables when the deterministic review block is present, preventing duplicate reassessment content. Ordinary actions and daily tracking remain unchanged.
+- Regression fixtures cover malformed provider review content, multi source review headings, removal of unsupported review content, and review row deduplication. A full external provider replay with structure equivalent synthetic data passed presentation validation, deterministic source coverage, semantic audit, and the no duplicate review check. The production build and MVP security smoke test pass.
+
+### 10.27 Composer Information Hierarchy (2026-07-31)
+
+The source selection view must prioritize selection and the primary Compose action over repeated explanatory copy.
+
+- The header uses one short instruction. Weekly allowance appears in a thin page level banner that follows the same visual pattern as the chat allowance banner.
+- The composer card must not repeat the allowance. At zero allowance, the page banner and disabled primary action communicate the limit without displaying a second paragraph about unaffected operations.
+- The source cards remain the canonical list of selected Saved Plans. The action panel must not repeat those titles as chips.
+- The action panel displays only the selected count, the starred count when nonzero, and the primary action. Source fidelity remains enforced by the server and does not require a long preflight explanation in the interface.
+- The action panel is content height on wide screens so a short summary does not create a large empty card.
+- Saving, viewing, editing, and deleting remain outside the AI allowance. This contract is unchanged even though the composer no longer repeats it inline.
+- In the saved composed-plan accordion, topic sections retain their category colors and icons. `Review and adjust` uses an amber refresh icon, while `Plan sources` uses a violet document icon so supporting sections are immediately distinguishable.

@@ -1,9 +1,11 @@
 import type { NextApiRequest, NextApiResponse } from 'next';
+import { randomUUID } from 'node:crypto';
 import { getServerSession } from 'next-auth';
 import { authOptions } from '../auth/[...nextauth]';
 import { getSupabaseAdmin } from '../../../lib/supabase';
 import { getPayloadSizeBytes, rejectIfRateLimited } from '../../../lib/rate-limit';
 import {
+  applySourceBackedReviewSection,
   buildPlanFaithfulnessAuditPrompt,
   buildPlanGenerationPrompt,
   cleanPlanGenerationJson,
@@ -26,6 +28,21 @@ const DEEPSEEK_MODEL = process.env.DEEPSEEK_MODEL || 'deepseek-v4-flash';
 const DEEPSEEK_THINKING = { type: 'disabled' };
 const MAX_PAYLOAD_BYTES = 12 * 1024;
 const MAX_SOURCE_BYTES = 32 * 1024;
+
+function logPlanGenerationWarning(
+  requestId: string,
+  event: string,
+  details: Record<string, unknown>,
+) {
+  console.warn(JSON.stringify({
+    timestamp: new Date().toISOString(),
+    level: 'warn',
+    msg: event,
+    event,
+    request_id: requestId,
+    ...details,
+  }));
+}
 
 type SourceRow = {
   id: string;
@@ -98,6 +115,7 @@ function normalizeSource(row: SourceRow) {
 }
 
 export default async function handler(req: NextApiRequest, res: NextApiResponse) {
+  const requestId = randomUUID();
   if (req.method !== 'POST') {
     res.setHeader('Allow', ['POST']);
     return res.status(405).json({ error: `Method ${req.method} not allowed` });
@@ -158,6 +176,10 @@ export default async function handler(req: NextApiRequest, res: NextApiResponse)
     }, { userId: context.userId, pagePath: '/plan' });
 
     const generationPrompt = buildPlanGenerationPrompt(validation.input, sources);
+    const normalizeDraftCandidate = (candidate: unknown) => applySourceBackedReviewSection(
+      normalizeGeneratedPlanPresentation(candidate),
+      sources,
+    );
     const requestDraft = (prompt: string) => fetch(`${DEEPSEEK_API_BASE}/chat/completions`, {
       method: 'POST',
       headers: {
@@ -174,6 +196,7 @@ export default async function handler(req: NextApiRequest, res: NextApiResponse)
         temperature: 0.1,
         max_tokens: 4000,
         thinking: DEEPSEEK_THINKING,
+        response_format: { type: 'json_object' },
       }),
       signal: AbortSignal.timeout(30000),
     });
@@ -199,21 +222,27 @@ export default async function handler(req: NextApiRequest, res: NextApiResponse)
     let parsed = await parseDraftResponse(response);
     if (!parsed) return res.status(502).json({ error: 'Could not build a plan draft. Please try again.' });
 
-    let normalizedCandidate = normalizeGeneratedPlanPresentation(parsed);
+    let normalizedCandidate = normalizeDraftCandidate(parsed);
     let draftValidation = validateGeneratedPlanDraft(normalizedCandidate, category);
     if ('error' in draftValidation && draftValidation.error !== 'Unsafe or unsupported plan draft') {
-      console.warn('[plan/generate] retrying provider format', { reason: draftValidation.error, ...describeGeneratedPlanShape(normalizedCandidate) });
-      response = await requestDraft(`${generationPrompt}\n\nFORMAT RETRY: Your previous response failed the server presentation rule ${draftValidation.error}. Return a fresh JSON object that follows the exact four-key schema, puts every visual section inside interventionBlocks, keeps every required action-table topic section and Plan sources, removes empty optional columns, and preserves the same source facts without adding anything.`);
+      logPlanGenerationWarning(requestId, 'plan_generation_format_retry', {
+        reason: draftValidation.error,
+        ...describeGeneratedPlanShape(normalizedCandidate),
+      });
+      response = await requestDraft(`${generationPrompt}\n\nFORMAT RETRY: Your previous response failed the server presentation rule ${draftValidation.error}. Return a fresh JSON object that follows the exact four-key schema, puts every visual section inside interventionBlocks, keeps every required action-table topic section and Plan sources, removes empty optional columns, and preserves the same source facts without adding anything. Every action table must use only these exact column names in this order when present: When / Trigger | What to do | Support / Setup | Feedback | Track. What to do is required in every action table.`);
       if (response.ok) {
         parsed = await parseDraftResponse(response);
         if (parsed) {
-          normalizedCandidate = normalizeGeneratedPlanPresentation(parsed);
+          normalizedCandidate = normalizeDraftCandidate(parsed);
           draftValidation = validateGeneratedPlanDraft(normalizedCandidate, category);
         }
       }
     }
     if ('error' in draftValidation) {
-      console.warn('[plan/generate] rejected provider draft', { reason: draftValidation.error, ...describeGeneratedPlanShape(normalizedCandidate) });
+      logPlanGenerationWarning(requestId, 'plan_generation_format_rejected', {
+        reason: draftValidation.error,
+        ...describeGeneratedPlanShape(normalizedCandidate),
+      });
       return res.status(502).json({ error: 'The generated plan format was incomplete. Please try again.' });
     }
 
@@ -234,6 +263,7 @@ export default async function handler(req: NextApiRequest, res: NextApiResponse)
           temperature: 0,
           max_tokens: 600,
           thinking: DEEPSEEK_THINKING,
+          response_format: { type: 'json_object' },
         }),
         signal: AbortSignal.timeout(15000),
       });
@@ -273,12 +303,12 @@ export default async function handler(req: NextApiRequest, res: NextApiResponse)
         issueCount: auditIssues.length,
         ...(process.env.NODE_ENV !== 'production' ? { localIssues: auditIssues } : {}),
       });
-      const fidelityRetryPrompt = `${generationPrompt}\n\nSOURCE-FIDELITY RETRY ${retryAttempt} OF 2: The previous candidate failed for these reasons:\n- ${auditIssues.slice(0, 8).join('\n- ')}\nEvery source listed below was intentionally selected, even when categories differ:\n- ${sources.map((source) => source.painPoint).join('\n- ')}\nReturn a fresh candidate using only explicit source facts. Preserve every action and every exact quantity, timing, setup, support, monitoring, and review fact from every selected source. Do not shorten the composite by dropping a source row. Remove unsupported claims rather than replacing them with new advice. Follow the exact JSON and dynamic-column schema.`;
+      const fidelityRetryPrompt = `${generationPrompt}\n\nSOURCE-FIDELITY RETRY ${retryAttempt} OF 2: The previous candidate failed for these reasons:\n- ${auditIssues.slice(0, 8).join('\n- ')}\nEvery source listed below was intentionally selected, even when categories differ:\n- ${sources.map((source) => source.painPoint).join('\n- ')}\nReturn a fresh candidate using only explicit source facts. Preserve every action and every exact implementation quantity, timing, setup, support, and monitoring fact from every selected source. Do not create Review and adjust because the server reconstructs it from the saved sources. Research study durations or sample details that appear only in explanatory or evidence-only sections are not implementation quantities and must not be copied into the practical plan. Do not shorten the composite by dropping a source row. Remove unsupported claims rather than replacing them with new advice. Follow the exact JSON and dynamic-column schema.`;
       const fidelityResponse = await requestDraft(fidelityRetryPrompt);
       if (fidelityResponse.ok) {
         const fidelityParsed = await parseDraftResponse(fidelityResponse);
         if (fidelityParsed) {
-          const fidelityCandidate = normalizeGeneratedPlanPresentation(fidelityParsed);
+          const fidelityCandidate = normalizeDraftCandidate(fidelityParsed);
           const fidelityDraftValidation = validateGeneratedPlanDraft(fidelityCandidate, category);
           if ('draft' in fidelityDraftValidation) {
             draftValidation = fidelityDraftValidation;
@@ -288,7 +318,7 @@ export default async function handler(req: NextApiRequest, res: NextApiResponse)
               ? await auditDraft(draftValidation.draft)
               : { audit: { faithful: true, issues: [] as string[] } };
           } else {
-            console.warn('[plan/generate] rejected fidelity retry format', {
+            logPlanGenerationWarning(requestId, 'plan_generation_fidelity_retry_format_rejected', {
               reason: fidelityDraftValidation.error,
               ...describeGeneratedPlanShape(fidelityCandidate),
             });

@@ -74,7 +74,7 @@ export default function PlanGenerator({ items, onSave, onCancel, quotaRemaining,
       return;
     }
     if (quotaRemaining === 0) {
-      setError('You have used this week\'s 10 AI plan operations. Your saved plans remain available to view and edit.');
+      setError('You have reached this week\'s AI plan limit.');
       return;
     }
 
@@ -179,15 +179,10 @@ export default function PlanGenerator({ items, onSave, onCancel, quotaRemaining,
 
   return (
     <section className="w-full min-w-0 overflow-hidden rounded-xl border border-primary-purple/20 bg-white p-3 shadow-sm sm:p-4" aria-labelledby="plan-composer-title" aria-busy={isGenerating}>
-      <div>
+      <div className="min-w-0">
         <p className="text-xs font-semibold uppercase tracking-wide text-primary-purple">Saved Plan Composer</p>
-        <h2 id="plan-composer-title" className="text-lg font-bold text-slate-900">Turn saved ideas into one visual plan</h2>
-        <p className="mt-1 text-sm text-slate-600">Starred plans are selected automatically. Choose what to include; Qimi will reorganize the saved material without asking you to tell the story again.</p>
-        {typeof quotaRemaining === 'number' && (
-          <p className={`mt-2 text-xs font-semibold ${quotaRemaining === 0 ? 'text-red-600' : 'text-slate-500'}`}>
-            {quotaRemaining} of 10 AI plan operations remaining this week. Saving, viewing, editing, and deleting plans do not use this allowance.
-          </p>
-        )}
+        <h2 id="plan-composer-title" className="text-lg font-bold text-slate-900">Compose a visual plan</h2>
+        <p className="mt-1 text-sm text-slate-600">Select the Saved Plans to combine. Starred plans are preselected.</p>
       </div>
 
       <div className="mt-5 grid min-w-0 grid-cols-1 gap-4 xl:grid-cols-[minmax(0,1.15fr)_minmax(300px,0.85fr)] xl:gap-5">
@@ -230,7 +225,7 @@ export default function PlanGenerator({ items, onSave, onCancel, quotaRemaining,
           </div>
 
           <div className="mt-3 rounded-lg border border-dashed border-slate-300 bg-white p-3">
-            <label htmlFor="composer-manual-item" className="text-xs font-semibold text-slate-700">Add your own item for this plan</label>
+            <label htmlFor="composer-manual-item" className="text-xs font-semibold text-slate-700">Add a note</label>
             <div className="mt-1.5 flex min-w-0 flex-col gap-2 sm:flex-row">
               <input
                 id="composer-manual-item"
@@ -243,7 +238,7 @@ export default function PlanGenerator({ items, onSave, onCancel, quotaRemaining,
                     addManualItem();
                   }
                 }}
-                placeholder="Add a strategy, constraint, or reminder"
+                placeholder="Strategy, constraint, or reminder"
                 className={`${inputClassName} min-w-0`}
               />
               <button type="button" onClick={addManualItem} className="inline-flex flex-none items-center justify-center gap-1 rounded-lg border border-slate-200 px-3 py-2 text-sm font-semibold text-slate-600 hover:bg-slate-50">
@@ -265,31 +260,17 @@ export default function PlanGenerator({ items, onSave, onCancel, quotaRemaining,
           </div>
         </div>
 
-        <div className="flex min-w-0 flex-col rounded-xl border border-slate-200 p-4">
+        <div className="flex min-w-0 flex-col self-start rounded-xl border border-slate-200 p-4">
           <div>
-            <p className="text-xs font-semibold uppercase tracking-wide text-primary-purple">One practical plan</p>
-            <h3 className="mt-1 text-base font-bold text-slate-900">Organize the selected material</h3>
-            <p className="mt-1 text-xs leading-relaxed text-slate-500">Qimi will keep the saved interventions and arrange only the implementation details supported by your sources.</p>
+            <p className="text-xs font-semibold uppercase tracking-wide text-primary-purple">Compose plan</p>
+            <h3 className="mt-1 text-base font-bold text-slate-900">Review your selection</h3>
           </div>
 
-          {isGenerating ? <GenerationProgress mode="generate" /> : <div className="mt-4 rounded-xl bg-primary-purple/5 p-4">
-            <div className="flex items-center gap-2">
-              <Sparkles className="h-4 w-4 text-primary-purple" />
-              <h3 className="text-sm font-bold text-slate-800">Ready to organize</h3>
-            </div>
-            <dl className="mt-3 grid grid-cols-2 gap-3">
-              <div><dt className="text-[11px] uppercase text-slate-400">Sources</dt><dd className="text-lg font-bold text-slate-800">{selectedCount}</dd></div>
-              <div><dt className="text-[11px] uppercase text-slate-400">Starred</dt><dd className="text-lg font-bold text-slate-800">{selectedStarCount}</dd></div>
-            </dl>
-            <p className="mt-3 text-xs leading-relaxed text-slate-600">The plan shows only source-backed, non-duplicative details. Missing optional categories are omitted rather than guessed or repeated in empty columns.</p>
-          </div>}
-
-          {selectedItems.length > 0 && (
-            <div className="mt-4">
-              <p className="text-xs font-semibold text-slate-600">Included Saved Plans</p>
-              <div className="mt-2 flex min-w-0 flex-wrap gap-1.5">
-                {selectedItems.map((item) => <span key={item.id} className="min-w-0 max-w-full truncate rounded-full bg-slate-100 px-2.5 py-1 text-xs text-slate-600">{item.star ? '★ ' : ''}{item.painPoint}</span>)}
-              </div>
+          {isGenerating ? <GenerationProgress mode="generate" /> : (
+            <div className="mt-4 flex flex-wrap items-center gap-2 rounded-xl bg-primary-purple/5 px-4 py-3 text-sm text-slate-700">
+              <Sparkles className="h-4 w-4 flex-none text-primary-purple" />
+              <span className="font-semibold">{selectedCount} selected</span>
+              {selectedStarCount > 0 && <span className="text-slate-400">{selectedStarCount} starred</span>}
             </div>
           )}
 
@@ -297,8 +278,8 @@ export default function PlanGenerator({ items, onSave, onCancel, quotaRemaining,
 
           <div className="mt-auto flex flex-col-reverse gap-2 pt-6 sm:flex-row sm:justify-end">
             <button type="button" onClick={onCancel} disabled={isGenerating} className={secondaryButtonClassName}>Cancel</button>
-            <button type="button" onClick={generateDraft} disabled={isGenerating || selectedCount === 0} className={primaryButtonClassName}>
-              {isGenerating ? 'Composing your plan...' : `Compose from ${selectedCount} item${selectedCount === 1 ? '' : 's'}`}
+            <button type="button" onClick={generateDraft} disabled={isGenerating || selectedCount === 0 || quotaRemaining === 0} className={primaryButtonClassName}>
+              {isGenerating ? 'Composing your plan...' : quotaRemaining === 0 ? 'Weekly limit reached' : 'Compose plan'}
             </button>
           </div>
         </div>

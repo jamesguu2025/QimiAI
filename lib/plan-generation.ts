@@ -120,11 +120,6 @@ ${blocks || '(no structured details saved)'}`;
     .map((item, index) => `MANUAL SOURCE ${index + 1}: ${item}`)
     .join('\n');
   const selectedTopicNames = [...new Set(sources.map((source) => PLAN_CATEGORY_NAMES[source.category]))];
-  const reviewFactPattern = /\b(review|reassess(?:ment)?|re-evaluat(?:e|ion)|trial period|follow-up)\b|复评|复查|重新评估|试行期/i;
-  const requiredReviewExcerpts = sources.flatMap((source) => [
-    source.explanationMarkdown,
-    ...source.interventionBlocks.flatMap((block) => [block.title || '', block.contentMarkdown]),
-  ]).filter((text) => reviewFactPattern.test(text)).slice(0, 8).map((text) => text.slice(0, 700));
   const topicGroupingRule = selectedTopicNames.length > 1
     ? `The selected Saved Plans span ${selectedTopicNames.length} topics. Create one separate Markdown-table block for each topic, using these exact block titles: ${selectedTopicNames.join(' | ')}. Keep each Saved Plan action under its source Category. Do not create one mixed "Plan at a glance" table. ${input.manualItems.length > 0 ? 'Put manual items in a separate table block titled "Additional items"; do not guess a topic for them.' : ''}`
     : 'The selected Saved Plans use one topic. Create one Markdown-table block titled "Plan at a glance".';
@@ -143,6 +138,7 @@ Rules:
 - Treat the sources as the complete factual boundary. Do not use general knowledge, typical practice, research knowledge, or plausibility to fill a gap.
 - Do not add or change any actor, beneficiary, schedule, trigger, sequence dependency, quantity, duration, frequency, intensity, difficulty, equipment, environment, assistance, supervision, independence level, choice, preference, cue, feedback, reward, consequence, tracking metric, outcome, symptom, risk, review interval, success criterion, progression, adjustment, role, or setting unless that same fact is explicitly present in a selected source.
 - Treat every saved quantity, duration, frequency, difficulty, side-specific instruction, support condition, and intervention choice as read-only source material. Preserve it accurately; do not extend, reinterpret, or promote an instruction or observation into a new goal, tracker, or success criterion.
+- Explanation text and blocks titled Why this may help, Research, Evidence, Sources, or References are supporting context, not implementation instructions. Do not copy their study durations, sample sizes, or citation details into the action tables or Review and adjust unless the same operational fact also appears in the saved title, summary, or another actionable detail block.
 - Do not independently increase or decrease repetitions, sets, hold time, duration, frequency, difficulty, reinforcement schedules, or work assigned to one side of the body.
 - Do not infer pain, weakness, diagnosis, or a need for extra one-sided practice from asymmetry or slower progress.
 - If the sources do not specify how to review or change the intervention, do not add a generic review method, caution, measure, or change instruction. Preserve only the review facts that are explicit in the sources.
@@ -154,7 +150,7 @@ Rules:
 - ${topicGroupingRule}
 - Topic titles are presentation labels only. They do not create a new intervention, document type, diagnosis, goal, or claim.
 - Every action-table block must contain a valid GitHub-Flavored Markdown table. Never place actions from different Saved Plan categories in the same table when more than one topic is selected.
-${requiredReviewExcerpts.length > 0 ? `- A separate "Review and adjust" block is REQUIRED because the sources contain these review facts. Preserve only their explicit review content:\n${requiredReviewExcerpts.map((excerpt) => `  - ${excerpt}`).join('\n')}` : '- The sources contain no explicit review fact, so omit Review and adjust.'}
+- Do not create a Review and adjust block. The server reconstructs that block deterministically from explicit Review, Reassessment, Watch for, and Needs adjustment source sections after generation.
 - Table columns are dynamic and source-backed. Use only this canonical order: When / Trigger | What to do | Support / Setup | Feedback | Track. "What to do" is required. Include each other column only when it contributes independent, non-duplicative information.
 - Place each source fact in exactly one best-fit column. What to do contains the action, technique, and dose. Support / Setup contains only independently useful posture, equipment, location, environmental, cue, assistance, or supervision information.
 - Never repeat the same setup fact in both What to do and Support / Setup. If you move a setup clause into Support / Setup, remove only that duplicate clause from What to do while preserving the complete action and dose. If the setup cannot be separated safely or the action is already concise, keep it in What to do and omit Support / Setup.
@@ -166,8 +162,7 @@ ${requiredReviewExcerpts.length > 0 ? `- A separate "Review and adjust" block is
 - Never create an empty column and never put "Not specified", "Actor not specified", or a similar placeholder inside table cells. If a displayed optional column applies to only some rows, use an em dash for the other rows.
 - Name who acts only when a source names that actor. Do not repeat a missing-actor placeholder in each row.
 - Keep Feedback and Track as separate optional columns because they represent different functions. Copy source-backed feedback or tracking only; omit the entire corresponding column when none exists.
-- Include a "Review and adjust" block only when a selected source explicitly contains a review date, review method, measure, or adjustment instruction. Include only the supported parts; omit missing labels instead of writing "Measure: Not specified". The block must not create a new dose, progression, independence requirement, performance target, one-sided exercise, consequence, reward schedule, tracker, or intervention.
-- Search source titles, summaries, explanations, and detail blocks for review content. A stated trial period followed by reassessment is a source-backed review interval and must be preserved in Review and adjust; do not list the review date/interval as a gap.
+- Leave review presentation to the server. Keep review facts out of the action tables only when they already have a dedicated Review, Reassessment, Watch for, or Needs adjustment source section. Do not replace them with a new review rule.
 - Timing words such as daily/weekly/after/before belong in When / Trigger. Posture, equipment, location, assistance, and environmental conditions may remain in What to do when that avoids a redundant Support / Setup column.
 - Include a final "Plan sources" block listing the supplied saved-plan titles and manual items. Do not add research citations to the individualized plan.
 - Before returning JSON, compare every output claim against the sources and replace every unsupported claim with "Not specified" or remove it.
@@ -186,7 +181,7 @@ Return this shape:
   ]
 }
 
-For a single-topic plan, use Plan at a glance as shown. For a multi-topic plan, replace that one block with the exact topic-titled table blocks required above. Omit Review and adjust when no source-backed review content exists. Never omit the required action table block(s) or Plan sources.
+For a single-topic plan, use Plan at a glance as shown. For a multi-topic plan, replace that one block with the exact topic-titled table blocks required above. Do not return Review and adjust because the server adds it from the saved sources. Never omit the required action table block(s) or Plan sources.
 
 ${savedSources || '(no saved plan sources)'}
 
@@ -214,7 +209,11 @@ Important classification rules:
 - The selected sources collectively define the factual boundary. Never reject a candidate merely because it combines different source categories, and never treat a listed selected source as unsupported because it differs from the first source's category.
 - A source-stated trial period followed by reassessment is review-interval information. Preserving that same fact inside Review and adjust does not repurpose it and must not be rejected.
 - Source-stated monitoring signs and adjustment guidance may be grouped inside Review and adjust when their meaning and role are preserved; this does not create a new review interval for another source.
+- Moving an explicit source instruction to observe, note, log, record, track, watch, or check into the Track column preserves its role. Do not call that move a newly created tracking metric when the same observation or record instruction is present in the source.
+- Moving an explicit Review, Reassessment, Watch for, or Needs adjustment fact into Review and adjust preserves its role. This remains allowed when a composite plan contains other topics, provided the fact itself is unchanged and its source title remains listed.
+- A Saved Plan may repeat the same action in a summary block and a plan table. Deduplicating that repeated source fact or displaying it once in the best fit section is allowed.
 - Plan sources may reproduce a saved source title exactly. An exact source title is faithful and must not be treated as an unsupported summary.
+- Explanation text and evidence-only blocks provide context for checking unsupported claims. Their study durations, sample sizes, citations, and research descriptions do not have to appear in the practical plan unless the same fact is also stated as an implementation or review instruction in an operational source field.
 
 Mark faithful=false if the candidate adds, changes, removes, strengthens, or repurposes any actor, beneficiary, schedule, trigger, sequence dependency, quantity, duration, frequency, intensity, difficulty, equipment, environment, assistance, supervision, independence level, choice, preference, cue, feedback, reward, consequence, tracking metric, outcome, symptom, risk, review interval, success criterion, progression, adjustment, role, setting, or intervention. Also mark false if an action instruction or technique note is promoted into a new tracker, outcome, or success criterion.
 When a When / Trigger column exists, also mark faithful=false if the candidate broadens a source schedule (for example, changing school breaks or holidays into all weeks), or repeats that schedule/cadence inside What to do instead of assigning it to When / Trigger.
@@ -277,6 +276,22 @@ export function reconcilePlanFaithfulnessAudit(
   const preservesBothMaintenanceSchedules = [sourceText, candidateText].every((text) => (
     text.includes('school breaks or holidays') && text.includes('all weeks')
   ));
+  const operationalSourceText = sources.map(sourceOperationalText).join('\n').toLowerCase();
+  const sourceHasExplicitTracking = /\b(?:observe|watch|note|keep\s+(?:a\s+)?(?:simple\s+)?(?:home\s+)?log|record|track|check[ -]?in)\b/.test(operationalSourceText);
+  const candidateHasTrackColumn = draft.interventionBlocks.some((block) => /\|[^\n]*\bTrack\b[^\n]*\|/i.test(block.contentMarkdown));
+  const reviewBlock = draft.interventionBlocks.find((block) => block.title?.toLowerCase() === 'review and adjust');
+  const reviewPattern = /\b(review|reassess(?:ment)?|re-evaluat(?:e|ion)|trial period|follow-up|watch for|needs adjustment)\b|复评|复查|重新评估|试行期/i;
+  const sourceReviewText = sources
+    .flatMap(sourceOperationalParts)
+    .filter((part) => reviewPattern.test(part))
+    .join('\n');
+  const sourceReviewQuantities = extractQuantityFacts(sourceReviewText);
+  const sourceReviewQuantitySet = new Set(sourceReviewQuantities);
+  const candidateReviewQuantities = extractQuantityFacts(reviewBlock?.contentMarkdown || '');
+  const reviewFactsAligned = Boolean(reviewBlock)
+    && reviewPattern.test(sourceReviewText)
+    && candidateReviewQuantities.every((fact) => sourceReviewQuantitySet.has(fact))
+    && (sourceReviewQuantities.length === 0 || candidateReviewQuantities.length > 0);
 
   const issues = result.audit.issues.filter((issue) => {
     const normalizedIssue = issue.toLowerCase();
@@ -288,6 +303,16 @@ export function reconcilePlanFaithfulnessAudit(
     const maintenanceFalsePositive = preservesBothMaintenanceSchedules
       && /(?:maintenance|prevent regression|school breaks|off.?weeks).{0,180}(?:broadens|changes|does not match|omits|step reference)|(?:broadens|changes|does not match|omits).{0,180}(?:maintenance|school breaks|off.?weeks)/.test(normalizedIssue);
     if (maintenanceFalsePositive) return false;
+
+    const trackingPlacementFalsePositive = sourceHasExplicitTracking
+      && candidateHasTrackColumn
+      && /(?:track column|tracking column).{0,180}(?:observation instruction|home log instruction).{0,180}(?:convert|repurpos)|(?:convert|repurpos).{0,180}(?:observation instruction|home log instruction).{0,180}(?:track column|tracking column)/.test(normalizedIssue);
+    if (trackingPlacementFalsePositive) return false;
+
+    const reviewPlacementFalsePositive = reviewFactsAligned
+      && /(?:review and adjust|reassess).{0,360}(?:duplicat|placed|placement|mix(?:es|ing)? categories|repurpos|separate intervention block|not present in the original source.?s (?:review and adjust|plan table)|chang(?:e|es|ed|ing) (?:the )?structure|structural change|step column)|(?:duplicat|placed|placement|mix(?:es|ing)? categories|repurpos|separate intervention block|chang(?:e|es|ed|ing) (?:the )?structure|structural change|step column).{0,360}(?:review and adjust|reassess)/.test(normalizedIssue)
+      && !/\b(?:reward|consequence|medication|dose|dosage|new schedule|new frequency|new target|new actor|new role|new risk|new symptom|new intervention)\b/.test(normalizedIssue);
+    if (reviewPlacementFalsePositive) return false;
 
     return true;
   });
@@ -304,19 +329,142 @@ function sourceSemanticText(source: PlanGenerationSource): string {
   ].join('\n');
 }
 
-function normalizeCoverageText(value: string): string {
-  return value
-    .toLowerCase()
-    .replace(/[–—-]/g, ' ')
-    .replace(/\b(seconds?|minutes?|hours?|days?|weeks?|months?|reps?|repetitions?|sets?|times?|attempts?|sessions?)\b/g, (unit) => unit.replace(/s$/, ''))
-    .replace(/\s+/g, ' ')
-    .trim();
+const NON_OPERATIONAL_BLOCK_TITLE_PATTERN = /^(?:why (?:this|it) may help|research(?: notes?| summary)?|evidence(?: notes?| summary)?|sources?|references?)$/i;
+const REVIEW_SOURCE_BLOCK_TITLE_PATTERN = /^(?:review(?: and adjust| plan| notes?)?|reassessment|watch for|needs adjustment)$/i;
+const REVIEW_FACT_PATTERN = /\b(review|reassess(?:ment)?|re-evaluat(?:e|ion)|trial period|follow-up|watch for|needs adjustment)\b|复评|复查|重新评估|试行期/i;
+const REVIEW_ACTION_ROW_PATTERN = /\b(review|reassess(?:ment)?|re-evaluat(?:e|ion)|watch for|needs adjustment|progress)\b|复评|复查|重新评估|需要调整|进展/i;
+
+function sourceOperationalParts(source: PlanGenerationSource): string[] {
+  return [
+    source.painPoint,
+    source.strategySummary,
+    ...source.interventionBlocks.flatMap((block) => {
+      const title = block.title?.trim() || '';
+      if (NON_OPERATIONAL_BLOCK_TITLE_PATTERN.test(title)) return [];
+      return [title, block.contentMarkdown];
+    }),
+  ].filter(Boolean);
+}
+
+function sourceOperationalText(source: PlanGenerationSource): string {
+  return sourceOperationalParts(source).join('\n');
+}
+
+function extractReviewMarkdownFromBlock(block: PlanContentBlock): string[] {
+  const content = block.contentMarkdown.trim();
+  if (!content) return [];
+  const tableLines = content.split('\n').filter((line) => parseMarkdownTableLine(line));
+  if (tableLines.length < 3) return [content];
+
+  const titleIsReviewSpecific = REVIEW_SOURCE_BLOCK_TITLE_PATTERN.test(block.title?.trim() || '');
+  return tableLines.slice(2).flatMap((line) => {
+    const row = parseMarkdownTableLine(line);
+    if (!row) return [];
+    const rowText = row.join(' ');
+    if (!titleIsReviewSpecific && !REVIEW_FACT_PATTERN.test(rowText)) return [];
+    const meaningfulCells = row.filter((cell) => cell && !/^\d+$/.test(cell));
+    return meaningfulCells.length > 0 ? [`- ${meaningfulCells.join(' ')}`] : [];
+  });
+}
+
+function stripDedicatedReviewRows(markdown: string): string {
+  const lines = markdown.split('\n');
+  const tableLineIndexes = lines
+    .map((line, index) => parseMarkdownTableLine(line) ? index : -1)
+    .filter((index) => index >= 0);
+  if (tableLineIndexes.length < 3) return markdown;
+
+  const rowIndexes = tableLineIndexes.slice(2);
+  const keptRowIndexes = rowIndexes.filter((index) => {
+    const row = parseMarkdownTableLine(lines[index]);
+    return row && !REVIEW_ACTION_ROW_PATTERN.test(row.join(' '));
+  });
+  if (keptRowIndexes.length === rowIndexes.length || keptRowIndexes.length === 0) return markdown;
+
+  const firstTableIndex = tableLineIndexes[0];
+  const lastTableIndex = tableLineIndexes[tableLineIndexes.length - 1];
+  return [
+    ...lines.slice(0, firstTableIndex),
+    lines[tableLineIndexes[0]],
+    lines[tableLineIndexes[1]],
+    ...keptRowIndexes.map((index) => lines[index]),
+    ...lines.slice(lastTableIndex + 1),
+  ].join('\n').trim();
+}
+
+export function applySourceBackedReviewSection(
+  value: unknown,
+  sources: PlanGenerationSource[],
+): unknown {
+  if (!isRecord(value) || !Array.isArray(value.interventionBlocks)) return value;
+
+  const reviewSections = sources.flatMap((source) => {
+    const operationalBlocks = source.interventionBlocks.filter((block) => (
+      !NON_OPERATIONAL_BLOCK_TITLE_PATTERN.test(block.title?.trim() || '')
+    ));
+    const reviewSpecificBlocks = operationalBlocks.filter((block) => (
+      REVIEW_SOURCE_BLOCK_TITLE_PATTERN.test(block.title?.trim() || '')
+    ));
+    const reviewCandidateBlocks = reviewSpecificBlocks.length > 0
+      ? reviewSpecificBlocks
+      : operationalBlocks.filter((block) => REVIEW_FACT_PATTERN.test(block.contentMarkdown));
+    const reviewItems = reviewCandidateBlocks.flatMap(extractReviewMarkdownFromBlock);
+    if (reviewItems.length === 0 && REVIEW_FACT_PATTERN.test(source.strategySummary)) {
+      reviewItems.push(source.strategySummary.trim());
+    }
+    const uniqueItems = reviewItems.filter((item, index) => {
+      const normalizedItem = item.toLowerCase().replace(/[*_`~]/g, '').replace(/\s+/g, ' ').trim();
+      return reviewItems.findIndex((candidate) => (
+        candidate.toLowerCase().replace(/[*_`~]/g, '').replace(/\s+/g, ' ').trim() === normalizedItem
+      )) === index;
+    });
+    if (uniqueItems.length === 0) return [];
+    return [{
+      sourceTitle: source.painPoint,
+      contentMarkdown: uniqueItems.join('\n\n'),
+    }];
+  });
+
+  const interventionBlocks = value.interventionBlocks.flatMap((candidate) => {
+    if (!isRecord(candidate) || typeof candidate.title !== 'string') return [candidate];
+    const title = candidate.title.trim();
+    if (title.toLowerCase() === 'review and adjust') return [];
+    if (reviewSections.length > 0
+      && isActionTableBlockTitle(title)
+      && typeof candidate.contentMarkdown === 'string') {
+      return [{ ...candidate, contentMarkdown: stripDedicatedReviewRows(candidate.contentMarkdown) }];
+    }
+    return [candidate];
+  });
+  if (reviewSections.length === 0) return { ...value, interventionBlocks };
+
+  const reviewMarkdown = reviewSections.length === 1
+    ? reviewSections[0].contentMarkdown
+    : reviewSections.map((section) => `### ${section.sourceTitle}\n${section.contentMarkdown}`).join('\n\n');
+  const reviewBlock = { title: 'Review and adjust', contentMarkdown: reviewMarkdown };
+  const planSourcesIndex = interventionBlocks.findIndex((candidate) => (
+    isRecord(candidate)
+    && typeof candidate.title === 'string'
+    && candidate.title.trim().toLowerCase() === 'plan sources'
+  ));
+  if (planSourcesIndex < 0) interventionBlocks.push(reviewBlock);
+  else interventionBlocks.splice(planSourcesIndex, 0, reviewBlock);
+  return { ...value, interventionBlocks };
 }
 
 function extractQuantityFacts(value: string): string[] {
-  const normalized = normalizeCoverageText(value);
-  const matches = normalized.match(/\b\d+(?:\.\d+)?\s*(?:second|minute|hour|day|week|month|rep|repetition|set|time|attempt|session)\b/g) || [];
-  return [...new Set(matches.map((fact) => fact.replace(/\s+/g, ' ').trim()))];
+  const normalized = value
+    .toLowerCase()
+    .replace(/[–—]/g, '-')
+    .replace(/\b(seconds?|minutes?|hours?|days?|weeks?|months?|reps?|repetitions?|sets?|times?|attempts?|sessions?)\b/g, (unit) => unit.replace(/s$/, ''))
+    .replace(/\s+/g, ' ')
+    .trim();
+  const pattern = /\b(\d+(?:\.\d+)?)(?:\s*(?:-|to)\s*(\d+(?:\.\d+)?))?\s*(second|minute|hour|day|week|month|rep|repetition|set|time|attempt|session)\b/g;
+  const facts: string[] = [];
+  for (const match of normalized.matchAll(pattern)) {
+    facts.push(`${match[1]}${match[2] ? `-${match[2]}` : ''} ${match[3]}`);
+  }
+  return [...new Set(facts)];
 }
 
 export function validateGeneratedPlanSourceCoverage(
@@ -324,14 +472,14 @@ export function validateGeneratedPlanSourceCoverage(
   manualItems: string[],
   draft: GeneratedPlanDraft,
 ): PlanSourceCoverage {
-  const sourceText = [...sources.map(sourceSemanticText), ...manualItems].join('\n');
+  const sourceText = [...sources.map(sourceOperationalText), ...manualItems].join('\n');
   const draftText = [
     draft.painPoint,
     draft.strategySummary,
     draft.explanationMarkdown,
     ...draft.interventionBlocks.flatMap((block) => [block.title || '', block.contentMarkdown]),
   ].join('\n');
-  const normalizedDraft = normalizeCoverageText(draftText);
+  const draftQuantityFacts = new Set(extractQuantityFacts(draftText));
   const issues: string[] = [];
 
   const selectedTopicNames = [...new Set(sources.map((source) => PLAN_CATEGORY_NAMES[source.category]))];
@@ -349,7 +497,7 @@ export function validateGeneratedPlanSourceCoverage(
     }
   }
 
-  const missingQuantityFacts = extractQuantityFacts(sourceText).filter((fact) => !normalizedDraft.includes(fact));
+  const missingQuantityFacts = extractQuantityFacts(sourceText).filter((fact) => !draftQuantityFacts.has(fact));
   if (missingQuantityFacts.length > 0) {
     issues.push(`Candidate omitted source quantity facts: ${missingQuantityFacts.slice(0, 8).join(', ')}`);
   }
@@ -357,22 +505,22 @@ export function validateGeneratedPlanSourceCoverage(
   const sourceHasReviewFact = /\b(review|reassess(?:ment)?|re-evaluat(?:e|ion)|trial period|follow-up)\b|复评|复查|重新评估|试行期/i.test(sourceText);
   const reviewBlock = draft.interventionBlocks.find((block) => block.title?.toLowerCase() === 'review and adjust');
   if (sourceHasReviewFact && !reviewBlock) {
-    const reviewExcerpts = sources.flatMap((source) => [
-      source.explanationMarkdown,
-      ...source.interventionBlocks.flatMap((block) => [block.title || '', block.contentMarkdown]),
-    ]).filter((text) => /\b(review|reassess(?:ment)?|re-evaluat(?:e|ion)|trial period|follow-up)\b|复评|复查|重新评估|试行期/i.test(text)).slice(0, 4);
+    const reviewExcerpts = sources
+      .flatMap(sourceOperationalParts)
+      .filter((text) => /\b(review|reassess(?:ment)?|re-evaluat(?:e|ion)|trial period|follow-up)\b|复评|复查|重新评估|试行期/i.test(text))
+      .slice(0, 4);
     issues.push(`Candidate omitted the required Review and adjust block. Preserve only these source excerpts: ${reviewExcerpts.map((text) => text.slice(0, 700)).join(' | ')}`);
   }
 
   if (sourceHasReviewFact && reviewBlock) {
-    const normalizedReview = normalizeCoverageText(reviewBlock.contentMarkdown);
+    const reviewQuantityFacts = new Set(extractQuantityFacts(reviewBlock.contentMarkdown));
     const missingReviewQuantities = extractQuantityFacts(sourceText)
       .filter((fact) => /\b(?:second|minute|hour|day|week|month)\b/.test(fact))
-      .filter((fact) => !normalizedReview.includes(fact));
+      .filter((fact) => !reviewQuantityFacts.has(fact));
     if (missingReviewQuantities.length > 0) {
       const sourceReviewLines = sourceText.split(/\n+/).filter((line) => /\b(review|reassess(?:ment)?|re-evaluat(?:e|ion)|trial period|follow-up)\b|复评|复查|重新评估|试行期/i.test(line));
       const reviewFacts = extractQuantityFacts(sourceReviewLines.join('\n'));
-      const actuallyMissing = reviewFacts.filter((fact) => !normalizedReview.includes(fact));
+      const actuallyMissing = reviewFacts.filter((fact) => !reviewQuantityFacts.has(fact));
       if (actuallyMissing.length > 0) issues.push(`Review block omitted source interval facts: ${actuallyMissing.join(', ')}`);
     }
   }
@@ -391,6 +539,50 @@ export function cleanPlanGenerationJson(responseText: string): string {
 function parseMarkdownTableLine(line: string): string[] | null {
   if (!/^\s*\|.+\|\s*$/.test(line)) return null;
   return line.trim().split('|').slice(1, -1).map((cell) => cell.trim());
+}
+
+const PLAN_TABLE_HEADER_ALIASES: Record<string, string> = {
+  'when/trigger': 'When / Trigger',
+  when: 'When / Trigger',
+  trigger: 'When / Trigger',
+  'what to do': 'What to do',
+  action: 'What to do',
+  actions: 'What to do',
+  steps: 'What to do',
+  'support/setup': 'Support / Setup',
+  support: 'Support / Setup',
+  setup: 'Support / Setup',
+  'cue/setup': 'Support / Setup',
+  'feedback/track': 'Feedback / Track',
+  feedback: 'Feedback',
+  'immediate feedback': 'Feedback',
+  track: 'Track',
+  tracking: 'Track',
+  'how to track': 'Track',
+};
+
+const CANONICAL_PLAN_TABLE_HEADERS = [
+  'When / Trigger',
+  'What to do',
+  'Support / Setup',
+  'Feedback',
+  'Track',
+] as const;
+
+const ACTION_TABLE_BLOCK_TITLES = new Set([
+  'plan at a glance',
+  'additional items',
+  ...Object.values(PLAN_CATEGORY_NAMES).map((title) => title.toLowerCase()),
+]);
+
+function isActionTableBlockTitle(title: string): boolean {
+  return ACTION_TABLE_BLOCK_TITLES.has(title.trim().toLowerCase());
+}
+
+function normalizePlanTableHeader(rawHeader: string): string {
+  const compactHeader = rawHeader.replace(/\s+/g, ' ').trim();
+  const headerAlias = compactHeader.toLowerCase().replace(/\s*\/\s*/g, '/');
+  return PLAN_TABLE_HEADER_ALIASES[headerAlias] || compactHeader;
 }
 
 function isEmptyPlanCell(value: string): boolean {
@@ -487,16 +679,7 @@ function normalizePlanTable(markdown: string): string {
   const expandedHeader: string[] = [];
   const expandedRows = sourceRows.map(() => [] as string[]);
   header.forEach((rawHeader, columnIndex) => {
-    const compactHeader = rawHeader.replace(/\s+/g, ' ').trim();
-    const headerAlias = compactHeader.toLowerCase().replace(/\s*\/\s*/g, '/');
-    const normalizedHeader = ({
-      'when/trigger': 'When / Trigger',
-      'what to do': 'What to do',
-      'support/setup': 'Support / Setup',
-      'feedback/track': 'Feedback / Track',
-      feedback: 'Feedback',
-      track: 'Track',
-    } as Record<string, string>)[headerAlias] || compactHeader;
+    const normalizedHeader = normalizePlanTableHeader(rawHeader);
     if (normalizedHeader.toLowerCase() === 'feedback / track') {
       expandedHeader.push('Feedback', 'Track');
       sourceRows.forEach((row, rowIndex) => {
@@ -541,10 +724,12 @@ function normalizePlanTable(markdown: string): string {
   const keptColumnIndexes = expandedHeader
     .map((_, index) => index)
     .filter((index) => keepColumns[index])
-    .sort((left, right) => (
-      canonicalColumnOrder.indexOf(expandedHeader[left].toLowerCase())
-      - canonicalColumnOrder.indexOf(expandedHeader[right].toLowerCase())
-    ));
+    .sort((left, right) => {
+      const leftPosition = canonicalColumnOrder.indexOf(expandedHeader[left].toLowerCase());
+      const rightPosition = canonicalColumnOrder.indexOf(expandedHeader[right].toLowerCase());
+      return (leftPosition < 0 ? canonicalColumnOrder.length : leftPosition)
+        - (rightPosition < 0 ? canonicalColumnOrder.length : rightPosition);
+    });
   const finalHeader = keptColumnIndexes.map((index) => expandedHeader[index]);
   const finalRows = expandedRows.map((row) => keptColumnIndexes.map((index) => row[index]));
   if (!finalHeader.includes('What to do')) return markdown;
@@ -569,7 +754,7 @@ export function normalizeGeneratedPlanPresentation(value: unknown): unknown {
     const hasMarkdownTable = candidate.contentMarkdown
       .split('\n')
       .filter((line) => parseMarkdownTableLine(line)).length >= 3;
-    if (hasMarkdownTable) {
+    if (hasMarkdownTable && isActionTableBlockTitle(title)) {
       return [{ ...candidate, contentMarkdown: normalizePlanTable(candidate.contentMarkdown) }];
     }
     if (title.toLowerCase() === 'review and adjust') {
@@ -609,20 +794,45 @@ export function normalizeGeneratedPlanPresentation(value: unknown): unknown {
   };
 }
 
-export function describeGeneratedPlanShape(value: unknown): { blockTitles: string[]; tableHeader: string[] } {
-  if (!isRecord(value) || !Array.isArray(value.interventionBlocks)) return { blockTitles: [], tableHeader: [] };
-  const blockTitles = value.interventionBlocks.flatMap((candidate) => (
-    isRecord(candidate) && typeof candidate.title === 'string' ? [candidate.title] : []
+export function describeGeneratedPlanShape(value: unknown): {
+  blockLabels: string[];
+  tableHeaders: Array<{ blockIndex: number; blockLabel: string; columns: string[] }>;
+} {
+  if (!isRecord(value) || !Array.isArray(value.interventionBlocks)) {
+    return { blockLabels: [], tableHeaders: [] };
+  }
+
+  const safeBlockTitles = new Set([
+    'Plan at a glance',
+    'Additional items',
+    'Review and adjust',
+    'Plan sources',
+    ...Object.values(PLAN_CATEGORY_NAMES),
+  ]);
+  const safeBlockLabel = (candidate: UnknownRecord): string => (
+    typeof candidate.title === 'string' && safeBlockTitles.has(candidate.title)
+      ? candidate.title
+      : 'Unrecognized block'
+  );
+  const safeHeaderLabel = (header: string): string => {
+    const normalizedHeader = normalizePlanTableHeader(header);
+    return CANONICAL_PLAN_TABLE_HEADERS.includes(normalizedHeader as typeof CANONICAL_PLAN_TABLE_HEADERS[number])
+      ? normalizedHeader
+      : 'Unrecognized column';
+  };
+
+  const blockLabels = value.interventionBlocks.flatMap((candidate) => (
+    isRecord(candidate) ? [safeBlockLabel(candidate)] : []
   ));
-  const tableBlock = value.interventionBlocks.find((candidate) => (
-    isRecord(candidate)
-    && typeof candidate.contentMarkdown === 'string'
-    && candidate.contentMarkdown.split('\n').filter((line) => parseMarkdownTableLine(line)).length >= 3
-  ));
-  const tableHeader = isRecord(tableBlock) && typeof tableBlock.contentMarkdown === 'string'
-    ? parseMarkdownTableLine(tableBlock.contentMarkdown.split('\n').find((line) => parseMarkdownTableLine(line)) || '') || []
-    : [];
-  return { blockTitles, tableHeader };
+  const tableHeaders = value.interventionBlocks.flatMap((candidate, blockIndex) => {
+    if (!isRecord(candidate) || typeof candidate.contentMarkdown !== 'string') return [];
+    const tableLines = candidate.contentMarkdown.split('\n').filter((line) => parseMarkdownTableLine(line));
+    if (tableLines.length < 3) return [];
+    const columns = parseMarkdownTableLine(tableLines[0])?.map(safeHeaderLabel) || [];
+    return [{ blockIndex, blockLabel: safeBlockLabel(candidate), columns }];
+  });
+
+  return { blockLabels, tableHeaders };
 }
 
 export function validateGeneratedPlanDraft(
@@ -653,8 +863,9 @@ export function validateGeneratedPlanDraft(
   }
   if (interventionBlocks.length < 2 || interventionBlocks.length > 10) return { error: 'PLAN_DRAFT_INVALID_BLOCK_COUNT' };
 
-  const canonicalHeaders = ['when / trigger', 'what to do', 'support / setup', 'feedback', 'track'];
+  const canonicalHeaders = CANONICAL_PLAN_TABLE_HEADERS.map((header) => header.toLowerCase());
   const tableBlocks = interventionBlocks.flatMap((block) => {
+    if (!block.title || !isActionTableBlockTitle(block.title)) return [];
     const tableLines = block.contentMarkdown.split('\n').filter((line) => /^\s*\|.+\|\s*$/.test(line));
     return tableLines.length >= 3 ? [{ block, tableLines }] : [];
   });

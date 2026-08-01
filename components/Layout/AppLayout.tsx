@@ -9,6 +9,7 @@ import guestStorage from '../../utils/guest-storage';
 
 interface AppLayoutProps {
     children: React.ReactNode;
+    topBanner?: React.ReactNode;
     fullScreen?: boolean;
     onNewChat?: () => void;
     onSelectConversation?: (id: string) => void;
@@ -22,6 +23,7 @@ interface AppLayoutProps {
 
 const AppLayout: React.FC<AppLayoutProps> = ({
     children,
+    topBanner,
     fullScreen = false,
     onNewChat,
     onSelectConversation,
@@ -163,6 +165,8 @@ const AppLayout: React.FC<AppLayoutProps> = ({
                         {headerAccountControl}
                     </div>
                 </div>
+
+                {topBanner}
 
                 {/* Main Content */}
                 <main className={`flex-1 flex flex-col min-h-0 ${fullScreen ? '' : 'overflow-y-auto p-4 lg:p-8'}`}>

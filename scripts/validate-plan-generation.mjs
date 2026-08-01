@@ -1,8 +1,10 @@
 import assert from 'node:assert/strict';
 import {
+  applySourceBackedReviewSection,
   buildPlanFaithfulnessAuditPrompt,
   buildPlanGenerationPrompt,
   cleanPlanGenerationJson,
+  describeGeneratedPlanShape,
   normalizeGeneratedPlanPresentation,
   PLAN_TITLE_MAX_LENGTH,
   reconcilePlanFaithfulnessAudit,
@@ -39,6 +41,7 @@ assert.match(prompt, /Produce one unified practical plan/);
 assert.match(prompt, /When \/ Trigger \| What to do \| Support \/ Setup \| Feedback \| Track/);
 assert.match(prompt, /Do not add or change any actor, beneficiary, schedule, trigger/);
 assert.match(prompt, /do not extend, reinterpret, or promote an instruction or observation into a new goal, tracker, or success criterion/);
+assert.match(prompt, /supporting context, not implementation instructions/);
 assert.match(prompt, /Never create an empty column/);
 assert.match(prompt, /Keep Feedback and Track as separate optional columns/);
 assert.match(prompt, /Place each source fact in exactly one best-fit column/);
@@ -125,6 +128,59 @@ assert.deepEqual(
   { audit: { faithful: false, issues: ['The candidate invented a new reward schedule.'] } },
 );
 
+const trackingAndReviewSource = [{
+  ...sources[0],
+  strategySummary: 'Keep a home log and reassess after 4-6 weeks.',
+  interventionBlocks: [
+    { title: 'Observation and Tracking', contentMarkdown: 'Observe daily and note any changes in a simple home log.' },
+    { title: 'Reassessment', contentMarkdown: 'Reassess after 4-6 weeks.' },
+  ],
+}];
+const trackingAndReviewDraft = {
+  ...draftResult.draft,
+  interventionBlocks: [
+    {
+      title: 'Plan at a glance',
+      contentMarkdown: '| What to do | Track |\n|---|---|\n| Complete the saved observation | Note changes in the home log |',
+    },
+    { title: 'Review and adjust', contentMarkdown: 'Reassess after 4 to 6 weeks.' },
+    { title: 'Plan sources', contentMarkdown: '- Starting homework after dinner' },
+  ],
+};
+assert.deepEqual(
+  reconcilePlanFaithfulnessAudit({
+    audit: {
+      faithful: false,
+      issues: [
+        "The Track column converts the observation instruction into a tracking metric, which is a repurposing.",
+        "The Review and adjust section places the Reassessment block in a different structure and duplicates its timing.",
+      ],
+    },
+  }, trackingAndReviewSource, trackingAndReviewDraft),
+  { audit: { faithful: true, issues: [] } },
+);
+assert.deepEqual(
+  reconcilePlanFaithfulnessAudit({
+    audit: {
+      faithful: false,
+      issues: [
+        "The 'Review and adjust' section duplicates the exercise steps and timing, and adds a reassessment step that is not present in the original source's 'Review and adjust' section.",
+        "The 'Review and adjust' section includes a reassessment step placed in a section that also contains school communication content, potentially mixing categories.",
+        "The 'Plan sources' section is allowed, but the 'Review and adjust' section does not clearly separate the reassessment and duplicates the exercise steps.",
+        "The reassessment was a separate intervention block and moving it into 'Review and adjust' is a repurposing of the source structure.",
+        "The 'Review and adjust' block includes a 'Reassess' step with 'End of week 4-6' which is not present in the original source's plan table; the original source has a separate 'Reassessment' block, but the candidate merges it into the table and adds a 'Step' column, changing the structure.",
+      ],
+    },
+  }, trackingAndReviewSource, trackingAndReviewDraft),
+  { audit: { faithful: true, issues: [] } },
+);
+assert.deepEqual(
+  reconcilePlanFaithfulnessAudit({
+    audit: { faithful: false, issues: ['The Review and adjust section adds a new reward schedule.'] },
+  }, trackingAndReviewSource, trackingAndReviewDraft),
+  { audit: { faithful: false, issues: ['The Review and adjust section adds a new reward schedule.'] } },
+);
+
 const groupedCrossCategoryDraft = {
   ...crossCategoryDraft,
   interventionBlocks: [
@@ -148,6 +204,63 @@ const mixedCrossCategoryCoverage = validateGeneratedPlanSourceCoverage(crossCate
 assert.equal(mixedCrossCategoryCoverage.covered, false);
 assert.match(mixedCrossCategoryCoverage.issues.join(' '), /separate action-table sections|must not combine/i);
 
+const aliasedCrossCategoryDraft = normalizeGeneratedPlanPresentation({
+  ...groupedCrossCategoryDraft,
+  interventionBlocks: groupedCrossCategoryDraft.interventionBlocks.map((block) => {
+    if (block.title === 'Learning Strategies') {
+      return {
+        ...block,
+        contentMarkdown: '| When | Action |\n|---|---|\n| After dinner | Start one short task |',
+      };
+    }
+    if (block.title === 'Social Skills') {
+      return {
+        ...block,
+        contentMarkdown: '| Trigger | Steps | Tracking |\n|---|---|---|\n| Before recess | Practice the saved social script | Mark the completed practice |',
+      };
+    }
+    return block;
+  }),
+});
+assert.ok('draft' in validateGeneratedPlanDraft(aliasedCrossCategoryDraft, 'learning'));
+assert.match(aliasedCrossCategoryDraft.interventionBlocks[0].contentMarkdown, /^\| When \/ Trigger \| What to do \|/);
+assert.match(aliasedCrossCategoryDraft.interventionBlocks[1].contentMarkdown, /^\| When \/ Trigger \| What to do \| Track \|/);
+assert.deepEqual(describeGeneratedPlanShape(aliasedCrossCategoryDraft).tableHeaders, [
+  { blockIndex: 0, blockLabel: 'Learning Strategies', columns: ['When / Trigger', 'What to do'] },
+  { blockIndex: 1, blockLabel: 'Social Skills', columns: ['When / Trigger', 'What to do', 'Track'] },
+]);
+
+const unknownHeaderDraft = normalizeGeneratedPlanPresentation({
+  ...groupedCrossCategoryDraft,
+  interventionBlocks: groupedCrossCategoryDraft.interventionBlocks.map((block) => block.title === 'Social Skills' ? {
+    ...block,
+    contentMarkdown: '| What to do | New recommendation |\n|---|---|\n| Practice the saved social script | Add a new reward |',
+  } : block),
+});
+assert.deepEqual(
+  validateGeneratedPlanDraft(unknownHeaderDraft, 'learning'),
+  { error: 'PLAN_DRAFT_INVALID_TABLE_HEADER' },
+);
+assert.deepEqual(describeGeneratedPlanShape(unknownHeaderDraft).tableHeaders[1], {
+  blockIndex: 1,
+  blockLabel: 'Social Skills',
+  columns: ['What to do', 'Unrecognized column'],
+});
+
+const reviewSpecificTableDraft = normalizeGeneratedPlanPresentation({
+  ...groupedCrossCategoryDraft,
+  interventionBlocks: [
+    ...groupedCrossCategoryDraft.interventionBlocks.filter((block) => block.title !== 'Plan sources'),
+    {
+      title: 'Review and adjust',
+      contentMarkdown: '| Review timing | What to review | Next step |\n|---|---|---|\n| After the saved trial | Compare the saved observations | Discuss whether to continue |',
+    },
+    groupedCrossCategoryDraft.interventionBlocks.find((block) => block.title === 'Plan sources'),
+  ].filter(Boolean),
+});
+assert.ok('draft' in validateGeneratedPlanDraft(reviewSpecificTableDraft, 'learning'));
+assert.match(reviewSpecificTableDraft.interventionBlocks[2].contentMarkdown, /^\| Review timing \| What to review \| Next step \|/);
+
 const reviewCoverageSource = [{
   ...sources[0],
   strategySummary: 'Try the routine for a 4-week trial before reassessment.',
@@ -170,7 +283,100 @@ const uncoveredReview = validateGeneratedPlanSourceCoverage(
   { ...coveredReviewDraft, interventionBlocks: coveredReviewDraft.interventionBlocks.filter((block) => block.title !== 'Review and adjust') },
 );
 assert.equal(uncoveredReview.covered, false);
-assert.match(uncoveredReview.issues.join(' '), /4 week|review information/i);
+assert.match(uncoveredReview.issues.join(' '), /4[- ]week|review information/i);
+
+const evidenceDurationSource = [{
+  ...sources[0],
+  strategySummary: 'Use a 4-6 week home trial before reassessment.',
+  explanationMarkdown: 'Background explanation only.',
+  interventionBlocks: [
+    { title: 'Reassessment', contentMarkdown: 'Reassess after the 4-6 week home trial.' },
+    { title: 'Why this may help', contentMarkdown: 'A cited study used a 12-week intervention.' },
+  ],
+}];
+const evidenceDurationDraft = {
+  ...draftResult.draft,
+  strategySummary: 'Use the saved home trial and reassessment.',
+  interventionBlocks: [
+    ...draftResult.draft.interventionBlocks.filter((block) => block.title !== 'Review and adjust'),
+    { title: 'Review and adjust', contentMarkdown: 'Reassess after the 4 to 6 week home trial.' },
+  ],
+};
+assert.deepEqual(
+  validateGeneratedPlanSourceCoverage(evidenceDurationSource, [], evidenceDurationDraft),
+  { covered: true, issues: [] },
+);
+const missingOperationalRange = validateGeneratedPlanSourceCoverage(
+  evidenceDurationSource,
+  [],
+  {
+    ...evidenceDurationDraft,
+    interventionBlocks: evidenceDurationDraft.interventionBlocks.map((block) => block.title === 'Review and adjust'
+      ? { ...block, contentMarkdown: 'Reassess the home trial.' }
+      : block),
+  },
+);
+assert.equal(missingOperationalRange.covered, false);
+assert.match(missingOperationalRange.issues.join(' '), /4-6 week/);
+
+const deterministicReviewSources = [
+  {
+    ...sources[0],
+    category: 'exercise',
+    painPoint: 'Movement routine',
+    strategySummary: 'Use the saved movement routine and reassess after 4-6 weeks.',
+    interventionBlocks: [
+      { title: 'Practice', contentMarkdown: 'Complete the saved movement activity.' },
+      { title: 'Reassessment', contentMarkdown: '**Reassess after 4-6 weeks.** Check the saved observations.' },
+      { title: 'Plan Table', contentMarkdown: '| Step | What to do | When / how often |\n|---|---|---|\n| 1 | Complete the activity | Most days |\n| 2 | Reassess the saved observations | End of week 4-6 |' },
+    ],
+  },
+  {
+    ...sources[0],
+    id: '00000000-0000-0000-0000-000000000103',
+    category: 'school',
+    painPoint: 'School communication routine',
+    strategySummary: 'Use the saved school communication routine.',
+    interventionBlocks: [
+      { title: 'Starter Plan', contentMarkdown: 'Use the saved weekly check in.' },
+      { title: 'Watch for', contentMarkdown: '- **Progress:** Communication becomes more consistent.\n- **Needs adjustment:** Discuss the saved support option after 2 weeks.' },
+    ],
+  },
+];
+const candidateWithBrokenReview = {
+  ...groupedCrossCategoryDraft,
+  interventionBlocks: [
+    ...groupedCrossCategoryDraft.interventionBlocks.filter((block) => block.title !== 'Plan sources').map((block) => (
+      block.title === 'Learning Strategies'
+        ? { ...block, contentMarkdown: `${block.contentMarkdown}\n| After 4-6 weeks | Reassess the saved observations |` }
+        : block
+    )),
+    {
+      title: 'Review and adjust',
+      contentMarkdown: '| Step | What to do | When / how often ||---|---|---|| 1 | Duplicate every action | Daily |',
+    },
+    groupedCrossCategoryDraft.interventionBlocks.find((block) => block.title === 'Plan sources'),
+  ].filter(Boolean),
+};
+const deterministicReviewDraft = applySourceBackedReviewSection(candidateWithBrokenReview, deterministicReviewSources);
+const deterministicReviewBlock = deterministicReviewDraft.interventionBlocks.find((block) => block.title === 'Review and adjust');
+assert.ok(deterministicReviewBlock);
+assert.match(deterministicReviewBlock.contentMarkdown, /### Movement routine/);
+assert.match(deterministicReviewBlock.contentMarkdown, /Reassess after 4-6 weeks/);
+assert.match(deterministicReviewBlock.contentMarkdown, /### School communication routine/);
+assert.match(deterministicReviewBlock.contentMarkdown, /Needs adjustment/);
+assert.doesNotMatch(deterministicReviewBlock.contentMarkdown, /Duplicate every action|\| Step \|/);
+const deterministicLearningBlock = deterministicReviewDraft.interventionBlocks.find((block) => block.title === 'Learning Strategies');
+assert.ok(deterministicLearningBlock);
+assert.doesNotMatch(deterministicLearningBlock.contentMarkdown, /Reassess the saved observations/);
+
+const noReviewSource = [{
+  ...sources[0],
+  strategySummary: 'Use the saved action.',
+  interventionBlocks: [{ title: 'Steps', contentMarkdown: 'Complete the saved action.' }],
+}];
+const hallucinatedReviewRemoved = applySourceBackedReviewSection(candidateWithBrokenReview, noReviewSource);
+assert.equal(hallucinatedReviewRemoved.interventionBlocks.some((block) => block.title === 'Review and adjust'), false);
 
 assert.deepEqual(
   validateGeneratedPlanDraft({ ...visualDraft, interventionBlocks: visualDraft.interventionBlocks.slice(1) }, 'learning'),
