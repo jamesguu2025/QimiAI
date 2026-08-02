@@ -13,6 +13,10 @@ export const INDEXABLE_PUBLIC_ROUTES = new Set([
   '/terms',
 ]);
 
+export const SITEMAP_STATIC_ROUTES = Array.from(INDEXABLE_PUBLIC_ROUTES).filter(
+  (pathname) => !pathname.includes('['),
+);
+
 export const PUBLIC_ROUTE_METADATA: Record<string, { title: string; description: string }> = {
   '/': {
     title: 'Qimi AI - Empowering Every ADHD Family',

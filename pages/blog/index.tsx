@@ -4,7 +4,6 @@ import Link from 'next/link';
 import { BookOpen, Calendar, ChevronRight } from 'lucide-react';
 import LandingLayout from '@/components/Landing/LandingLayout';
 import { listPublicArticles, type PublicBlogArticle } from '@/lib/blog';
-import { absoluteUrl } from '@/lib/site-config';
 
 type Props = { articles: PublicBlogArticle[] };
 
@@ -26,7 +25,6 @@ export default function BlogPage({ articles }: Props) {
       <Head>
         <title>ADHD Blog | Qimi AI</title>
         <meta name="description" content="Evidence-informed ADHD articles and practical strategies for families." />
-        <link rel="canonical" href={absoluteUrl('/blog')} />
       </Head>
       <main className="py-16 px-4 sm:px-6 lg:px-8 bg-gradient-to-b from-slate-50 to-white min-h-screen">
         <div className="max-w-5xl mx-auto">

@@ -1,23 +1,7 @@
 import type { GetServerSideProps } from 'next';
-import { INDEXABLE_PUBLIC_ROUTES, absoluteUrl } from '@/lib/site-config';
 import { listIndexableArticles, type PublicBlogArticle } from '@/lib/blog';
-
-function escapeXml(value: string): string {
-  return value.replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;').replace(/"/g, '&quot;').replace(/'/g, '&apos;');
-}
-
-function buildSitemap(articles: PublicBlogArticle[]): string {
-  const staticUrls = [...Array.from(INDEXABLE_PUBLIC_ROUTES), '/blog']
-    .map((pathname) => `  <url><loc>${escapeXml(absoluteUrl(pathname))}</loc></url>`);
-  const articleUrls = articles.map((article) => `  <url><loc>${escapeXml(article.canonicalUrl)}</loc><lastmod>${escapeXml(article.updatedAt)}</lastmod></url>`);
-  const urls = [...staticUrls, ...articleUrls]
-    .join('\n');
-
-  return `<?xml version="1.0" encoding="UTF-8"?>
-<urlset xmlns="http://www.sitemaps.org/schemas/sitemap/0.9">
-${urls}
-</urlset>`;
-}
+import { SITEMAP_STATIC_ROUTES, absoluteUrl } from '@/lib/site-config';
+import { buildSitemap } from '@/lib/sitemap-contract';
 
 export const getServerSideProps: GetServerSideProps = async ({ res }) => {
   let articles: PublicBlogArticle[] = [];
@@ -28,7 +12,7 @@ export const getServerSideProps: GetServerSideProps = async ({ res }) => {
   }
   res.setHeader('Content-Type', 'application/xml; charset=utf-8');
   res.setHeader('Cache-Control', 'public, max-age=0, s-maxage=3600, stale-while-revalidate=86400');
-  res.write(buildSitemap(articles));
+  res.write(buildSitemap(SITEMAP_STATIC_ROUTES, articles, absoluteUrl));
   res.end();
 
   return { props: {} };

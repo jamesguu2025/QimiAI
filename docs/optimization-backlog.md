@@ -252,3 +252,28 @@ Required future slice before reopening the UI:
 
 Current MVP decision:
 - Attachment input, paperclip, drag-and-drop, and local preview are hidden. No attachment bytes are stored in Supabase.
+
+### OPT-007 ESLint warning baseline cleanup
+
+- Status: `Open`
+- Priority: `P2`
+- Area: `engineering quality / React / Next.js`
+- Date added: `2026-08-02`
+- Source: first Next.js 16 ESLint flat-config rollout
+
+Problem:
+- The first full-project ESLint run found 84 historical findings across already implemented and accepted modules.
+- Seven blocking internal-link errors were fixed during setup. The remaining baseline contains 77 warnings and zero errors.
+- The largest groups concern synchronous state updates inside effects, unused variables, unoptimized image elements, missing effect dependencies, JSX entity escaping, broad types, and React render-purity checks.
+- Fixing all findings in the SEO launch patch would touch authentication, Chat, Family, Growth Plan, onboarding, settings, and RAG code without module-specific regression acceptance.
+
+Current lint policy:
+- `npm run lint` remains a required deployment check and fails on rules that are still configured as errors.
+- Existing migration-heavy React and TypeScript rules remain visible as warnings rather than being disabled.
+- New work should not add warnings. Files touched for feature work should reduce or preserve their warning count.
+
+Suggested follow-up:
+1. Capture warning counts by rule and module as the cleanup baseline.
+2. Resolve warnings in module-scoped slices with focused functional regression tests.
+3. Promote each warning-level rule back to error after its baseline reaches zero.
+4. Prioritize React render-purity and effect-state warnings before cosmetic JSX and image warnings.

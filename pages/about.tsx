@@ -1,4 +1,5 @@
 import Head from 'next/head';
+import Link from 'next/link';
 import {
   Target,
   Brain,
@@ -126,12 +127,12 @@ export default function About() {
             <p className="text-slate-600 mb-8 max-w-xl mx-auto">
               Bring the challenge that is on your mind today. Qimi can help you organize what you know and decide what to explore next.
             </p>
-            <a
+            <Link
               href="/chat"
               className="inline-flex items-center gap-2 px-8 py-4 rounded-xl bg-gradient-to-r from-primary-teal to-primary-purple text-white font-bold text-lg hover:shadow-lg hover:scale-105 transition-all"
             >
               Start with Qimi
-            </a>
+            </Link>
           </div>
         </div>
       </div>

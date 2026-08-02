@@ -1,4 +1,5 @@
 import Head from 'next/head';
+import Link from 'next/link';
 import { useSession } from 'next-auth/react';
 import { useRouter } from 'next/router';
 import { useEffect, useState } from 'react';
@@ -20,6 +21,7 @@ export default function Home() {
   const { openLoginModal } = useAuthUIStore();
   const [waitlistCount, setWaitlistCount] = useState(0);
   const [paperCount, setPaperCount] = useState(0);
+  const currentYear = new Date().getFullYear();
 
   const handleStart = () => {
     trackClientEvent('landing:cta_click', {
@@ -205,11 +207,11 @@ export default function Home() {
             {/* Bottom: Legal + Copyright */}
             <div className="pt-6 flex flex-wrap justify-between items-center gap-4 text-[13px]">
               <div className="flex flex-wrap gap-4">
-                <a href="/blog" className="text-slate-400 hover:text-white transition-colors">ADHD Insights</a>
-                <a href="/privacy" className="text-slate-400 hover:text-white transition-colors">Privacy Policy</a>
-                <a href="/terms" className="text-slate-400 hover:text-white transition-colors">Terms of Service</a>
+                <Link href="/blog" className="text-slate-400 hover:text-white transition-colors">ADHD Insights</Link>
+                <Link href="/privacy" className="text-slate-400 hover:text-white transition-colors">Privacy Policy</Link>
+                <Link href="/terms" className="text-slate-400 hover:text-white transition-colors">Terms of Service</Link>
               </div>
-              <span>&copy; 2025 Qimi AI. All rights reserved.</span>
+              <span>&copy; {currentYear} Qimi AI. All rights reserved.</span>
             </div>
           </div>
         </footer>

@@ -1,4 +1,5 @@
 import type { ReactNode } from 'react';
+import Link from 'next/link';
 import LandingHeader from '@/components/Landing/LandingHeader';
 
 interface LandingLayoutProps {
@@ -6,6 +7,8 @@ interface LandingLayoutProps {
 }
 
 export default function LandingLayout({ children }: LandingLayoutProps) {
+  const currentYear = new Date().getFullYear();
+
   return (
     <div className="min-h-screen bg-slate-50 font-sans selection:bg-primary-teal/20">
       <LandingHeader />
@@ -29,11 +32,11 @@ export default function LandingLayout({ children }: LandingLayoutProps) {
 
           <div className="pt-6 flex flex-wrap justify-between items-center gap-4 text-[13px]">
             <div className="flex flex-wrap gap-4">
-              <a href="/blog" className="text-slate-400 hover:text-white transition-colors">ADHD Insights</a>
-              <a href="/privacy" className="text-slate-400 hover:text-white transition-colors">Privacy Policy</a>
-              <a href="/terms" className="text-slate-400 hover:text-white transition-colors">Terms of Service</a>
+              <Link href="/blog" className="text-slate-400 hover:text-white transition-colors">ADHD Insights</Link>
+              <Link href="/privacy" className="text-slate-400 hover:text-white transition-colors">Privacy Policy</Link>
+              <Link href="/terms" className="text-slate-400 hover:text-white transition-colors">Terms of Service</Link>
             </div>
-            <span>&copy; 2025 Qimi AI. All rights reserved.</span>
+            <span>&copy; {currentYear} Qimi AI. All rights reserved.</span>
           </div>
         </div>
       </footer>
