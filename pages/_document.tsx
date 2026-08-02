@@ -9,10 +9,6 @@ export default function Document() {
         <link rel="shortcut icon" href="/favicon.svg" />
         <link rel="apple-touch-icon" href="/favicon.svg" />
         <meta name="theme-color" content="#00D4AA" />
-        <meta
-          name="impact-site-verification"
-          {...{ value: '19849224-3142-433d-a5b6-f8270d0afd96' }}
-        />
         {/* Google Fonts - Noto Sans SC, Inter, Outfit */}
         <link rel="preconnect" href="https://fonts.googleapis.com" />
         <link rel="preconnect" href="https://fonts.gstatic.com" crossOrigin="anonymous" />
